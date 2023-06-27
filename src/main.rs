@@ -1,4 +1,5 @@
 use posixmq::PosixMq;
+use std::io::ErrorKind;
 use std::io::Result;
 use fork::{fork, Fork};
 use nix::unistd::execve;
@@ -6,6 +7,7 @@ use std::ffi::CStr;
 use std::ffi::CString;
 use serde::{Serialize, Deserialize};
 use std::collections::BTreeMap;
+use core::time::Duration;
 
 const NB_FOLLOWER: u8 = 3;
 const QNAME: &str = "/nts_mq";
@@ -21,11 +23,12 @@ enum Message {
     WakeUp,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 enum State {
     Running,
     Waiting,
     Blocked,
+    ToWakeUp,
 }
 /**
  * Initialize one queue on which the leader will wait for the messages from the followers and a
@@ -74,7 +77,7 @@ fn unlink_queues(nb: u8) -> Result<()>{
  * @arg env: the environment to start the follower
  * @return: the pid of the child on success
  **/
-fn run_follower(id: u8, exe: String, args: &[&CStr], env: &[&CStr]) -> Result<i32> {
+fn run_follower(id: u8, exe: &str, args: &[&CStr], env: &[&CStr]) -> Result<i32> {
     match fork() {
         Ok(Fork::Parent(child)) => Ok(child),
         Ok(Fork::Child) => {
@@ -84,7 +87,7 @@ fn run_follower(id: u8, exe: String, args: &[&CStr], env: &[&CStr]) -> Result<i3
                 .capacity(NB_FOLLOWER as usize)
                 .create()
                 .open(&format!("{}_{}", QNAME, 0))
-                .unwrap();
+                .expect("failed to open queue qo for a follower");
             qo.set_cloexec(false)?;
 
             let qi = posixmq::OpenOptions::readonly() //the follower will receive the messages of
@@ -93,46 +96,33 @@ fn run_follower(id: u8, exe: String, args: &[&CStr], env: &[&CStr]) -> Result<i3
                 .capacity(NB_FOLLOWER as usize)
                 .create()    
                 .open(&format!("{}_{}", QNAME, id))
-                .unwrap();
+                .expect("failed to open queue qi for a follower");
             qi.set_cloexec(false)?;
 
-            execve(&CString::new(exe.as_str()).unwrap().as_c_str(), args, env)?;
+            execve(CString::new(exe).unwrap().as_c_str(), args, env)?;
             Ok(0)
         }
         Err(_) => Err(std::io::Error::new(std::io::ErrorKind::Other, String::from("Fork failed"))),
     } 
 }
 
-fn decision_process(states: &[State], runnings: u8, id:u8, newState: State, qs: &Vec<PosixMq>) -> Result<()> {
-    match newState {
-        State::Waiting => {
-            //some progress happened, let's wake up any process (except id)
+fn decision_process(states: &mut [State], msg: Message) -> Result<()> {
+    match msg {
+        Message::Progressed(id) => {
+            //some progress happened, let's wake up every process (except id)
             //we could add context (e.g. on which file descriptor it is waiting) to guess which
             //process should be woke up
             //this would be easier if writing syscalls were also recorded
-            let idToWakeUp = 1; //should try random
-            let sts = &states[idToWakeUp..];
-            let qss = &qs[idToWakeUp+1..];
-            for (s,q) in sts.iter().zip(qss[idToWakeUp+1..].iter()) {
-                match s {
-                    State::Running => continue,
-                    _ => {
-                        if let Ok(msg) = serde_cbor::to_vec(&Message::WakeUp) {
-                            let m = &msg[..];
-                            q.send(1, m);
-                        }
-                        else {
-                            return Err(std::io::Error::new(std::io::ErrorKind::Other, String::from("Message not properly serialized")))
-                        }
-                        break;
-                    },
-                }
+            let ids = (0..states.len()).filter(|&i| i != id as usize);
+            for i in ids {
+                states[i] = State::ToWakeUp;
             }
+            states[id as usize] = State::Waiting;
             Ok(())
         },
-        State::Blocked => {
+        Message::Stuck(id) => {
             //did not progress
-            //woke up the wrong process, try again
+            states[id as usize] = State::Blocked;
             Ok(())
         },
         _ => {
@@ -142,65 +132,82 @@ fn decision_process(states: &[State], runnings: u8, id:u8, newState: State, qs: 
     }
 }
 
+fn messages_handler(states: &mut [State], events: &mut BTreeMap<u64, Vec<u8>>, message: &[u8]) -> Result<()> {
+    match serde_cbor::from_slice(&message).expect("failed to parse received message") {
+        Message::AddStep(id, t) => {
+            if let Some(x) = events.get_mut(&t) {
+                x.push(id);
+            } else {
+                events.insert(t, vec![id]);
+            }
+        },
+        Message::DelStep(id, t) => {
+            if let Some(x) = events.get_mut(&t) {
+                for elem in x.iter_mut() {
+                    if elem == &id {
+                        *elem = 0;
+                        break;
+                    }
+                }
+            }
+        },
+        Message::GetTime(id) => {
+            //return head key of the BTreeMap
+            
+        },
+        msg => {
+            decision_process(states, msg)?;
+        },
+        
+    }
+    Ok(())
+}
+
 fn main_loop(qs: Vec<PosixMq>) -> Result<()> {
-    let mut runnings = NB_FOLLOWER;
     let mut states: [State; NB_FOLLOWER as usize] = [State::Running; NB_FOLLOWER as usize];
     let mut events: BTreeMap<u64, Vec<u8>> = BTreeMap::new();
+    let mut msg: [u8; 24] = [0; 24];
     loop {
-        let mut msg: [u8; 24] = [0; 24];
-        qs[0].recv(&mut msg)?;
-        match serde_cbor::from_slice(&msg).unwrap() {
-            Message::Progressed(id) => {
-                states[id as usize] = State::Waiting;
-                runnings -= 1;
-                decision_process(&states, runnings, id, State::Waiting, &qs);
-            },
-            Message::Stuck(id) => {
-                states[id as usize] = State::Blocked;
-                runnings -= 1;
-                decision_process(&states, runnings, id, State::Blocked, &qs);
-            },
-            Message::AddStep(id, t) => {
-                if let Some(x) = events.get_mut(&t) {
-                    x.push(id);
-                } else {
-                    events.insert(t, Vec::from([id]));
-                }
-            },
-            Message::DelStep(id, t) => {
-                if let Some(x) = events.get_mut(&t) {
-                    for elem in x.iter_mut() {
-                        if elem == &id {
-                            *elem = 0;
-                            break;
-                        }
+        match qs[0].recv_timeout(&mut msg, Duration::new(0, 0)) {
+            Ok(_) => messages_handler(&mut states, &mut events, &msg)?,
+            Err(e) if e.kind() == ErrorKind::TimedOut => {
+                let mut nb_blocked = 0;
+                for (mut s, q) in states.iter_mut().zip(qs[1..].iter()) {
+                    match s {
+                        State::Blocked => nb_blocked += 1,
+                        State::ToWakeUp => {
+                            if let Ok(msg) = serde_cbor::to_vec(&Message::WakeUp) {
+                                let m = &msg[..];
+                                q.send(1, m)?;
+                                s = &mut State::Running;
+                            }
+                        },
+                        _ => {},
+                    }
+                    if nb_blocked == NB_FOLLOWER { //all followers are blocked, we need to make a step in time
+                        
                     }
                 }
             },
-            Message::GetTime(id) => {
-                //return head key of the BTreeMap
-                break;
-            },
-            _ => {
-            //this should not happen
-            return Err(std::io::Error::new(std::io::ErrorKind::Other, String::from("Unexpected message")))
-        },
+            Err(e) => panic!("prout"),
         }
+
+        
     }
     Ok(())
 }
 
 fn main() {
     println!("Hello, world!");
-        for i in 0..NB_FOLLOWER { //start the followers
-        run_follower(i+1, String::from(EXE_NAME), &[], &[]).unwrap();
+    for i in 0..NB_FOLLOWER { //start the followers
+        run_follower(i+1, EXE_NAME, &[], &[]).unwrap();
     }
     let qs = init_queues(NB_FOLLOWER).unwrap(); //open the communication queues
     for q in &qs[1..] {
         q.send(1, b"Born?").unwrap();
     }
 
-    main_loop(qs);
+    main_loop(qs).unwrap();
 
     std::thread::sleep(std::time::Duration::from_millis(500));
     unlink_queues(NB_FOLLOWER).unwrap(); //delete all communication queues
