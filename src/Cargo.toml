@@ -1,0 +1,31 @@
+[package]
+name = "network_time_simulator"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "API"
+path = "lib.rs"
+crate-type   = ["staticlib"]
+
+[dependencies]
+fork = "0.1.22"
+nix = "0.26.2"
+posixmq = "1.0.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_cbor = "0.10"
+rand = "0.8.5"
+
+[profile.dev]
+panic = "abort"
+overflow-checks = false
+opt-level = "s"
+lto = true
+codegen-units = 1
+
+[profile.release]
+panic = "abort"
+overflow-checks = false
+opt-level = "s"
+lto = true
+codegen-units = 1
