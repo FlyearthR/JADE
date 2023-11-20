@@ -22,13 +22,15 @@ struct timeval int_to_timeval_s(int t)
     return ret;
 }
 
-struct timeval uint_to_timeval_us(unsigned int)
+struct timeval u64_to_timeval_us(uint64_t t)
 {
-    
+    struct timeval ret = {.tv_sec = t/1000000, .tv_usec = t%1000000};
+    return ret;
 }
 
 struct timeval add_timeval(struct timeval t1, struct timeval t2)
 {
-    struct timeval t = {.tv_sec = 0, .tv_usec = 0};
+    struct timeval t = {.tv_sec = t1.tv_sec+t2.tv_sec+(t1.tv_usec+t2.tv_usec)/1000000,
+        .tv_usec = (t1.tv_usec+t2.tv_usec)%1000000};
     return t;
 }

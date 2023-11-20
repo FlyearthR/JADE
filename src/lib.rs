@@ -37,13 +37,13 @@ impl From<Message> for Buffer {
             Message::AddStep(id, t) => {
                 tab[0] = 2;
                 tab[1] = id;
-                /*let tt = t.to_ne_bytes();
+                let tt = t.to_ne_bytes();
                 let mut i = 0;
                 while i < 8 {
                     tab[i+2] = tt[i];
                     i = i + 1;
-                }*/
-                let mut tt = t;
+                }
+                /*let mut tt = t;
                 tab[2] = (tt & 0b11111111) as u8;
                 tt /= 256;
                 tab[3] = (tt & 0b11111111) as u8;
@@ -58,7 +58,8 @@ impl From<Message> for Buffer {
                 tt /= 256;
                 tab[8] = (tt & 0b11111111) as u8;
                 tt /= 256;
-                tab[9] = (tt & 0b11111111) as u8;
+                tab[9] = (tt & 0b11111111) as u8;*/
+                //tab[2] = 1;
             },
             Message::DelStep(id, t) => {
                 tab[0] = 3;
@@ -91,7 +92,7 @@ impl From<Message> for Buffer {
                 tab[0] = 7;
                 tab[1] = id;
             },
-        }
+        }        
         Buffer {buffer : tab}
     }
 }
@@ -114,26 +115,10 @@ impl Into<Message> for Buffer {
                 Message::Stuck(self.buffer[1])
             },
             2 => {
-                let mut tt: u64 = 0;
-                tt += self.buffer[9] as u64;
-                tt *= 256;
-                tt += self.buffer[8] as u64;
-                tt *= 256;
-                tt += self.buffer[7] as u64;
-                tt *= 256;
-                tt += self.buffer[6] as u64;
-                tt *= 256;
-                tt += self.buffer[5] as u64;
-                tt *= 256;
-                tt += self.buffer[4] as u64;
-                tt *= 256;
-                tt += self.buffer[3] as u64;
-                tt *= 256;
-                tt += self.buffer[2] as u64;
-                Message::AddStep(self.buffer[1], tt)
+                Message::AddStep(self.buffer[1], u64::from_ne_bytes(self.buffer[2..10].try_into().unwrap()))
             },
             3 => {
-                Message::DelStep(self.buffer[1], u64::from_be_bytes(self.buffer[2..10].try_into().unwrap()))
+                Message::DelStep(self.buffer[1], u64::from_ne_bytes(self.buffer[2..10].try_into().unwrap()))
             },
             4 => {
                 Message::GetTime(self.buffer[1])
@@ -142,7 +127,7 @@ impl Into<Message> for Buffer {
                 Message::GetRand(self.buffer[1])
             },
             6 => {
-                Message::WakeUp(u64::from_be_bytes(self.buffer[2..10].try_into().unwrap()))
+                Message::WakeUp(u64::from_ne_bytes(self.buffer[2..10].try_into().unwrap()))
             },
             _ => {
                 Message::Finished(self.buffer[1])

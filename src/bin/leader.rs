@@ -13,7 +13,7 @@ use network_time_simulator::serialize;
 use network_time_simulator::deserialize;
 use network_time_simulator::Buffer;
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 enum State {
     Running,
     Waiting,
@@ -62,7 +62,7 @@ const RANDOM_NUMBER: u64 = 84;
 fn init_queues(nb: u8) -> Result<Vec<PosixMq>> {
     let mut qs = Vec::new();
     qs.push(posixmq::OpenOptions::readonly() //the leader will receive messages on this queue
-            .max_msg_len(24)
+            .max_msg_len(10)
             .capacity(NB_FOLLOWER as usize)
             .create()
             .open(&format!("{}_{}", QNAME, 0))
@@ -70,7 +70,7 @@ fn init_queues(nb: u8) -> Result<Vec<PosixMq>> {
 
     for i in 0..nb {
         qs.push(posixmq::OpenOptions::writeonly() //the leader will send messages on those queues
-                .max_msg_len(24)
+                .max_msg_len(10)
                 .capacity(NB_FOLLOWER as usize)
                 .create()
                 .open(&format!("{}_{}", QNAME, i+1))
@@ -140,7 +140,7 @@ fn decision_process(states: &mut [State], msg: Message) -> Result<()> {
             //we could add context (e.g. on which file descriptor it is waiting) to guess which
             //process should be woke up
             //this would be easier if writing syscalls were also recorded
-            let ids = (0..states.len()).filter(|&i| i != id as usize);
+            let ids = (0..states.len()).filter(|&i| i != (id+1) as usize);
             for i in ids {
                 if states[i] != State::Finished {
                     states[i] = State::ToWakeUp;
@@ -153,6 +153,14 @@ fn decision_process(states: &mut [State], msg: Message) -> Result<()> {
             println!("Received Stuck from {}", id);
             //did not progress
             states[(id-1) as usize] = State::Blocked;
+            let ids = (0..states.len()).filter(|&i| i != (id-1) as usize);
+            for i in ids {
+                println!("Test {i}");
+                if states[i] == State::Waiting {
+                    println!("{i} detected");
+                    states[i] = State::ToWakeUp;
+                }
+            }
             Ok(())
         },
         _ => {
@@ -191,16 +199,14 @@ fn messages_handler(states: &mut [State], events: &mut BTreeMap<u64, Vec<u8>>, m
             println!("Received GetTime from {}", id);
             //return head key of the BTreeMap
             let msg = serialize(Message::WakeUp(*(events.first_key_value().unwrap().0)));
-            println!("sending reponse");
-            println!("sending 4");
             qs[id as usize].send(2, &msg.buffer)?;
-            println!("response sent");
+            println!("response WakeUp at {id}, {:?}", msg.buffer);
         },
         Message::GetRand(id) => {
             println!("Received GetRand from {}", id);
             let msg = serialize(Message::WakeUp(RANDOM_NUMBER));
-            println!("sending 3");
             qs[id as usize].send(2, &msg.buffer)?;
+            println!("response WakeUp at {id}, {:?}", msg.buffer);
         },
         Message::Finished(id) => {
             println!("Node {} has finished", id);
@@ -222,7 +228,9 @@ fn main_loop(qs: Vec<PosixMq>) -> Result<()> {
     loop {
         match qs[0].recv(&mut msg.buffer) {
             Ok(_) => {
+                println!("States before messages_handler {:?}", states);
                 messages_handler(&mut states, &mut events, &msg, &qs)?;
+                println!("States after messages_handler {:?}", states);
                 let mut nb_blocked = 0;
                 let mut nb_finished = 0;
                 for (s, q) in states.iter_mut().zip(qs[1..].iter()) {
@@ -230,8 +238,8 @@ fn main_loop(qs: Vec<PosixMq>) -> Result<()> {
                         State::Blocked => nb_blocked += 1,
                         State::ToWakeUp => {
                                 let msg = serialize(Message::WakeUp(*(events.first_key_value().unwrap().0)));
-                                println!("sending 2");
                                 q.send(1, &msg.buffer)?;
+                                println!("response WakeUp at {:?}, {:?}", q, msg.buffer);
                                 *s = State::Running;
                         },
                         State::Finished => nb_finished += 1,
@@ -251,12 +259,16 @@ fn main_loop(qs: Vec<PosixMq>) -> Result<()> {
                     {
                         let msg = serialize(Message::WakeUp(*(events.first_key_value().unwrap().0)));
                         for (s, q) in states.iter_mut().zip(qs[1..].iter()) {
-                            println!("sending 1");
-                            q.send(1, &msg.buffer)?;
-                            *s = State::Running;
+                            if s != &State::Finished {
+                                q.send(1, &msg.buffer)?;
+                                println!("response WakeUp at {:?}, {:?}", q, msg.buffer);
+                                *s = State::Running;
+                            }
                         }
                     }
                 }
+
+                println!("States after everything {:?}", states);
             },
             Err(e) =>  {
                 eprintln!("Message error: {e}");

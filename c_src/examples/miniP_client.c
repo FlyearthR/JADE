@@ -71,7 +71,7 @@ int main(int argc, char* argv[])
 	    perror("sendto");
 	    exit(EXIT_FAILURE);
         }
-	ret = poll(fds, 1, TIMEOUT * 1000);
+	ret = poll(fds, 1, TIMEOUT);
         if (ret == -1) {
 	    perror ("poll");
 	    exit(EXIT_FAILURE);
