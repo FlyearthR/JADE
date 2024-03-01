@@ -317,8 +317,10 @@ mod simple_network {
     use crate::{serialize, deserialize};
 
     use crate::{follower_init_queues, leader_init_queues, unlink_queues};
+    use serial_test::serial;
 
     #[test]
+    #[serial]
     fn test_init_queues() {
         let qs = leader_init_queues(3).expect("creating leader queues");
         let mut buf = vec![0; 100];
@@ -346,16 +348,23 @@ mod simple_network {
     }
 
     #[test]
+    #[serial]
     fn test_serialize_deserialize_mq() {
+        let _ = unlink_queues(2);
         let qs = leader_init_queues(1).expect("leader queues creating");
         let qio = follower_init_queues(1).expect("follower queues creating");
         let mut msg: Buffer = Buffer { buffer: [0; 10] };
         let msgs = [Progressed(42), Stuck(42), AddStep(42, 43), DelStep(42, 42), GetTime(42), GetRand(42), Finished(42)];
 
         for m in msgs {
+            let check = m.clone();
             qio.1.send(10, &serialize(m).buffer).expect("send follower message failed");
             qs[0].recv(&mut msg.buffer).unwrap();
-            assert_eq!(deserialize(msg), m);
+            assert_eq!(deserialize(msg), check);
         }
+        qs[1].send(1, &serialize(WakeUp(42)).buffer).expect("send leader message failed");
+        qio.0.recv(&mut msg.buffer).unwrap();
+        assert_eq!(deserialize(msg), WakeUp(42));
+        let _ = unlink_queues(2);
     }
 }

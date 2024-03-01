@@ -12,6 +12,8 @@ posixmq = "1.0.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_cbor = "0.10"
 rand = "0.8.5"
+serial = "0.4.0"
+serial_test = "3.0.0"
 
 [profile.dev]
 panic = "abort"
