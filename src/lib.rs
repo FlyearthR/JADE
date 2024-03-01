@@ -10,6 +10,7 @@ pub struct Buffer {
 
 
 #[repr(C)]
+#[derive(Debug, Eq, PartialEq)]
 //#[derive(Serialize, Deserialize)]
 pub enum Message {
     Progressed(u8),

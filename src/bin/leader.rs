@@ -1,5 +1,5 @@
 use posixmq::PosixMq;
-use std::io::ErrorKind;
+//use std::io::ErrorKind;
 use std::io::Result;
 use fork::{fork, Fork};
 use nix::unistd::execve;
@@ -7,7 +7,7 @@ use nix::unistd::execve;
 use std::ffi::CStr;
 use std::ffi::CString;
 use std::collections::BTreeMap;
-use core::time::Duration;
+//use core::time::Duration;
 use network_time_simulator::Message;
 use network_time_simulator::serialize;
 use network_time_simulator::deserialize;
@@ -59,7 +59,7 @@ const RANDOM_NUMBER: u64 = 84;
  * @arg nb: the number of follower
  * @return: on succes return a vector of posix queue, the first one beeing the leader's queue
  **/
-fn init_queues(nb: u8) -> Result<Vec<PosixMq>> {
+fn leader_init_queues(nb: u8) -> Result<Vec<PosixMq>> {
     let mut qs = Vec::new();
     qs.push(posixmq::OpenOptions::readonly() //the leader will receive messages on this queue
             .max_msg_len(10)
@@ -78,6 +78,32 @@ fn init_queues(nb: u8) -> Result<Vec<PosixMq>> {
     }
     Ok(qs)
 }
+
+/**
+ * Open one queue on which the follower will send message to the leader and
+ * one queue on which the follower will receive messages from the server
+ * @arg id: the id of the follower, strictly positive
+ * @return: on success return a pair of posix queues (follower_receiving_queue, follower_sending_queue)
+ */
+fn follower_init_queues(id: u8) -> Result<(PosixMq, PosixMq)> {
+    let qo = posixmq::OpenOptions::writeonly() //the follower will send messages to the
+        .max_msg_len(10)                           //leader on this queue
+        .capacity(NB_FOLLOWER as usize)
+        .create()
+        .open(&format!("{}_{}", QNAME, 0))
+        .expect("failed to open queue qo for a follower");
+    qo.set_cloexec(false)?;
+
+    let qi = posixmq::OpenOptions::readonly() //the follower will receive the messages of
+        .max_msg_len(10)                          //the leader on this queue
+        .capacity(NB_FOLLOWER as usize)
+        .create()    
+        .open(&format!("{}_{}", QNAME, id))
+        .expect("failed to open queue qi for a follower");
+    qi.set_cloexec(false)?;
+    return Ok((qi, qo));
+}
+
 /**
  * Deletes the queues created for the run
  * @arg nb: the number of queues to delete (i.e. the number of followers + 1)
@@ -107,24 +133,7 @@ fn run_follower(id: u8, exe: &CStr, args: &[&CStr], env: &[&CStr]) -> Result<i32
             Ok(child)
         },
         Ok(Fork::Child) => {
-            let qo = posixmq::OpenOptions::writeonly() //the follower will send messages to the
-                                                       //leader on this queue
-                .max_msg_len(10)
-                .capacity(NB_FOLLOWER as usize)
-                .create()
-                .open(&format!("{}_{}", QNAME, 0))
-                .expect("failed to open queue qo for a follower");
-            qo.set_cloexec(false)?;
-
-            let qi = posixmq::OpenOptions::readonly() //the follower will receive the messages of
-                                                      //the leader on this queue
-                .max_msg_len(10)
-                .capacity(NB_FOLLOWER as usize)
-                .create()    
-                .open(&format!("{}_{}", QNAME, id))
-                .expect("failed to open queue qi for a follower");
-            qi.set_cloexec(false)?;
-
+            let _ = follower_init_queues(id);
             execve(exe, args, env)?;
             Ok(0)
         }
@@ -288,7 +297,7 @@ fn main() {
             &[CString::new((format!("ID={}", i+1)).to_string().as_str()).unwrap().as_c_str(),
             CString::new((format!("LD_PRELOAD={}", LIB_NAME)).to_string().as_str()).unwrap().as_c_str()]).expect("run follower failed");
     }
-    let qs = init_queues(NB_FOLLOWER).expect("init queue failed"); //open the communication queues
+    let qs = leader_init_queues(NB_FOLLOWER).expect("init queue failed"); //open the communication queues
     /*for q in &qs[1..] {
         q.send(1, b"Born?").expect("send first message failed");
     }*/
@@ -297,4 +306,56 @@ fn main() {
 
     std::thread::sleep(std::time::Duration::from_millis(500));
     unlink_queues(NB_FOLLOWER).expect("unlink failed"); //delete all communication queues
+}
+
+#[cfg(test)]
+mod simple_network {
+    use network_time_simulator::Buffer;
+
+    //use network_time_simulator::{deserialize, serialize};
+    use crate::Message::*;
+    use crate::{serialize, deserialize};
+
+    use crate::{follower_init_queues, leader_init_queues, unlink_queues};
+
+    #[test]
+    fn test_init_queues() {
+        let qs = leader_init_queues(3).expect("creating leader queues");
+        let mut buf = vec![0; 100];
+        assert_eq!(qs.len(), 4);
+        for i in 1..4 {
+            let qio = follower_init_queues(i).expect("creating follower queues");
+            qs[i as usize].send(10, b"Born?").expect("send first message failed");
+            assert_eq!(qio.0.recv(&mut buf).unwrap(), (10, "Born?".len()));
+            qio.1.send(10, b"Yes!").expect("send first message failed");
+            assert_eq!(qs[0].recv(&mut buf).unwrap(), (10, "Yes!".len()));
+        }
+        unlink_queues(3).expect("error during unlinking");
+    }
+
+    #[test]
+    fn test_serialize_deserialize() {
+        assert_eq!(deserialize(serialize(Progressed(42))), Progressed(42));
+        assert_eq!(deserialize(serialize(Stuck(42))), Stuck(42));
+        assert_eq!(deserialize(serialize(AddStep(42, 43))), AddStep(42, 43));
+        assert_eq!(deserialize(serialize(DelStep(42, 42))), DelStep(42, 42));
+        assert_eq!(deserialize(serialize(GetTime(42))), GetTime(42));
+        assert_eq!(deserialize(serialize(GetRand(42))), GetRand(42));
+        assert_eq!(deserialize(serialize(WakeUp(42))), WakeUp(42));
+        assert_eq!(deserialize(serialize(Finished(42))), Finished(42));
+    }
+
+    #[test]
+    fn test_serialize_deserialize_mq() {
+        let qs = leader_init_queues(1).expect("leader queues creating");
+        let qio = follower_init_queues(1).expect("follower queues creating");
+        let mut msg: Buffer = Buffer { buffer: [0; 10] };
+        let msgs = [Progressed(42), Stuck(42), AddStep(42, 43), DelStep(42, 42), GetTime(42), GetRand(42), Finished(42)];
+
+        for m in msgs {
+            qio.1.send(10, &serialize(m).buffer).expect("send follower message failed");
+            qs[0].recv(&mut msg.buffer).unwrap();
+            assert_eq!(deserialize(msg), m);
+        }
+    }
 }
