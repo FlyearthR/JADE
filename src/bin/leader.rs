@@ -369,25 +369,30 @@ mod simple_network {
         let _ = unlink_queues(2);
     }
 
-    fn mini_setup(nb_add_step: u64, nb_stuck: u64, return_value: u8) {
+    fn mini_setup(nb_add_step: u64, nb_stuck: u64, nb_recv: u64, return_value: u8) {
         let _ = unlink_queues(2);
         let qs = leader_init_queues(2).expect("leader queues creating");
         let qf1 = follower_init_queues(1).expect("follower queues creating");
         let qf2 = follower_init_queues(2).expect("follower queues creating");
         let t = thread::spawn(|| {main_loop(qs)});
-        for i in 1..nb_add_step {
+        for i in 1..nb_add_step+1 {
+            println!("adding step");
             qf1.1.send(1, &serialize(AddStep(1, i)).buffer).expect("send add_step failed");
         }
-        for i in 1..nb_stuck {
+        for _i in 1..nb_stuck+1 {
+            println!("getting stuck");
             qf1.1.send(1, &serialize(Stuck(1)).buffer).expect("send stuck failed");
             qf2.1.send(1, &serialize(Stuck(2)).buffer).expect("send stuck failed");
         }
 
-        let mut msg: Buffer = Buffer { buffer: [0; 10] };
-        qf1.0.recv(&mut msg.buffer).unwrap();
-        assert_eq!(deserialize(msg), WakeUp(1));
-        qf2.0.recv(&mut msg.buffer).unwrap();
-        assert_eq!(deserialize(msg), WakeUp(1));
+        for i in 1..nb_recv+1 {
+            println!("receiving");
+            let mut msg: Buffer = Buffer { buffer: [0; 10] };
+            qf1.0.recv(&mut msg.buffer).unwrap();
+            assert_eq!(deserialize(msg), WakeUp(i));
+            qf2.0.recv(&mut msg.buffer).unwrap();
+            assert_eq!(deserialize(msg), WakeUp(i));
+        }
         qf1.1.send(1, &serialize(Finished(1)).buffer).expect("send finished failed");
         qf2.1.send(1, &serialize(Finished(2)).buffer).expect("send finished failed");
         if let Ok(nb) = t.join().unwrap() {
@@ -403,78 +408,24 @@ mod simple_network {
     #[test]
     #[serial]
     fn direct_finished() {
-        let _ = unlink_queues(2);
-        let qs = leader_init_queues(2).expect("leader queues creating");
-        let qf1 = follower_init_queues(1).expect("follower queues creating");
-        let qf2 = follower_init_queues(2).expect("follower queues creating");
-        qf1.1.send(1, &serialize(Finished(1)).buffer).expect("send finished failed");
-        qf2.1.send(1, &serialize(Finished(2)).buffer).expect("send finished failed");
-        if let Ok(nb) = main_loop(qs) {
-            let _ = unlink_queues(2);
-            assert_eq!(nb, 0);
-        }
-        else {
-            let _ = unlink_queues(2);
-            assert!(false);
-        }
+        mini_setup(0, 0, 0, 0);
     }
 
     #[test]
     #[serial]
     fn direct_blocked() {
-        let _ = unlink_queues(2);
-        let qs = leader_init_queues(2).expect("leader queues creating");
-        let qf1 = follower_init_queues(1).expect("follower queues creating");
-        let qf2 = follower_init_queues(2).expect("follower queues creating");
-        let t = thread::spawn(|| {main_loop(qs)});
-        qf1.1.send(1, &serialize(Stuck(1)).buffer).expect("send stuck failed");
-        qf2.1.send(1, &serialize(Stuck(2)).buffer).expect("send stuck failed");
-        qf1.1.send(1, &serialize(Finished(1)).buffer).expect("send finished failed");
-        qf2.1.send(1, &serialize(Finished(2)).buffer).expect("send finished failed");
-        if let Ok(nb) = t.join().unwrap() {
-            let _ = unlink_queues(2);
-            assert_eq!(nb, 1);
-        }
-        else {
-            let _ = unlink_queues(2);
-            assert!(false);
-        }
+        mini_setup(0, 1, 0, 1);
     }
 
     #[test]
     #[serial]
     fn one_step() {
-        let _ = unlink_queues(2);
-        let qs = leader_init_queues(2).expect("leader queues creating");
-        let qf1 = follower_init_queues(1).expect("follower queues creating");
-        let qf2 = follower_init_queues(2).expect("follower queues creating");
-        let t = thread::spawn(|| {main_loop(qs)});
-        qf1.1.send(1, &serialize(AddStep(1, 1)).buffer).expect("send add_step failed");
-        qf1.1.send(1, &serialize(Stuck(1)).buffer).expect("send stuck failed");
-        qf2.1.send(1, &serialize(Stuck(2)).buffer).expect("send stuck failed");
-
-        let mut msg: Buffer = Buffer { buffer: [0; 10] };
-        qf1.0.recv(&mut msg.buffer).unwrap();
-        assert_eq!(deserialize(msg), WakeUp(1));
-        qf2.0.recv(&mut msg.buffer).unwrap();
-        assert_eq!(deserialize(msg), WakeUp(1));
-        qf1.1.send(1, &serialize(Finished(1)).buffer).expect("send finished failed");
-        qf2.1.send(1, &serialize(Finished(2)).buffer).expect("send finished failed");
-        if let Ok(nb) = t.join().unwrap() {
-            let _ = unlink_queues(2);
-            assert_eq!(nb, 0);
-        }
-        else {
-            let _ = unlink_queues(2);
-            assert!(false);
-        }
+        mini_setup(1, 1, 1, 0);
     }
 
     #[test]
     #[serial]
     fn too_much_steps() {
-        
+        mini_setup(2, 1, 1, 0);
     }
-
-
 }
