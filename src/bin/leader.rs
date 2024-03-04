@@ -229,7 +229,7 @@ fn messages_handler(states: &mut [State], events: &mut BTreeMap<u64, Vec<u8>>, m
     Ok(())
 }
 
-fn main_loop(qs: Vec<PosixMq>) -> Result<()> {
+fn main_loop(qs: Vec<PosixMq>) -> Result<u8> {
     let mut states: [State; NB_FOLLOWER as usize] = [State::Running; NB_FOLLOWER as usize];
     let mut events: BTreeMap<u64, Vec<u8>> = BTreeMap::new();
     let mut msg: Buffer = Buffer { buffer: [0; 10] };
@@ -251,28 +251,31 @@ fn main_loop(qs: Vec<PosixMq>) -> Result<()> {
                                 println!("response WakeUp at {:?}, {:?}", q, msg.buffer);
                                 *s = State::Running;
                         },
-                        State::Finished => nb_finished += 1,
+                        State::Finished => {
+                            nb_finished += 1;
+                            println!("nb_finished incremented");
+                        },
                         _ => {},
                     }
                     
                 }
+                println!("number finished: {nb_finished}");
                 if nb_finished == NB_FOLLOWER {
-                    break;
+                    return Ok(0);
                 }
                 if nb_blocked+nb_finished == NB_FOLLOWER { //all followers are blocked or finished, we need to make a step in time
-                    if let None = events.pop_first() {
+                    let _ = events.pop_first();
+                    if let None = events.first_key_value() {
                         // the simulation is finished
-                        break;
+                        println!("Simulation finished by all process beeing blocked with no more events");
+                        return Ok(1);
                     }
-                    else
-                    {
-                        let msg = serialize(Message::WakeUp(*(events.first_key_value().unwrap().0)));
-                        for (s, q) in states.iter_mut().zip(qs[1..].iter()) {
-                            if s != &State::Finished {
-                                q.send(1, &msg.buffer)?;
-                                println!("response WakeUp at {:?}, {:?}", q, msg.buffer);
-                                *s = State::Running;
-                            }
+                    let msg = serialize(Message::WakeUp(*(events.first_key_value().unwrap().0)));
+                    for (s, q) in states.iter_mut().zip(qs[1..].iter()) {
+                        if s != &State::Finished {
+                            q.send(1, &msg.buffer)?;
+                            println!("response WakeUp at {:?}, {:?}", q, msg.buffer);
+                            *s = State::Running;
                         }
                     }
                 }
@@ -283,11 +286,8 @@ fn main_loop(qs: Vec<PosixMq>) -> Result<()> {
                 eprintln!("Message error: {e}");
                 panic!("recv on leader queue failed");
             },
-        }
-
-        
+        }      
     }
-    Ok(())
 }
 
 fn main() {
@@ -313,11 +313,12 @@ mod simple_network {
     use network_time_simulator::Buffer;
 
     //use network_time_simulator::{deserialize, serialize};
-    use crate::Message::*;
+    use crate::{main_loop, Message::*};
     use crate::{serialize, deserialize};
 
     use crate::{follower_init_queues, leader_init_queues, unlink_queues};
     use serial_test::serial;
+    use std::thread;
 
     #[test]
     #[serial]
@@ -367,4 +368,113 @@ mod simple_network {
         assert_eq!(deserialize(msg), WakeUp(42));
         let _ = unlink_queues(2);
     }
+
+    fn mini_setup(nb_add_step: u64, nb_stuck: u64, return_value: u8) {
+        let _ = unlink_queues(2);
+        let qs = leader_init_queues(2).expect("leader queues creating");
+        let qf1 = follower_init_queues(1).expect("follower queues creating");
+        let qf2 = follower_init_queues(2).expect("follower queues creating");
+        let t = thread::spawn(|| {main_loop(qs)});
+        for i in 1..nb_add_step {
+            qf1.1.send(1, &serialize(AddStep(1, i)).buffer).expect("send add_step failed");
+        }
+        for i in 1..nb_stuck {
+            qf1.1.send(1, &serialize(Stuck(1)).buffer).expect("send stuck failed");
+            qf2.1.send(1, &serialize(Stuck(2)).buffer).expect("send stuck failed");
+        }
+
+        let mut msg: Buffer = Buffer { buffer: [0; 10] };
+        qf1.0.recv(&mut msg.buffer).unwrap();
+        assert_eq!(deserialize(msg), WakeUp(1));
+        qf2.0.recv(&mut msg.buffer).unwrap();
+        assert_eq!(deserialize(msg), WakeUp(1));
+        qf1.1.send(1, &serialize(Finished(1)).buffer).expect("send finished failed");
+        qf2.1.send(1, &serialize(Finished(2)).buffer).expect("send finished failed");
+        if let Ok(nb) = t.join().unwrap() {
+            let _ = unlink_queues(2);
+            assert_eq!(nb, return_value);
+        }
+        else {
+            let _ = unlink_queues(2);
+            assert!(false);
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn direct_finished() {
+        let _ = unlink_queues(2);
+        let qs = leader_init_queues(2).expect("leader queues creating");
+        let qf1 = follower_init_queues(1).expect("follower queues creating");
+        let qf2 = follower_init_queues(2).expect("follower queues creating");
+        qf1.1.send(1, &serialize(Finished(1)).buffer).expect("send finished failed");
+        qf2.1.send(1, &serialize(Finished(2)).buffer).expect("send finished failed");
+        if let Ok(nb) = main_loop(qs) {
+            let _ = unlink_queues(2);
+            assert_eq!(nb, 0);
+        }
+        else {
+            let _ = unlink_queues(2);
+            assert!(false);
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn direct_blocked() {
+        let _ = unlink_queues(2);
+        let qs = leader_init_queues(2).expect("leader queues creating");
+        let qf1 = follower_init_queues(1).expect("follower queues creating");
+        let qf2 = follower_init_queues(2).expect("follower queues creating");
+        let t = thread::spawn(|| {main_loop(qs)});
+        qf1.1.send(1, &serialize(Stuck(1)).buffer).expect("send stuck failed");
+        qf2.1.send(1, &serialize(Stuck(2)).buffer).expect("send stuck failed");
+        qf1.1.send(1, &serialize(Finished(1)).buffer).expect("send finished failed");
+        qf2.1.send(1, &serialize(Finished(2)).buffer).expect("send finished failed");
+        if let Ok(nb) = t.join().unwrap() {
+            let _ = unlink_queues(2);
+            assert_eq!(nb, 1);
+        }
+        else {
+            let _ = unlink_queues(2);
+            assert!(false);
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn one_step() {
+        let _ = unlink_queues(2);
+        let qs = leader_init_queues(2).expect("leader queues creating");
+        let qf1 = follower_init_queues(1).expect("follower queues creating");
+        let qf2 = follower_init_queues(2).expect("follower queues creating");
+        let t = thread::spawn(|| {main_loop(qs)});
+        qf1.1.send(1, &serialize(AddStep(1, 1)).buffer).expect("send add_step failed");
+        qf1.1.send(1, &serialize(Stuck(1)).buffer).expect("send stuck failed");
+        qf2.1.send(1, &serialize(Stuck(2)).buffer).expect("send stuck failed");
+
+        let mut msg: Buffer = Buffer { buffer: [0; 10] };
+        qf1.0.recv(&mut msg.buffer).unwrap();
+        assert_eq!(deserialize(msg), WakeUp(1));
+        qf2.0.recv(&mut msg.buffer).unwrap();
+        assert_eq!(deserialize(msg), WakeUp(1));
+        qf1.1.send(1, &serialize(Finished(1)).buffer).expect("send finished failed");
+        qf2.1.send(1, &serialize(Finished(2)).buffer).expect("send finished failed");
+        if let Ok(nb) = t.join().unwrap() {
+            let _ = unlink_queues(2);
+            assert_eq!(nb, 0);
+        }
+        else {
+            let _ = unlink_queues(2);
+            assert!(false);
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn too_much_steps() {
+        
+    }
+
+
 }
