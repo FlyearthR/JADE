@@ -130,3 +130,12 @@ void __attribute__((destructor)) send_finished() {
     //printf("Sending message: Finished\n");
     send_msg(Finished, 0);
 }
+
+#define CHECK_STRING(str, size) do \
+{                                   \
+int n_term = 1; \
+int i; \
+for (i = 0 ; i < size && n_term; i++) \
+n_term = n_term && str[i]; \
+p_assert(!n_term); \
+} while(0)

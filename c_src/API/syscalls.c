@@ -103,8 +103,7 @@ int infinity_poll(struct pollfd *fds, nfds_t nfds, int timeout)
         waiting();
         do {
                 ret = LIBC_FUNCTION_GET(poll)(fds, nfds, 0);
-		blocking();
-        } while (ret == 0);
+        } while (ret == 0 && blocking());
         return ret;
 }
 
@@ -125,10 +124,9 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
         //printf("time in poll: {%i,; %i}\n", to.tv_sec, to.tv_usec);
         add_event(to);
         cur = waiting();
-	while (ret == 0 && before_timeval(cur, to)) {
+	do {
                 ret = LIBC_FUNCTION_GET(poll)(fds, nfds, 0);
-		cur = blocking();
-	}
+	} while (ret == 0 && before_timeval(blocking(), to));
 	suppress_event(to);
         return ret;
 }
@@ -147,10 +145,9 @@ int ppoll(struct pollfd *fds, nfds_t nfds,
         //printf("time in ppoll: {%i,; %i}\n", to.tv_sec, to.tv_usec);
         add_event(to);
         cur = waiting();
-	while (ret == 0 && before_timeval(cur, to)) {
+	do {
                 ret = LIBC_FUNCTION_GET(ppoll)(fds, nfds, &zeros, sigmask);
-		cur = blocking();
-	}
+	} while (ret == 0 && before_timeval(blocking(), to));
         suppress_event(to);
         return ret;
 }
