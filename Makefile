@@ -5,11 +5,10 @@ CFLAGS = -g
 
 test: all
 	cargo test
-	cd examples/ && ./unlink "/nts_mq_0" && ./unlink "/nts_mq_1" && ./unlink "/nts_mq_2"
 	cp -f target/debug/leader testing/leader
 	cp -f target/syscalls/syscalls.so testing/syscalls.so
-	cp -f target/examples/miniP_client test/client
-	cp -f target/examples/miniP_server test/server
+	cp -f target/examples/miniP_client tests/client
+	cp -f target/examples/miniP_server tests/server
 	cd testing && RUST_BACKTRACE=1 ./leader
 
 all: syscalls.so leader examples API 
@@ -20,10 +19,10 @@ syscalls.so: API
 examples: target/examples/miniP_client target/examples/miniP_server
 
 target/examples/miniP_client:
-	cd examples/miniP && $(CC) ${CFLAGS} miniP_client.c -o ../../target/examples/client
+	cd examples/miniP && $(CC) ${CFLAGS} miniP_client.c -o ../../target/examples/miniP_client
 
 target/examples/miniP_server:
-	cd examples/miniP && ${CC} ${CFLAGS} miniP_server.c -o ../../target/examples/server
+	cd examples/miniP && ${CC} ${CFLAGS} miniP_server.c -o ../../target/examples/miniP_server
 
 leader:
 	cargo build
@@ -38,8 +37,8 @@ clean:
 	rm -f c_src/*.o
 	rm -f c_src/*.so
 	rm -f c_src/*.a
-	rm -f examples/client
-	rm -f examples/server
+	rm -f examples/miniP_client
+	rm -f examples/miniP_server
 
 little_clean:
 	cd target/examples && rm -f miniP_server && rm -f miniP_client
