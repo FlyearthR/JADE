@@ -617,7 +617,7 @@ mod simple_network {
                     let q: &Option<(PosixMq, PosixMq)> = &$qfs[i as usize];
                     $tab[i] = Some($s.spawn(move || {
                         if i as usize > $prioritized {
-                            match q.unwrap().0.recv_timeout(&mut $msgs[i as usize].buffer, Duration::from_secs(1)) {
+                            match q.as_ref().unwrap().0.recv_timeout(&mut $msgs[i as usize].buffer, Duration::from_secs(1)) {
                                 Ok(x) => {
                                     assert!(false);
                                     Ok(x)
@@ -628,7 +628,7 @@ mod simple_network {
                                 },
                             }
                         } else {
-                            q.unwrap().0.recv_timeout(&mut $msgs[i as usize].buffer, Duration::from_secs(1))
+                            q.as_ref().unwrap().0.recv_timeout(&mut $msgs[i as usize].buffer, Duration::from_secs(1))
                         }
                     }));
                 }
@@ -643,7 +643,7 @@ mod simple_network {
     macro_rules! m_check {
         ($ts:ident, $already_received:ident, $id_order:expr) => {
             for i in 0..NB_FOLLOWERS!() {
-                match $ts[i].unwrap().join().unwrap() {
+                match $ts[i].take().expect("Uninit thread handle").join().unwrap() {
                     Ok(_) => {
                         assert!(!$already_received);
                         $already_received = true;
@@ -663,14 +663,14 @@ mod simple_network {
     macro_rules! m_send_1arg {
         ($msg:expr, $qfs:ident, $nb:expr) => {
             for i in 0..NB_FOLLOWERS!() {
-                $qfs[i].unwrap().1.send(1, &serialize($msg((i+1) as u8)).buffer).expect("send message failed");
+                $qfs[i].as_ref().unwrap().1.send(1, &serialize($msg((i+1) as u8)).buffer).expect("send message failed");
             }
         }
     }
     macro_rules! m_send_2arg {
         ($msg:expr, $arg:expr, $qfs:ident, $nb:expr) => {
             for i in 0..$nb {
-                $qfs[i].unwrap().1.send(1, &serialize($msg((i+1) as u8, $arg)).buffer).expect("send message failed");
+                $qfs[i].as_ref().unwrap().1.send(1, &serialize($msg((i+1) as u8, $arg)).buffer).expect("send message failed");
             }
         }
     }
@@ -686,7 +686,7 @@ mod simple_network {
             m_send_1arg!(Finished, $qfs, $nb)
         };
         (DelStep($id:expr, $step:expr), $qfs:ident) => {
-            $qfs[$id-1].unwrap().1.send(1, &serialize(DelStep(($id) as u8, $step)).buffer).expect("send DelStep failed");
+            $qfs[$id-1].as_ref().unwrap().1.send(1, &serialize(DelStep(($id) as u8, $step)).buffer).expect("send DelStep failed");
         };
         (DelStep(_, $step:expr), $qfs:ident, $nb:expr) => {
             m_send_2arg!(AddStep, $step, $qfs, $nb)
@@ -729,7 +729,7 @@ mod simple_network {
                     let mut ts: [Option<ScopedJoinHandle<Result<(u32, usize)>>> ; NB_FOLLOWERS!()] = [NONE_THREAD; NB_FOLLOWERS!()];
                     m_receive!(s, qfs, msgs, nb_f, ts);
                     for i in 0..nb_f {
-                        let _ = ts[i].unwrap().join().unwrap();
+                        let _ = ts[i].take().expect("uninit thread handle").join().unwrap();
                     }
                 });
                 m_send!(Finished(_), qfs, nb_f);
