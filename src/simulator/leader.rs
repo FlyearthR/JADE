@@ -507,7 +507,7 @@ mod unit_testing {
 
     #[test]
     fn test_one_to_wake_up() {
-        // test the if the decision process eventually wakes up every process
+        // tests if the decision process eventually wakes up every process
         const SIZE_TEST: u8 = 4;
         for id_progressing in 0..SIZE_TEST {
             for id_to_wake_up in 0..SIZE_TEST {
@@ -539,19 +539,22 @@ mod unit_testing {
         let _ = sim.messages_handler(&serialize(Message::AddStep(1, 1)), &leader_qs);
         let mut v = vec![1];
         assert_eq!(sim.events.first_key_value(), Some((&1, &v)));
+
         let _ = sim.messages_handler(&serialize(Message::AddStep(2, 1)), &leader_qs);
-        if let Some((&1, v)) = sim.events.first_key_value() {
-            assert!(v.contains(&1));
-            assert!(v.contains(&2));
-        }
         v.push(2);
+        if let Some((&1, v2)) = sim.events.first_key_value() {
+            assert!(v2.contains(&1));
+            assert!(v2.contains(&2));
+        } else {assert!(false);}
         assert_eq!(sim.events.first_key_value(), Some((&1, &v))); //TODO: compare at a higher level, not the Vec's
+
         let _ = sim.messages_handler(&serialize(Message::AddStep(2, 1)), &leader_qs);
         v.push(2);
         assert_eq!(sim.events.first_key_value(), Some((&1, &v)));
+
         let _ = sim.messages_handler(&serialize(Message::DelStep(1, 1)), &leader_qs);
-        v.remove(0);
-        assert_eq!(sim.events.first_key_value(), Some((&1, &v)));
+        
+        assert_eq!(sim.events.first_key_value(), Some((&1, &v[1..3].to_vec())));
         
     }
 }
@@ -569,7 +572,7 @@ mod determinism {
 
     macro_rules! NB_FOLLOWERS {
         () => {
-            32
+            10 //must be root to get higher than 10
         };
     }
 
