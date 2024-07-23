@@ -1,14 +1,19 @@
 use posixmq::PosixMq;
+use std::path::Path;
 use std::io::Result;
-use fork::{fork, Fork};
-use nix::unistd::execve;
+use std::fs;
+use std::env;
 use std::ffi::CStr;
 use std::ffi::CString;
 use std::collections::BTreeMap;
+use fork::{fork, Fork};
+use nix::unistd::execve;
 use network_time_simulator::Message;
 use network_time_simulator::serialize;
 use network_time_simulator::deserialize;
 use network_time_simulator::Buffer;
+use toml::Value;
+use toml::de::Error as TomlError;
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 enum State {
@@ -35,11 +40,12 @@ pub const fn validate_cstr_contents(bytes: &[u8]) {
     }
 }
 
-macro_rules! cstr {
-    ( $s:literal ) => {{
-        $crate::validate_cstr_contents($s.as_bytes());
-        unsafe { std::mem::transmute::<_, &std::ffi::CStr>(concat!($s, "\0")) }
-    }};
+fn cstringify(arr: &[&CStr]) -> Vec<CString> {
+    let mut ret: Vec<CString> = Vec::with_capacity(arr.len());
+    for e in arr.iter() {
+        ret.push(CString::from(*e));
+    }
+    return ret;
 }
 
 
@@ -48,8 +54,8 @@ const LIB_NAME: &str = "syscalls.so";
 /**
  * Provide a unique (system-wide) identifier for message queues
  */
-fn get_identifier() -> &'static str {
-    return "/nts_mq";
+fn get_identifier() -> String {
+    return "/nts_mq".to_string();
 }
 
 /**
@@ -155,30 +161,78 @@ fn decision_process(states: &mut [State], msg: Message) -> Result<()> {
 }
 
 
+#[derive(Debug)]
 pub struct Config {
     nb_follower: u8,
-    _qname: &'static str,
-    exe_names: Vec<&'static CStr>,
-    exe_args: Vec<Vec<&'static CStr>>,
+    _qname: String,
+    exe_names: Vec<CString>,
+    exe_args: Vec<Vec<CString>>,
     random_number: u64,
 }
 
 impl Config {
+    #[allow(dead_code)]
     fn default_config() -> Self {
         const NB_FOLLOWER: u8 = 2;
         const QNAME: &str = "/nts_mq";
-        const EXE_NAMES: [&CStr; 2] = [cstr!("./client"), cstr!("./server")];
-        const EXE_ARGS: [[&CStr; 5]; 2] = [[cstr!("./client"), cstr!("-i"), cstr!("127.0.0.1"), cstr!("-p"), cstr!("4443")],
-                                        [cstr!("./server"), cstr!("-i"), cstr!("127.0.0.1"), cstr!("-p"), cstr!("4443")]];
+        const EXE_NAMES: [&CStr; 2] = [c"./client", c"./server"];
+        const EXE1_ARGS: [&CStr; 5] = [c"./client", c"-i", c"127.0.0.1", c"-p", c"4443"];
+        const EXE2_ARGS: [&CStr; 5] = [c"./server", c"-i", c"127.0.0.1", c"-p", c"4443"];
         const RANDOM_NUMBER: u64 = 84;
     
         return Self {
             nb_follower: NB_FOLLOWER,
-            _qname: QNAME,
-            exe_names: Vec::from(EXE_NAMES),
-            exe_args: vec![Vec::from(EXE_ARGS[0]), Vec::from(EXE_ARGS[1])],
+            _qname: QNAME.to_string(),
+            exe_names: cstringify(&EXE_NAMES),
+            exe_args: vec![cstringify(&EXE1_ARGS), cstringify(&EXE2_ARGS)],
             random_number: RANDOM_NUMBER,
         }
+    }
+
+    pub fn new(path: &Path) -> std::result::Result<Config, TomlError> {
+        // Read the file content
+        let content = fs::read_to_string(path).expect("Failed to read the file");
+
+        // Parse the content as a TOML Value
+        let value: Value = toml::from_str(&content)?;
+
+        // Extract the values from the TOML Value
+        let nb_follower = value.get("nb_follower").and_then(Value::as_integer).unwrap_or(0) as u8;
+        let _qname = value.get("qname").and_then(Value::as_str).unwrap_or("").to_string();
+
+        let mut exe_names = Vec::new();
+        let mut exe_args = Vec::new();
+
+        if let Some(executables) = value.get("executables").and_then(Value::as_table) {
+            if let Some(exes) = executables.get("exe").and_then(Value::as_array) {
+                for exe in exes {
+                    if let Some(exe_table) = exe.as_table() {
+                        if let Some(path) = exe_table.get("path").and_then(Value::as_str) {
+                            exe_names.push(CString::new(path).unwrap());
+                        }
+
+                        if let Some(args) = exe_table.get("args").and_then(Value::as_array) {
+                            let args_vec = args.iter()
+                                .filter_map(|arg| arg.as_str().map(|s| CString::new(s).unwrap()))
+                                .collect();
+                            exe_args.push(args_vec);
+                        } else {
+                            exe_args.push(Vec::new());
+                        }
+                    }
+                }
+            }
+        }
+
+        let random_number = value.get("random_number").and_then(Value::as_integer).unwrap_or(0) as u64;
+
+        Ok(Config {
+            nb_follower,
+            _qname,
+            exe_names,
+            exe_args,
+            random_number,
+        })
     }
 }
 pub struct Simulation { //TODO: should contain PosixMq's
@@ -209,8 +263,8 @@ impl Simulation {
  * @return: the pid of the child on success
  **/
     fn run_follower(&self, id: u8, env: &[&CStr]) -> Result<i32> {
-        println!("Lauching {id}: {:?} {:?} {:?}", env, self.cfg.exe_names[id as usize],
-            &self.cfg.exe_args[id as usize]);
+        println!("Lauching {id}: {:?} {:?} {:?}", env, self.cfg.exe_names[(id-1) as usize],
+            &self.cfg.exe_args[(id-1) as usize]);
         match fork() {
             Ok(Fork::Parent(child)) => {
                 println!("Child: {}", child);
@@ -218,7 +272,7 @@ impl Simulation {
             },
             Ok(Fork::Child) => {
                 let _ = follower_init_queues(id, self.cfg.nb_follower);
-                execve(self.cfg.exe_names[id as usize], &self.cfg.exe_args[id as usize], env)?;
+                execve(&self.cfg.exe_names[(id-1) as usize], &self.cfg.exe_args[(id-1) as usize], env)?;
                 Ok(0)
             }
             Err(_) => Err(std::io::Error::new(std::io::ErrorKind::Other, String::from("Fork failed"))),
@@ -355,9 +409,23 @@ impl Simulation {
 }
 
 fn main() {
-    let cfg = Config::default_config();
-    let sim = Simulation::new(cfg);
-    sim.run();
+    let args: Vec<String> = env::args().collect();
+
+    match args.len() {
+        // no arguments passed
+        1 => {
+            println!("Please provide a config file");
+        },
+        // one argument passed
+        2 => {
+            let sim = Simulation::new(Config::new(Path::new(&args[1])).expect("Error parsing config file"));
+            println!("{:?}", sim.cfg);
+            sim.run();
+        },
+        _ => {
+            println!("Please provide a config file");
+        }
+    }
 
 }
 
@@ -553,8 +621,8 @@ mod unit_testing {
         assert_eq!(sim.events.first_key_value(), Some((&1, &v)));
 
         let _ = sim.messages_handler(&serialize(Message::DelStep(1, 1)), &leader_qs);
-        
-        assert_eq!(sim.events.first_key_value(), Some((&1, &v[1..3].to_vec())));
+        v[0] = 0;
+        assert_eq!(sim.events.first_key_value(), Some((&1, &v.to_vec())));
         
     }
 }
@@ -657,7 +725,7 @@ mod determinism {
     }
 
     /**
-     * Sends a message to all followers
+     * Sends a message from all followers
      */
     macro_rules! m_send {
         (Stuck(_), $qfs:ident, $nb:expr) => {
@@ -680,16 +748,16 @@ mod determinism {
     impl Config {    
         fn test_config(nb: u8) -> Self {
             const QNAME: &str = "/nts_mq";
-            const EXE_NAMES: [&CStr; 2] = [cstr!("./client"), cstr!("./server")];
-            const EXE_ARGS: [[&CStr; 5]; 2] = [[cstr!("./client"), cstr!("-i"), cstr!("127.0.0.1"), cstr!("-p"), cstr!("4443")],
-                                            [cstr!("./server"), cstr!("-i"), cstr!("127.0.0.1"), cstr!("-p"), cstr!("4443")]];
+            const EXE_NAMES: [&CStr; 2] = [c"./client", c"./server"];
+            const EXE1_ARGS: [&CStr; 5] = [c"./client", c"-i", c"127.0.0.1", c"-p", c"4443"];
+            const EXE2_ARGS: [&CStr; 5] = [c"./server", c"-i", c"127.0.0.1", c"-p", c"4443"];
             const RANDOM_NUMBER: u64 = 84;
         
             return Self {
                 nb_follower: nb,
-                _qname: QNAME,
-                exe_names: Vec::from(EXE_NAMES),
-                exe_args: vec![Vec::from(EXE_ARGS[0]), Vec::from(EXE_ARGS[1])],
+                _qname: QNAME.to_string(),
+                exe_names: cstringify(&EXE_NAMES),
+                exe_args: vec![cstringify(&EXE1_ARGS), cstringify(&EXE2_ARGS)],
                 random_number: RANDOM_NUMBER,
             }
         }

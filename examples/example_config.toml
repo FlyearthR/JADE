@@ -1,0 +1,19 @@
+# Queue name
+qname = 'some_queue'
+
+# Random number
+random_number = 123
+
+# Number of followers
+nb_follower = 2
+
+# Executables
+[executables]
+[[executables.exe]]
+path = 'examples/miniP/client'
+args = ["./client", "-i", "127.0.0.1", "-p", "4443"]
+
+[[executables.exe]]
+path = 'examples/miniP/server'
+args = ["./server", "-i", "127.0.0.1", "-p", "4443"]
+
