@@ -19,6 +19,7 @@ rand = "0.8.5"
 serial = "0.4.0"
 serial_test = "3.0.0"
 arr_macro = "0.2.1"
+toml = "0.8.14"
 
 [profile.dev]
 panic = "abort"

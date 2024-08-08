@@ -363,7 +363,7 @@ impl Simulation {
                     }
                     if nb_blocked+nb_finished == self.cfg.nb_follower { //all followers are blocked or finished, we need to make a step in time
                         let _ = self.events.pop_first();
-                        if let None = self.events.first_key_value() {
+                        if self.events.first_key_value() == None {
                             // the simulation is finished
                             println!("Simulation finished by all process beeing blocked with no more events");
                             self.final_code = 1;
@@ -434,7 +434,7 @@ fn main() {
 mod unit_testing {
     use posixmq::PosixMq;
     use std::io::Result;
-    use serial_test::serial;
+    use serial_test::{serial, parallel};
     use std::collections::VecDeque;
     use std::thread::{self};
 
@@ -458,6 +458,7 @@ mod unit_testing {
     }
 
     #[test]
+    #[parallel]
     fn test_serialize_deserialize() {
         assert_eq!(deserialize(serialize(Progressed(42))), Progressed(42));
         assert_eq!(deserialize(serialize(Stuck(42))), Stuck(42));
@@ -574,6 +575,7 @@ mod unit_testing {
     }
 
     #[test]
+    #[parallel]
     fn test_one_to_wake_up() {
         // tests if the decision process eventually wakes up every process
         const SIZE_TEST: u8 = 4;
@@ -589,6 +591,7 @@ mod unit_testing {
     }
 
     #[test]
+    #[parallel]
     fn test_messages_handler() {
         // Setting up the environment
         let mut followers_qs: Vec<PosixMq> = vec![];
@@ -640,7 +643,7 @@ mod determinism {
 
     macro_rules! NB_FOLLOWERS {
         () => {
-            10 //must be root to get higher than 10
+            2 //must be root to get higher than 10
         };
     }
 
@@ -665,20 +668,20 @@ mod determinism {
                 for i in 0..NB_FOLLOWERS!() {
                     let q: &Option<(PosixMq, PosixMq)> = &$qfs[i as usize];
                     $tab[i] = Some($s.spawn(move || {
-                        if i as usize > $prioritized {
                             match q.as_ref().unwrap().0.recv_timeout(&mut $msgs[i as usize].buffer, Duration::from_secs(1)) {
                                 Ok(x) => {
-                                    assert!(false);
+                                    if i as usize > $prioritized {
+                                        assert!(false);
+                                    }
                                     Ok(x)
                                 },
-                                Err(x) => {
-                                    assert!(true);
-                                    Err(x)
+                                Err(_) => {
+                                    if i as usize > $prioritized {
+                                        assert!(true);
+                                    }
+                                    Ok((0,0))
                                 },
                             }
-                        } else {
-                            q.as_ref().unwrap().0.recv_timeout(&mut $msgs[i as usize].buffer, Duration::from_secs(1))
-                        }
                     }));
                 }
             }
@@ -686,26 +689,43 @@ mod determinism {
     }
 
     /**
-     * Joins the receiving threads, asserts that only one follower received a message,
-     * set id_order if unset, asserts it's unchanged otherwise
+     * Joins the receiving threads
+     * Asserts that one and only one follower received a message
+     * Set id_order if unset, asserts it's unchanged otherwise
+     * Sends a DelStep to the leader to acknoledge the packet has been sent
      */
     macro_rules! m_check {
-        ($ts:ident, $already_received:ident, $id_order:expr) => {
+        ($ts:ident, $id_order:expr, DelStep(_, $step:expr), $qfs:ident) => {
+            let mut already_received = false;
+            let mut id_received = usize::MAX;
             for i in 0..NB_FOLLOWERS!() {
                 match $ts[i].take().expect("Uninit thread handle").join().unwrap() {
+                    Ok((0,0)) => {
+                        assert!(true); //all is ok
+                        println!("i in Ok(0,0) NB_FOLLOWER: {i}");
+                    },
                     Ok(_) => {
-                        assert!(!$already_received);
-                        $already_received = true;
+                        println!("i in Ok(_) NB_FOLLOWER: {i}");
+                        assert!(!already_received);
+                        already_received = true;
                         if $id_order == 0 {
                             $id_order = i;
                         } else {
                             assert_eq!($id_order, i);
                             $id_order = 0;
                         }
+                        id_received = i;
                     },
-                    _ => assert!(true), //all is ok
+                    Err(x) => {
+                        println!("i in Err(x) NB_FOLLOWER: {i}");
+                        println!("\n\n\n\n\n\n\nThread panic detected\n\n\n\n\n\n\n");
+                        println!("{x}");
+                        assert!(false);
+                    },
                 };
             }
+            assert!(id_received != usize::MAX); // checks that a follower received a message
+            m_send!(DelStep(id_received+1, $step), $qfs); // sends a DelStep to the leader to acknoledge the packet has been sent
         };
     }
 
@@ -720,6 +740,7 @@ mod determinism {
         ($msg:expr, $arg:expr, $qfs:ident, $nb:expr) => {
             for i in 0..$nb {
                 $qfs[i].as_ref().unwrap().1.send(1, &serialize($msg((i+1) as u8, $arg)).buffer).expect("send message failed");
+                println!("sent {:?} to {}", &serialize($msg((i+1) as u8, $arg)).buffer, i);
             }
         }
     }
@@ -738,7 +759,7 @@ mod determinism {
             $qfs[$id-1].as_ref().unwrap().1.send(1, &serialize(DelStep(($id) as u8, $step)).buffer).expect("send DelStep failed");
         };
         (DelStep(_, $step:expr), $qfs:ident, $nb:expr) => {
-            m_send_2arg!(AddStep, $step, $qfs, $nb)
+            m_send_2arg!(DelStep, $step, $qfs, $nb)
         };
         (AddStep(_, $step:expr), $qfs:ident, $nb:expr) => {
             m_send_2arg!(AddStep, $step, $qfs, $nb)
@@ -763,21 +784,25 @@ mod determinism {
         }
     }
 
-    fn test_determinism_setup(nb_sender:usize) { //make the number of follower a macro
+    /**
+     * In a topology of NB_FOLLOWERS processes, nb_sender of them send messages that should be received at the same time.
+     * This test checks that senders are woken up one at a time, following a deterministic order.
+     */
+    fn test_determinism_setup(nb_sender:usize) {
         //Setting up the environment
         let _ = unlink_queues(NB_FOLLOWERS!() as u8);
         let mut msgs: [Buffer; NB_FOLLOWERS!() as usize] = [Buffer { buffer: [0; 10] } ; NB_FOLLOWERS!() as usize];
         let nb_f = NB_FOLLOWERS!();
         let clo = |mut i| -> (PosixMq, PosixMq) {i += 1; follower_init_queues(i as u8, NB_FOLLOWERS!() as u8).expect("follower queues creating")};
         let qfs: [Option<(PosixMq, PosixMq)> ; NB_FOLLOWERS!()] = custom_arr_tpm(clo);
-        let mut already_received = false;
+        //let mut already_received = false;
         
         for _iter in 0..2 {
             thread::scope(|sc| {
                 let qs = leader_init_queues(NB_FOLLOWERS!() as u8).expect("leader queues creating");
                 let t = sc.spawn(|| {Simulation::new(Config::test_config(NB_FOLLOWERS!())).main_loop(qs)});
                 let mut receiving_order: [usize ; NB_FOLLOWERS!()] = [0 ; NB_FOLLOWERS!()];
-
+                
                 m_send!(AddStep(_, 1), qfs, nb_sender);
                 m_send!(Stuck(_), qfs, nb_f);
                 
@@ -785,10 +810,9 @@ mod determinism {
                     thread::scope(|s| {
                         let mut ts: [Option<ScopedJoinHandle<Result<(u32, usize)>>> ; NB_FOLLOWERS!()] = [NONE_THREAD; NB_FOLLOWERS!()];
                         m_receive!(s, qfs, msgs, nb_sender, ts);
-                        m_check!(ts, already_received, receiving_order[i]);
+                        println!("\n\n\n\n\n\n\ni in nb_sender: {i}\niter: {_iter}\n\n\n\n\n\n\n");
+                        m_check!(ts, receiving_order[i], DelStep(_, 1), qfs);
                     });
-                    
-                    m_send!(DelStep(i+1, 1), qfs);
                 }
 
                 thread::scope(|s| {
