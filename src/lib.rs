@@ -1,31 +1,70 @@
 mod follower;
 
-//use serde::{Serialize, Deserialize};
+pub const SIZE_BUFFER: usize = 25;
+
+#[repr(C)]
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct Ipv4AddrC {
+    segments: [u8; 4],
+}
+impl Ipv4AddrC {
+    pub fn new(a: u8, b: u8, c: u8, d: u8) -> Self {
+        Self { segments: [a, b, c, d] }
+    }
+
+    pub fn octets(self) -> [u8; 4] {
+        self.segments
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct Ipv6AddrC {
+    segments: [u16; 8],
+}
+impl Ipv6AddrC {
+    pub fn new(a: u16, b: u16, c: u16, d: u16, e: u16, f: u16, g: u16, h: u16) -> Self {
+        Self { segments: [a, b, c, d, e, f, g, h] }
+    }
+
+    pub fn segments(self) -> [u16; 8] {
+        self.segments
+    }
+}
 
 #[repr(C)]
 #[derive(Copy, Clone, PartialEq)]
 pub struct Buffer {
-    pub buffer: [u8; 10],
+    pub buffer: [u8; SIZE_BUFFER],
+}
+
+impl Buffer {
+    pub fn new() -> Buffer {
+        Buffer { buffer: [0; SIZE_BUFFER] }
+    }
 }
 
 
 #[repr(C)]
 #[derive(Debug, Eq, PartialEq, Clone)]
-//#[derive(Serialize, Deserialize)]
 pub enum Message {
-    Progressed(u8),
-    Stuck(u8),
-    AddStep(u8, u64),
-    DelStep(u8, u64),
-    GetTime(u8),
-    GetRand(u8),
-    WakeUp(u64),
-    Finished(u8),
+    Progressed(u8),                 // 0
+    Stuck(u8),                      // 1
+    AddStep(u8, u64),               // 2
+    DelStep(u8, u64),               // 3
+    HasToSend4(u8, Ipv4AddrC, u64), // 4
+    HasToSend6(u8, Ipv6AddrC, u64), // 5
+    Send(u64),                      // 6
+    Sent(u64),                      // 7
+    GetTime(u8),                    // 8
+    GetRand(u8),                    // 9
+    WakeUp(u64),                    // 10
+    Finished(u8),                   // 11
 }
 
 impl From<Message> for Buffer {
     fn from(msg: Message) -> Self {
-        let mut tab: [u8; 10] = [0; 10];
+        let mut tab: [u8; SIZE_BUFFER] = [0; SIZE_BUFFER];
         match msg {
             Message::Progressed(id) => {
                 tab[0] = 0;
@@ -44,23 +83,6 @@ impl From<Message> for Buffer {
                     tab[i+2] = tt[i];
                     i = i + 1;
                 }
-                /*let mut tt = t;
-                tab[2] = (tt & 0b11111111) as u8;
-                tt /= 256;
-                tab[3] = (tt & 0b11111111) as u8;
-                tt /= 256;
-                tab[4] = (tt & 0b11111111) as u8;
-                tt /= 256;
-                tab[5] = (tt & 0b11111111) as u8;
-                tt /= 256;
-                tab[6] = (tt & 0b11111111) as u8;
-                tt /= 256;
-                tab[7] = (tt & 0b11111111) as u8;
-                tt /= 256;
-                tab[8] = (tt & 0b11111111) as u8;
-                tt /= 256;
-                tab[9] = (tt & 0b11111111) as u8;*/
-                //tab[2] = 1;
             },
             Message::DelStep(id, t) => {
                 tab[0] = 3;
@@ -72,16 +94,68 @@ impl From<Message> for Buffer {
                     i = i + 1;
                 }
             },
-            Message::GetTime(id) => {
+            Message::HasToSend4(id, addr, pkt_id) => {
                 tab[0] = 4;
+                tab[1] = id;
+                let t = addr.octets();
+                let mut i = 0;
+                while i < 4 {
+                    tab[i+2] = t[i];
+                    i = i + 1;
+                }
+                let t1 = pkt_id.to_ne_bytes();
+                i = 0;
+                while i < 8 {
+                    tab[i+6] = t1[i];
+                    i = i + 1;
+                }
+            },
+            Message::HasToSend6(id, addr, pkt_id) => {
+                tab[0] = 5;
+                tab[1] = id;
+                let t = addr.segments();
+                let mut i = 0;
+                while i < 8 {
+                    let tt = t[i].to_ne_bytes();
+                    tab[2*i+2] = tt[0];
+                    tab[2*i+3] = tt[1];
+                    i = i + 1;
+                }
+                let t1 = pkt_id.to_ne_bytes();
+                i = 0;
+                while i < 8 {
+                    tab[i+18] = t1[i];
+                    i = i + 1;
+                }
+            },
+            Message::Send(pkt_id) => {
+                tab[0] = 6;
+                let tt = pkt_id.to_ne_bytes();
+                let mut i = 0;
+                while i < 8 {
+                    tab[i+2] = tt[i];
+                    i = i + 1;
+                }
+            },
+            Message::Sent(pkt_id) => {
+                tab[0] = 7;
+                let tt = pkt_id.to_ne_bytes();
+                let mut i = 0;
+                while i < 8 {
+                    tab[i+2] = tt[i];
+                    i = i + 1;
+                }
+            },
+            Message::GetTime(id) => {
+                tab[0] = 8;
                 tab[1] = id;
             },
             Message::GetRand(id) => {
-                tab[0] = 5;
+                tab[0] = 9;
                 tab[1] = id;
             },
             Message::WakeUp(t) => {
-                tab[0] = 6;
+                tab[0] = 10;
                 let tt = t.to_ne_bytes();
                 let mut i = 0;
                 while i < 8 {
@@ -90,21 +164,13 @@ impl From<Message> for Buffer {
                 }
             },
             Message::Finished(id) => {
-                tab[0] = 7;
+                tab[0] = 11;
                 tab[1] = id;
             },
         }        
         Buffer {buffer : tab}
     }
 }
-
-/*impl Into<Vec<u8> for Buffer {
-    fn into(self) -> Vec<u8> {
-        unsafe {
-            Vec::from_raw_parts(self.buffer as *mut u8, self.len as usize, self.len as usize)
-        }
-    }
-}*/
 
 impl Into<Message> for Buffer {
     fn into(self) -> Message {
@@ -122,12 +188,35 @@ impl Into<Message> for Buffer {
                 Message::DelStep(self.buffer[1], u64::from_ne_bytes(self.buffer[2..10].try_into().unwrap()))
             },
             4 => {
-                Message::GetTime(self.buffer[1])
+                Message::HasToSend4(self.buffer[1],
+                    Ipv4AddrC::new(self.buffer[2], self.buffer[3], self.buffer[4], self.buffer[5]),
+                    u64::from_ne_bytes(self.buffer[6..14].try_into().unwrap()))
             },
             5 => {
-                Message::GetRand(self.buffer[1])
+                Message::HasToSend6(self.buffer[1],
+                    Ipv6AddrC::new(u16::from_ne_bytes(self.buffer[2..4].try_into().unwrap()), 
+                        u16::from_ne_bytes(self.buffer[4..6].try_into().unwrap()), 
+                        u16::from_ne_bytes(self.buffer[6..8].try_into().unwrap()), 
+                        u16::from_ne_bytes(self.buffer[8..10].try_into().unwrap()),
+                        u16::from_ne_bytes(self.buffer[10..12].try_into().unwrap()), 
+                        u16::from_ne_bytes(self.buffer[12..14].try_into().unwrap()), 
+                        u16::from_ne_bytes(self.buffer[14..16].try_into().unwrap()), 
+                        u16::from_ne_bytes(self.buffer[16..18].try_into().unwrap())),
+                    u64::from_ne_bytes(self.buffer[18..26].try_into().unwrap()))
             },
             6 => {
+                Message::Send(u64::from_ne_bytes(self.buffer[1..9].try_into().unwrap()))
+            },
+            7 => {
+                Message::Sent(u64::from_ne_bytes(self.buffer[1..9].try_into().unwrap()))
+            },
+            8 => {
+                Message::GetTime(self.buffer[1])
+            },
+            9 => {
+                Message::GetRand(self.buffer[1])
+            },
+            10 => {
                 Message::WakeUp(u64::from_ne_bytes(self.buffer[2..10].try_into().unwrap()))
             },
             _ => {
@@ -139,7 +228,6 @@ impl Into<Message> for Buffer {
 
 #[no_mangle]
 pub extern "C" fn serialize(msg: Message) -> Buffer {
-    //let msg_vec = serde_cbor::to_vec(&msg).expect("Unable to serialize message");
     Buffer::from(msg)
 }
 
@@ -147,12 +235,3 @@ pub extern "C" fn serialize(msg: Message) -> Buffer {
 pub extern "C" fn deserialize(msg: Buffer) -> Message {
     Buffer::into(msg)
 }
-
-/*#[allow(dead_code)]
-pub fn deserialize(msg: &[u8]) -> Message {
-    serde_cbor::from_slice(msg).unwrap()
-}
-
-pub fn serialize_u64(msg: u64) -> [u8; 8] {
-    msg.to_be_bytes()
-}*/

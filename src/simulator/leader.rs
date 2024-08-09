@@ -1,3 +1,4 @@
+use network_time_simulator::SIZE_BUFFER;
 use posixmq::PosixMq;
 use std::path::Path;
 use std::io::Result;
@@ -67,7 +68,7 @@ fn get_identifier() -> String {
 fn leader_init_queues(nb: u8) -> Result<Vec<PosixMq>> {
     let mut qs = Vec::new();
     qs.push(posixmq::OpenOptions::readonly() //the leader will receive messages on this queue
-            .max_msg_len(10)
+            .max_msg_len(SIZE_BUFFER)
             .capacity(nb as usize)
             .create()
             .open(&format!("{}_{}", get_identifier(), 0))
@@ -75,7 +76,7 @@ fn leader_init_queues(nb: u8) -> Result<Vec<PosixMq>> {
 
     for i in 0..nb {
         qs.push(posixmq::OpenOptions::writeonly() //the leader will send messages on those queues
-                .max_msg_len(10)
+                .max_msg_len(SIZE_BUFFER)
                 .capacity(nb as usize)
                 .create()
                 .open(&format!("{}_{}", get_identifier(), i+1))
@@ -93,7 +94,7 @@ fn leader_init_queues(nb: u8) -> Result<Vec<PosixMq>> {
  */
 fn follower_init_queues(id: u8, nb: u8) -> Result<(PosixMq, PosixMq)> {
     let qo = posixmq::OpenOptions::writeonly() //the follower will send messages to the
-        .max_msg_len(10)                           //leader on this queue
+        .max_msg_len(SIZE_BUFFER)                           //leader on this queue
         .capacity(nb as usize)
         .create()
         .open(&format!("{}_{}", get_identifier(), 0))
@@ -101,7 +102,7 @@ fn follower_init_queues(id: u8, nb: u8) -> Result<(PosixMq, PosixMq)> {
     qo.set_cloexec(false)?;
 
     let qi = posixmq::OpenOptions::readonly() //the follower will receive the messages of
-        .max_msg_len(10)                          //the leader on this queue
+        .max_msg_len(SIZE_BUFFER)                          //the leader on this queue
         .capacity(nb as usize)
         .create()    
         .open(&format!("{}_{}", get_identifier(), id))
@@ -330,13 +331,13 @@ impl Simulation {
     }
 
     fn main_loop(mut self, qs: Vec<PosixMq>) -> Result<Self> {
-        let mut msg: Buffer = Buffer { buffer: [0; 10] };
+        let mut msg: Buffer = Buffer::new();
         self.events.insert(0, vec![0]);
         loop {
             match qs[0].recv(&mut msg.buffer) {
                 Ok(_) => {
                     println!("States before messages_handler {:?}", self.states);
-                    self.messages_handler( &msg, &qs)?;
+                    self.messages_handler(&msg, &qs)?;
                     println!("States after messages_handler {:?}", self.states);
                     let mut nb_blocked = 0;
                     let mut nb_finished = 0;
@@ -449,10 +450,10 @@ mod unit_testing {
         assert_eq!(qs.len(), 4);
         for i in 1..4 {
             let qio = follower_init_queues(i, 1).expect("creating follower queues");
-            qs[i as usize].send(10, b"Born?").expect("send first message failed");
-            assert_eq!(qio.0.recv(&mut buf).unwrap(), (10, "Born?".len()));
-            qio.1.send(10, b"Yes!").expect("send first message failed");
-            assert_eq!(qs[0].recv(&mut buf).unwrap(), (10, "Yes!".len()));
+            qs[i as usize].send(SIZE_BUFFER as u32, b"Born?").expect("send first message failed");
+            assert_eq!(qio.0.recv(&mut buf).unwrap(), (SIZE_BUFFER as u32, "Born?".len()));
+            qio.1.send(SIZE_BUFFER as u32, b"Yes!").expect("send first message failed");
+            assert_eq!(qs[0].recv(&mut buf).unwrap(), (SIZE_BUFFER as u32, "Yes!".len()));
         }
         unlink_queues(3).expect("error during unlinking");
     }
@@ -476,12 +477,12 @@ mod unit_testing {
         let _ = unlink_queues(2);
         let qs = leader_init_queues(1).expect("leader queues creating");
         let qio = follower_init_queues(1, 1).expect("follower queues creating");
-        let mut msg: Buffer = Buffer { buffer: [0; 10] };
+        let mut msg: Buffer = Buffer::new();
         let msgs = [Progressed(42), Stuck(42), AddStep(42, 43), DelStep(42, 42), GetTime(42), GetRand(42), Finished(42)];
 
         for m in msgs {
             let check = m.clone();
-            qio.1.send(10, &serialize(m).buffer).expect("send follower message failed");
+            qio.1.send(SIZE_BUFFER as u32, &serialize(m).buffer).expect("send follower message failed");
             qs[0].recv(&mut msg.buffer).unwrap();
             assert_eq!(deserialize(msg), check);
         }
@@ -509,7 +510,7 @@ mod unit_testing {
 
         for i in 1..nb_recv+1 {
             println!("receiving");
-            let mut msg: Buffer = Buffer { buffer: [0; 10] };
+            let mut msg: Buffer = Buffer::new();
             qf1.0.recv(&mut msg.buffer).unwrap();
             assert_eq!(deserialize(msg), WakeUp(i));
             qf2.0.recv(&mut msg.buffer).unwrap();
@@ -791,7 +792,7 @@ mod determinism {
     fn test_determinism_setup(nb_sender:usize) {
         //Setting up the environment
         let _ = unlink_queues(NB_FOLLOWERS!() as u8);
-        let mut msgs: [Buffer; NB_FOLLOWERS!() as usize] = [Buffer { buffer: [0; 10] } ; NB_FOLLOWERS!() as usize];
+        let mut msgs: [Buffer; NB_FOLLOWERS!() as usize] = [Buffer::new() ; NB_FOLLOWERS!() as usize];
         let nb_f = NB_FOLLOWERS!();
         let clo = |mut i| -> (PosixMq, PosixMq) {i += 1; follower_init_queues(i as u8, NB_FOLLOWERS!() as u8).expect("follower queues creating")};
         let qfs: [Option<(PosixMq, PosixMq)> ; NB_FOLLOWERS!()] = custom_arr_tpm(clo);

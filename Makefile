@@ -4,7 +4,7 @@ CFLAGS = -g
 .PHONY: syscalls.so all test API leader clean little_clean
 
 test: all
-	#cargo test --package network_time_simulator --bin simulator -- unit_testing --show-output --nocapture
+	cargo test --package network_time_simulator --bin simulator -- unit_testing --show-output --nocapture
 	cargo test --package network_time_simulator --bin simulator -- determinism --show-output --nocapture
 	cp -f target/debug/leader testing/leader
 	cp -f target/syscalls/syscalls.so testing/syscalls.so
