@@ -462,13 +462,77 @@ mod unit_testing {
     #[parallel]
     fn test_serialize_deserialize() {
         assert_eq!(deserialize(serialize(Progressed(42))), Progressed(42));
+        assert_ne!(deserialize(serialize(Progressed(42))), Progressed(43));
+
         assert_eq!(deserialize(serialize(Stuck(42))), Stuck(42));
+        assert_ne!(deserialize(serialize(Stuck(42))), Stuck(43));
+        
         assert_eq!(deserialize(serialize(AddStep(42, 43))), AddStep(42, 43));
+        assert_ne!(deserialize(serialize(AddStep(42, 43))), AddStep(42, 44));
+        assert_ne!(deserialize(serialize(AddStep(42, 43))), AddStep(43, 43));
+        
         assert_eq!(deserialize(serialize(DelStep(42, 42))), DelStep(42, 42));
+        assert_ne!(deserialize(serialize(DelStep(42, 42))), DelStep(42, 43));
+        assert_ne!(deserialize(serialize(DelStep(42, 42))), DelStep(43, 42));
+        
+        assert_eq!(deserialize(serialize(HasToSend4(42, Ipv4AddrC::new(42, 43, 44, 45), 42))),
+            HasToSend4(42, Ipv4AddrC::new(42, 43, 44, 45), 42));
+        assert_ne!(deserialize(serialize(HasToSend4(42, Ipv4AddrC::new(42, 43, 44, 45), 42))),
+            HasToSend4(43, Ipv4AddrC::new(42, 43, 44, 45), 42));
+        assert_ne!(deserialize(serialize(HasToSend4(42, Ipv4AddrC::new(42, 43, 44, 45), 42))),
+            HasToSend4(42, Ipv4AddrC::new(43, 43, 44, 45), 42));
+        assert_ne!(deserialize(serialize(HasToSend4(42, Ipv4AddrC::new(42, 43, 44, 45), 42))),
+            HasToSend4(42, Ipv4AddrC::new(42, 44, 44, 45), 42));
+        assert_ne!(deserialize(serialize(HasToSend4(42, Ipv4AddrC::new(42, 43, 44, 45), 42))),
+            HasToSend4(42, Ipv4AddrC::new(42, 43, 45, 45), 42));
+        assert_ne!(deserialize(serialize(HasToSend4(42, Ipv4AddrC::new(42, 43, 44, 45), 42))),
+            HasToSend4(42, Ipv4AddrC::new(42, 43, 44, 46), 42));
+        assert_ne!(deserialize(serialize(HasToSend4(42, Ipv4AddrC::new(42, 43, 44, 45), 42))),
+            HasToSend4(42, Ipv4AddrC::new(42, 43, 44, 45), 43));
+        
+        assert_eq!(deserialize(serialize(HasToSend6(42, Ipv6AddrC::new(42, 43, 43, 44, 46, 47, 48, 49), 42))),
+            HasToSend6(42, Ipv6AddrC::new(42, 43, 43, 44, 46, 47, 48, 49), 42));
+
+        assert_ne!(deserialize(serialize(HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
+            HasToSend6(43, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42));
+
+        assert_ne!(deserialize(serialize(HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
+            HasToSend6(42, Ipv6AddrC::new(43, 43, 44, 45, 46, 47, 48, 49), 42));
+        assert_ne!(deserialize(serialize(HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
+            HasToSend6(42, Ipv6AddrC::new(42, 44, 44, 45, 46, 47, 48, 49), 42));
+        assert_ne!(deserialize(serialize(HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
+            HasToSend6(42, Ipv6AddrC::new(42, 43, 45, 45, 46, 47, 48, 49), 42));
+        assert_ne!(deserialize(serialize(HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
+            HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 46, 46, 47, 48, 49), 42));
+        assert_ne!(deserialize(serialize(HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
+            HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 47, 47, 48, 49), 42));
+        assert_ne!(deserialize(serialize(HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
+            HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 46, 48, 48, 49), 42));
+        assert_ne!(deserialize(serialize(HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
+            HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 49, 49), 42));
+        assert_ne!(deserialize(serialize(HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
+            HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 50), 42));
+
+        assert_ne!(deserialize(serialize(HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
+            HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 43));
+
+        assert_eq!(deserialize(serialize(Send(42))), Send(42));
+        assert_ne!(deserialize(serialize(Send(42))), Send(43));
+
+        assert_eq!(deserialize(serialize(Sent(42))), Sent(42));
+        assert_ne!(deserialize(serialize(Sent(42))), Sent(43));
+
         assert_eq!(deserialize(serialize(GetTime(42))), GetTime(42));
+        assert_ne!(deserialize(serialize(GetTime(42))), GetTime(43));
+        
         assert_eq!(deserialize(serialize(GetRand(42))), GetRand(42));
+        assert_ne!(deserialize(serialize(GetRand(42))), GetRand(43));
+        
         assert_eq!(deserialize(serialize(WakeUp(42))), WakeUp(42));
+        assert_ne!(deserialize(serialize(WakeUp(42))), WakeUp(43));
+        
         assert_eq!(deserialize(serialize(Finished(42))), Finished(42));
+        assert_ne!(deserialize(serialize(Finished(42))), Finished(43));
     }
 
     #[test]
@@ -478,7 +542,9 @@ mod unit_testing {
         let qs = leader_init_queues(1).expect("leader queues creating");
         let qio = follower_init_queues(1, 1).expect("follower queues creating");
         let mut msg: Buffer = Buffer::new();
-        let msgs = [Progressed(42), Stuck(42), AddStep(42, 43), DelStep(42, 42), GetTime(42), GetRand(42), Finished(42)];
+        let msgs = [Progressed(42), Stuck(42), AddStep(42, 43),
+            HasToSend4(42, Ipv4AddrC::new(42, 43, 44, 45), 42), HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42),
+            Send(42), Sent(42), DelStep(42, 42), GetTime(42), GetRand(42), Finished(42)];
 
         for m in msgs {
             let check = m.clone();

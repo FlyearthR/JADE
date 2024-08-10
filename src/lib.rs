@@ -1,6 +1,6 @@
 mod follower;
 
-pub const SIZE_BUFFER: usize = 25;
+pub const SIZE_BUFFER: usize = 26;
 
 #[repr(C)]
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -205,10 +205,10 @@ impl Into<Message> for Buffer {
                     u64::from_ne_bytes(self.buffer[18..26].try_into().unwrap()))
             },
             6 => {
-                Message::Send(u64::from_ne_bytes(self.buffer[1..9].try_into().unwrap()))
+                Message::Send(u64::from_ne_bytes(self.buffer[2..10].try_into().unwrap()))
             },
             7 => {
-                Message::Sent(u64::from_ne_bytes(self.buffer[1..9].try_into().unwrap()))
+                Message::Sent(u64::from_ne_bytes(self.buffer[2..10].try_into().unwrap()))
             },
             8 => {
                 Message::GetTime(self.buffer[1])
