@@ -60,42 +60,16 @@ fn get_identifier() -> String {
 }
 
 /**
- * Initialize one queue on which the leader will wait for the messages from the followers and a
- * queue by follower
- * @arg nb: the number of follower
- * @return: on succes return a vector of posix queue, the first one beeing the leader's queue
- **/
-fn leader_init_queues(nb: u8) -> Result<Vec<PosixMq>> {
-    let mut qs = Vec::new();
-    qs.push(posixmq::OpenOptions::readonly() //the leader will receive messages on this queue
-            .max_msg_len(SIZE_BUFFER)
-            .capacity(nb as usize)
-            .create()
-            .open(&format!("{}_{}", get_identifier(), 0))
-            ?);
-
-    for i in 0..nb {
-        qs.push(posixmq::OpenOptions::writeonly() //the leader will send messages on those queues
-                .max_msg_len(SIZE_BUFFER)
-                .capacity(nb as usize)
-                .create()
-                .open(&format!("{}_{}", get_identifier(), i+1))
-                ?);
-    }
-    Ok(qs)
-}
-
-/**
  * Open one queue on which the follower will send message to the leader and
- * one queue on which the follower will receive messages from the server
+ * one queue on which the follower will receive messages from the leader
  * @arg id: the id of the follower, strictly positive
  * @arg nb: the size of the queue (use the number of followers)
  * @return: on success return a pair of posix queues (follower_receiving_queue, follower_sending_queue)
  */
-fn follower_init_queues(id: u8, nb: u8) -> Result<(PosixMq, PosixMq)> {
+fn follower_init_queues(id: u8, nb: usize) -> Result<(PosixMq, PosixMq)> {
     let qo = posixmq::OpenOptions::writeonly() //the follower will send messages to the
         .max_msg_len(SIZE_BUFFER)                           //leader on this queue
-        .capacity(nb as usize)
+        .capacity(nb)
         .create()
         .open(&format!("{}_{}", get_identifier(), 0))
         .expect("failed to open queue qo for a follower");
@@ -103,7 +77,7 @@ fn follower_init_queues(id: u8, nb: u8) -> Result<(PosixMq, PosixMq)> {
 
     let qi = posixmq::OpenOptions::readonly() //the follower will receive the messages of
         .max_msg_len(SIZE_BUFFER)                          //the leader on this queue
-        .capacity(nb as usize)
+        .capacity(nb)
         .create()    
         .open(&format!("{}_{}", get_identifier(), id))
         .expect("failed to open queue qi for a follower");
@@ -164,7 +138,7 @@ fn decision_process(states: &mut [State], msg: Message) -> Result<()> {
 
 #[derive(Debug)]
 pub struct Config {
-    nb_follower: u8,
+    nb_follower: usize,
     _qname: String,
     exe_names: Vec<CString>,
     exe_args: Vec<Vec<CString>>,
@@ -174,7 +148,7 @@ pub struct Config {
 impl Config {
     #[allow(dead_code)]
     fn default_config() -> Self {
-        const NB_FOLLOWER: u8 = 2;
+        const NB_FOLLOWER: usize = 2;
         const QNAME: &str = "/nts_mq";
         const EXE_NAMES: [&CStr; 2] = [c"./client", c"./server"];
         const EXE1_ARGS: [&CStr; 5] = [c"./client", c"-i", c"127.0.0.1", c"-p", c"4443"];
@@ -190,6 +164,12 @@ impl Config {
         }
     }
 
+    fn default_config_nb(nb_follower: usize) -> Self {
+        let mut cfg = Self::default_config();
+        cfg.nb_follower = nb_follower;
+        return cfg;
+    }
+
     pub fn new(path: &Path) -> std::result::Result<Config, TomlError> {
         // Read the file content
         let content = fs::read_to_string(path).expect("Failed to read the file");
@@ -198,7 +178,7 @@ impl Config {
         let value: Value = toml::from_str(&content)?;
 
         // Extract the values from the TOML Value
-        let nb_follower = value.get("nb_follower").and_then(Value::as_integer).unwrap_or(0) as u8;
+        let nb_follower:usize = value.get("nb_follower").and_then(Value::as_integer).unwrap_or(0) as usize;
         let _qname = value.get("qname").and_then(Value::as_str).unwrap_or("").to_string();
 
         let mut exe_names = Vec::new();
@@ -236,33 +216,124 @@ impl Config {
         })
     }
 }
-pub struct Simulation { //TODO: should contain PosixMq's
+
+/**
+ * A TimestampActions gathers all the actions to perform at a specific timestpot.
+ * @to_wake_up: the list of processes that have a known reason to be woken up a that timestamp
+ * @has_to_send: a list of pairs (process that have something to send , packet IDs)
+ */
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct TimestampActions {
+    to_wake_up: Vec<u8>,
+    has_to_send: BTreeMap<u8, Vec<u64>>,
+}
+
+impl TimestampActions {
+    
+    /**
+     * Create a new empty TimestampActions
+     */
+    fn new() -> Self {
+        TimestampActions {
+            to_wake_up: Vec::new(),
+            has_to_send: BTreeMap::new()
+        }
+    }
+    /**
+     * Create a new TimestampActions with one process to wake up
+     */
+    fn new_process(id: u8) -> Self {
+        TimestampActions {
+            to_wake_up: vec![id],
+            has_to_send: BTreeMap::new()
+        }
+    }
+
+    /**
+     * Create a new TimestampActions with one packet to send
+     */
+    fn new_pkt_id(id: u8, pkt_id: u64) -> Self {
+        let mut t = TimestampActions {
+            to_wake_up: Vec::new(),
+            has_to_send: BTreeMap::new()
+        };
+        t.add_packet(id, pkt_id);
+        return t;
+    }
+
+    /**
+     * Adds a process occurence to wake up
+     * Returns the number of process occurences
+     */
+    fn add_process(&mut self, id: u8) -> usize {
+        self.to_wake_up.push(id);
+        return self.to_wake_up.len();
+    }
+
+    /**
+     * Deletes a process occurence to wake up
+     * Returns the number of process occurences
+     */
+    fn del_process(&mut self, id: u8) -> usize {
+        self.to_wake_up.remove(self.to_wake_up.iter().position(|x| *x == id).unwrap());
+        return self.to_wake_up.len();
+    }
+
+    /**
+     * Returns the number of occurences of processes that have to be woken up
+     */
+    fn nb_process(&self) -> usize {
+        return self.to_wake_up.len();
+    }
+
+    /**
+     * Adds a packet to send
+     */
+    fn add_packet(&mut self, id: u8, pkt_id: u64) {
+        if let Some(x) = self.has_to_send.get_mut(&id) {
+            x.push(pkt_id);
+        } else {
+            self.has_to_send.insert(id, vec![pkt_id]);
+        }
+    }
+
+    /**
+     * Returns the number of *processes* that have packets to send
+     */
+    fn nb_pkt(self) -> usize {
+        return self.has_to_send.len();
+    }
+}
+
+pub struct Simulation {
     cfg: Config,
     states: Vec<State>,
-    events: BTreeMap<u64, Vec<u8>>,
+    events: BTreeMap<u64, TimestampActions>,
     final_code: u8,
+    qs: Vec<PosixMq>,
 }
 
 impl Simulation {
 
     fn new (cfg: Config) -> Self {
-        let nb_f = cfg.nb_follower as usize;
+        let nb_f = cfg.nb_follower;
         Self { cfg,
-            states: vec![State::Running; nb_f as usize],
+            states: vec![State::Running; nb_f],
             events: BTreeMap::new(),
-            final_code: 0
+            final_code: 0,
+            qs: Vec::with_capacity(nb_f+1)
         }
     }
 
-/**
- * Starts a follower with the queues to communicate toward the leader as file descriptor 3 and from
- * the leader as file descriptor 4.
- * @arg id: the id of the follower
- * @arg exe: the path to the follower executable
- * @arg args: the arguments to start the follower
- * @arg env: the environment to start the follower
- * @return: the pid of the child on success
- **/
+    /**
+     * Starts a follower with the queues to communicate toward the leader as file descriptor 3 and from
+     * the leader as file descriptor 4.
+     * @arg id: the id of the follower
+     * @arg exe: the path to the follower executable
+     * @arg args: the arguments to start the follower
+     * @arg env: the environment to start the follower
+     * @return: the pid of the child on success
+     **/
     fn run_follower(&self, id: u8, env: &[&CStr]) -> Result<i32> {
         println!("Lauching {id}: {:?} {:?} {:?}", env, self.cfg.exe_names[(id-1) as usize],
             &self.cfg.exe_args[(id-1) as usize]);
@@ -280,42 +351,62 @@ impl Simulation {
         } 
     }
 
-    fn messages_handler(&mut self, message: &Buffer, qs: &Vec<PosixMq>) -> Result<()> {
+    /**
+     * Initialize one queue on which the leader will wait for the messages from the followers and a
+     * queue by follower
+     * @arg nb: the number of follower
+     * @return: returns a Result
+     **/
+    fn leader_init_queues(&mut self) -> Result<()> {
+        self.qs.push( posixmq::OpenOptions::readonly() //the leader will receive messages on this queue
+                .max_msg_len(SIZE_BUFFER)
+                .capacity(self.cfg.nb_follower)
+                .create()
+                .open(&format!("{}_{}", get_identifier(), 0))
+                ?);
+
+        for i in 0..self.cfg.nb_follower {
+            self.qs.push(posixmq::OpenOptions::writeonly() //the leader will send messages on those queues
+                    .max_msg_len(SIZE_BUFFER)
+                    .capacity(self.cfg.nb_follower)
+                    .create()
+                    .open(&format!("{}_{}", get_identifier(), i+1))
+                    ?);
+        }
+        Ok(())
+    }
+
+    fn messages_handler(&mut self, message: &Buffer) -> Result<()> {
         match deserialize(*message) {
             Message::AddStep(id, t) => {
                 println!("{:?}", self.events);
                 println!("Received AddStep {} from {}", t, id);
                 if let Some(x) = self.events.get_mut(&t) {
                     println!("first case");
-                    x.push(id);
+                    x.add_process(id);
                 } else {
                     println!("other case");
-                    self.events.insert(t, vec![id]);
+                    self.events.insert(t, TimestampActions::new_process(id));
                 }
                 println!("{:?}", self.events);
             },
             Message::DelStep(id, t) => {
                 println!("Received DelStep {} from {}", t, id);
                 if let Some(x) = self.events.get_mut(&t) {
-                    for elem in x.iter_mut() {
-                        if elem == &id {
-                            *elem = 0;
-                            break;
-                        }
-                    }
+                    x.del_process(id);
                 }
             },
             Message::GetTime(id) => {
                 println!("Received GetTime from {}", id);
                 //return head key of the BTreeMap
                 let msg = serialize(Message::WakeUp(*(self.events.first_key_value().unwrap().0)));
-                qs[id as usize].send(2, &msg.buffer)?;
+                self.qs[id as usize].send(2, &msg.buffer)?;
                 println!("response WakeUp at {id}, {:?}", msg.buffer);
             },
             Message::GetRand(id) => {
                 println!("Received GetRand from {}", id);
                 let msg = serialize(Message::WakeUp(self.cfg.random_number));
-                qs[id as usize].send(2, &msg.buffer)?;
+                self.qs[id as usize].send(2, &msg.buffer)?;
                 println!("response WakeUp at {id}, {:?}", msg.buffer);
             },
             Message::Finished(id) => {
@@ -330,18 +421,29 @@ impl Simulation {
         Ok(())
     }
 
-    fn main_loop(mut self, qs: Vec<PosixMq>) -> Result<Self> {
+    /**
+     * Part of a timespot where the delayed send are actually sent
+     */
+    fn sending_time_loop(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    /**
+     * Part of a timespot where the processes actually run
+     * TODO: parse HasToSendX
+     */
+    fn running_time_loop(&mut self) -> Result<()> {
         let mut msg: Buffer = Buffer::new();
-        self.events.insert(0, vec![0]);
+        self.events.insert(0, TimestampActions::new());
         loop {
-            match qs[0].recv(&mut msg.buffer) {
+            match self.qs[0].recv(&mut msg.buffer) {
                 Ok(_) => {
                     println!("States before messages_handler {:?}", self.states);
-                    self.messages_handler(&msg, &qs)?;
+                    self.messages_handler(&msg)?;
                     println!("States after messages_handler {:?}", self.states);
                     let mut nb_blocked = 0;
                     let mut nb_finished = 0;
-                    for (s, q) in self.states.iter_mut().zip(qs[1..].iter()) {
+                    for (s, q) in self.states.iter_mut().zip(self.qs[1..].iter()) {
                         match s {
                             State::Blocked => nb_blocked += 1,
                             State::ToWakeUp => {
@@ -360,18 +462,18 @@ impl Simulation {
                     }
                     println!("number finished: {nb_finished}");
                     if nb_finished == self.cfg.nb_follower {
-                        return Ok(self);
+                        return Ok(());
                     }
                     if nb_blocked+nb_finished == self.cfg.nb_follower { //all followers are blocked or finished, we need to make a step in time
-                        let _ = self.events.pop_first();
+                        let _ = self.events.pop_first();                // there should not remain any message in the queue
                         if self.events.first_key_value() == None {
                             // the simulation is finished
                             println!("Simulation finished by all process beeing blocked with no more events");
                             self.final_code = 1;
-                            return Ok(self);
+                            return Ok(());
                         }
                         let msg = serialize(Message::WakeUp(*(self.events.first_key_value().unwrap().0)));
-                        for (s, q) in self.states.iter_mut().zip(qs[1..].iter()) {
+                        for (s, q) in self.states.iter_mut().zip(self.qs[1..].iter()) {
                             if s != &State::Finished {
                                 q.send(1, &msg.buffer)?;
                                 println!("response WakeUp at {:?}, {:?}", q, msg.buffer);
@@ -390,22 +492,25 @@ impl Simulation {
         }
     }
 
+    /**
+     * Part of a timespot where the delayed send are actually sent
+     */
+    fn main_loop(&mut self) -> Result<()> {
+        Ok(())
+    }
 
     fn run(mut self) {
         println!("Hello, world!");
         for i in 0..self.cfg.nb_follower { //start the followers
-            self.run_follower(i+1, &[CString::new((format!("ID={}", i+1)).to_string().as_str()).unwrap().as_c_str(),
+            self.run_follower((i+1) as u8, &[CString::new((format!("ID={}", i+1)).to_string().as_str()).unwrap().as_c_str(),
                 CString::new((format!("LD_PRELOAD={}", LIB_NAME)).to_string().as_str()).unwrap().as_c_str()]).expect("run follower failed");
         }
-        let qs = leader_init_queues(self.cfg.nb_follower).expect("init queue failed"); //open the communication queues
-        /*for q in &qs[1..] {
-            q.send(1, b"Born?").expect("send first message failed");
-        }*/
+        self.leader_init_queues().expect("leader queues initialisation failed"); //open the communication queues
 
-        self = self.main_loop(qs).expect("main loop failed");
+        self.main_loop().expect("main loop failed");
 
         std::thread::sleep(std::time::Duration::from_millis(500));
-        unlink_queues(self.cfg.nb_follower).expect("unlink failed"); //delete all communication queues
+        unlink_queues(self.cfg.nb_follower as u8).expect("unlink failed"); //delete all communication queues
     }
 }
 
@@ -438,24 +543,26 @@ mod unit_testing {
     use serial_test::{serial, parallel};
     use std::collections::VecDeque;
     use std::thread::{self};
+    use std::time::Duration;
 
     use network_time_simulator::{*, Message::*};
     use crate::*;
 
     #[test]
     #[serial]
-    fn test_init_queues() {
-        let qs = leader_init_queues(3).expect("creating leader queues");
+    fn test_init_queues() { //TODO change default config to adapt to the test
+        let mut sim = Simulation::new(Config::default_config_nb(4));
+        sim.leader_init_queues().expect("creating leader queues");
         let mut buf = vec![0; 100];
-        assert_eq!(qs.len(), 4);
-        for i in 1..4 {
+        assert_eq!(sim.qs.len(), 5);
+        for i in 1..5 {
             let qio = follower_init_queues(i, 1).expect("creating follower queues");
-            qs[i as usize].send(SIZE_BUFFER as u32, b"Born?").expect("send first message failed");
-            assert_eq!(qio.0.recv(&mut buf).unwrap(), (SIZE_BUFFER as u32, "Born?".len()));
+            sim.qs[i as usize].send(SIZE_BUFFER as u32, b"Born?").expect("send first message failed");
+            assert_eq!(qio.0.recv_timeout(&mut buf, Duration::from_secs(1)).unwrap(), (SIZE_BUFFER as u32, "Born?".len()));
             qio.1.send(SIZE_BUFFER as u32, b"Yes!").expect("send first message failed");
-            assert_eq!(qs[0].recv(&mut buf).unwrap(), (SIZE_BUFFER as u32, "Yes!".len()));
+            assert_eq!(sim.qs[0].recv_timeout(&mut buf, Duration::from_secs(1)).unwrap(), (SIZE_BUFFER as u32, "Yes!".len()));
         }
-        unlink_queues(3).expect("error during unlinking");
+        unlink_queues(4).expect("error during unlinking");
     }
 
     #[test]
@@ -519,8 +626,9 @@ mod unit_testing {
         assert_eq!(deserialize(serialize(Send(42))), Send(42));
         assert_ne!(deserialize(serialize(Send(42))), Send(43));
 
-        assert_eq!(deserialize(serialize(Sent(42))), Sent(42));
-        assert_ne!(deserialize(serialize(Sent(42))), Sent(43));
+        assert_eq!(deserialize(serialize(Sent(1, 42))), Sent(1, 42));
+        assert_ne!(deserialize(serialize(Sent(1, 42))), Sent(1, 43));
+        assert_ne!(deserialize(serialize(Sent(1, 42))), Sent(2, 42));
 
         assert_eq!(deserialize(serialize(GetTime(42))), GetTime(42));
         assert_ne!(deserialize(serialize(GetTime(42))), GetTime(43));
@@ -537,33 +645,35 @@ mod unit_testing {
 
     #[test]
     #[serial]
-    fn test_serialize_deserialize_mq() {
-        let _ = unlink_queues(2);
-        let qs = leader_init_queues(1).expect("leader queues creating");
+    fn test_serialize_deserialize_mq() { //TODO change default config to adapt to the test
+        let mut sim = Simulation::new(Config::default_config());
+        let _ = unlink_queues(sim.cfg.nb_follower as u8);
+        sim.leader_init_queues().expect("leader queues creating");
         let qio = follower_init_queues(1, 1).expect("follower queues creating");
         let mut msg: Buffer = Buffer::new();
         let msgs = [Progressed(42), Stuck(42), AddStep(42, 43),
             HasToSend4(42, Ipv4AddrC::new(42, 43, 44, 45), 42), HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42),
-            Send(42), Sent(42), DelStep(42, 42), GetTime(42), GetRand(42), Finished(42)];
+            Send(42), Sent(1, 42), DelStep(42, 42), GetTime(42), GetRand(42), Finished(42)];
 
         for m in msgs {
             let check = m.clone();
             qio.1.send(SIZE_BUFFER as u32, &serialize(m).buffer).expect("send follower message failed");
-            qs[0].recv(&mut msg.buffer).unwrap();
+            sim.qs[0].recv(&mut msg.buffer).unwrap();
             assert_eq!(deserialize(msg), check);
         }
-        qs[1].send(1, &serialize(WakeUp(42)).buffer).expect("send leader message failed");
+        sim.qs[1].send(1, &serialize(WakeUp(42)).buffer).expect("send leader message failed");
         qio.0.recv(&mut msg.buffer).unwrap();
         assert_eq!(deserialize(msg), WakeUp(42));
         let _ = unlink_queues(2);
     }
 
     fn mini_setup(nb_add_step: u64, nb_stuck: u64, nb_recv: u64, return_value: u8) {
-        let _ = unlink_queues(2);
-        let qs = leader_init_queues(2).expect("leader queues creating");
+        let mut sim = Simulation::new(Config::default_config());
+        let _ = unlink_queues(sim.cfg.nb_follower as u8);
+        sim.leader_init_queues().expect("leader queues creating");
         let qf1 = follower_init_queues(1, 2).expect("follower queues creating");
         let qf2 = follower_init_queues(2, 2).expect("follower queues creating");
-        let t = thread::spawn(|| {Simulation::new(Config::default_config()).main_loop(qs)});
+        let t = thread::spawn(|| {Simulation::new(Config::default_config()).main_loop()});
         for i in 1..nb_add_step+1 {
             println!("adding step");
             qf1.1.send(1, &serialize(AddStep(1, i)).buffer).expect("send add_step failed");
@@ -584,9 +694,9 @@ mod unit_testing {
         }
         qf1.1.send(1, &serialize(Finished(1)).buffer).expect("send finished failed");
         qf2.1.send(1, &serialize(Finished(2)).buffer).expect("send finished failed");
-        if let Ok(nb) = t.join().unwrap() {
+        if let Ok(_) = t.join().unwrap() {
             let _ = unlink_queues(2);
-            assert_eq!(nb.final_code, return_value);
+            assert_eq!(sim.final_code, return_value);
         }
         else {
             let _ = unlink_queues(2);
@@ -664,35 +774,35 @@ mod unit_testing {
         let mut followers_qs: Vec<PosixMq> = vec![];
         const SIZE_TEST: u8 = 4;
         let mut sim = Simulation::new(Config::default_config());
-        sim.cfg.nb_follower = SIZE_TEST;
+        sim.cfg.nb_follower = SIZE_TEST as usize;
         //sim.qname = "nts_test_message_handler";
         for i in 0..sim.cfg.nb_follower { //start the followers
-            if let Ok((qi, _)) = follower_init_queues(i, sim.cfg.nb_follower) {
+            if let Ok((qi, _)) = follower_init_queues(i as u8, sim.cfg.nb_follower) {
                 followers_qs.push(qi);
             }
         }
-        let leader_qs = leader_init_queues(sim.cfg.nb_follower).unwrap();
+        sim.leader_init_queues().unwrap();
 
         //test with one timestamp
-        let _ = sim.messages_handler(&serialize(Message::AddStep(1, 1)), &leader_qs);
-        let mut v = vec![1];
-        assert_eq!(sim.events.first_key_value(), Some((&1, &v)));
+        sim.messages_handler(&serialize(Message::AddStep(1, 1))).expect("message handler failing");
+        let mut ta = TimestampActions{ to_wake_up: vec![1], has_to_send: BTreeMap::new()};
+        assert_eq!(sim.events.first_key_value(), Some((&1, &ta)));
 
-        let _ = sim.messages_handler(&serialize(Message::AddStep(2, 1)), &leader_qs);
-        v.push(2);
+        let _ = sim.messages_handler(&serialize(Message::AddStep(2, 1)));
+        ta.to_wake_up.push(2);
         if let Some((&1, v2)) = sim.events.first_key_value() {
-            assert!(v2.contains(&1));
-            assert!(v2.contains(&2));
+            assert!(v2.to_wake_up.contains(&1));
+            assert!(v2.to_wake_up.contains(&2));
         } else {assert!(false);}
-        assert_eq!(sim.events.first_key_value(), Some((&1, &v))); //TODO: compare at a higher level, not the Vec's
+        assert_eq!(sim.events.first_key_value(), Some((&1, &ta))); //TODO: compare at a higher level, not the Vec's
 
-        let _ = sim.messages_handler(&serialize(Message::AddStep(2, 1)), &leader_qs);
-        v.push(2);
-        assert_eq!(sim.events.first_key_value(), Some((&1, &v)));
+        let _ = sim.messages_handler(&serialize(Message::AddStep(2, 1)));
+        ta.to_wake_up.push(2);
+        assert_eq!(sim.events.first_key_value(), Some((&1, &ta)));
 
-        let _ = sim.messages_handler(&serialize(Message::DelStep(1, 1)), &leader_qs);
-        v[0] = 0;
-        assert_eq!(sim.events.first_key_value(), Some((&1, &v.to_vec())));
+        let _ = sim.messages_handler(&serialize(Message::DelStep(1, 1)));
+        ta.to_wake_up[0] = 0;
+        assert_eq!(sim.events.first_key_value(), Some((&1, &ta)));
         
     }
 }
@@ -730,17 +840,27 @@ mod determinism {
      * asserts that non-prioritized follower haven't received any message 
      **/
     macro_rules! m_receive {
-        ($s:ident, $qfs:ident, $msgs:ident, $prioritized:ident, $tab:ident) => {
+        ($s:ident, $qfs:ident, $msgs:ident, $prioritized:ident, $tab:ident, $pkt_id:ident) => {
             {
                 for i in 0..NB_FOLLOWERS!() {
                     let q: &Option<(PosixMq, PosixMq)> = &$qfs[i as usize];
                     $tab[i] = Some($s.spawn(move || {
                             match q.as_ref().unwrap().0.recv_timeout(&mut $msgs[i as usize].buffer, Duration::from_secs(1)) {
                                 Ok(x) => {
-                                    if i as usize > $prioritized {
-                                        assert!(false);
+                                    match $msgs[i as usize].into() {
+                                        Send(id) => {
+                                            assert_eq!(id, $pkt_id);
+                                            if i as usize > $prioritized {
+                                                assert!(false);
+                                            }
+                                            Ok(x)
+                                        },
+                                        _ => {
+                                            assert!(false); // should not receive anything else
+                                            Ok((0,0))
+                                        },
                                     }
-                                    Ok(x)
+                                    
                                 },
                                 Err(_) => {
                                     if i as usize > $prioritized {
@@ -762,7 +882,7 @@ mod determinism {
      * Sends a DelStep to the leader to acknoledge the packet has been sent
      */
     macro_rules! m_check {
-        ($ts:ident, $id_order:expr, DelStep(_, $step:expr), $qfs:ident) => {
+        ($ts:ident, $id_order:expr, Sent(_, $pkt_id:expr), $qfs:ident) => {
             let mut already_received = false;
             let mut id_received = usize::MAX;
             for i in 0..NB_FOLLOWERS!() {
@@ -792,7 +912,7 @@ mod determinism {
                 };
             }
             assert!(id_received != usize::MAX); // checks that a follower received a message
-            m_send!(DelStep(id_received+1, $step), $qfs); // sends a DelStep to the leader to acknoledge the packet has been sent
+            m_send!(Sent(id_received+1, $pkt_id), $qfs); // sends a Sent to the leader to acknowledge the packet has been sent
         };
     }
 
@@ -808,6 +928,14 @@ mod determinism {
             for i in 0..$nb {
                 $qfs[i].as_ref().unwrap().1.send(1, &serialize($msg((i+1) as u8, $arg)).buffer).expect("send message failed");
                 println!("sent {:?} to {}", &serialize($msg((i+1) as u8, $arg)).buffer, i);
+            }
+        }
+    }
+    macro_rules! m_send_3arg {
+        ($msg:expr, $dest:expr, $pkt_id:expr, $qfs:ident, $nb:expr) => {
+            for i in 0..$nb {
+                $qfs[i].as_ref().unwrap().1.send(1, &serialize($msg((i+1) as u8, $dest, $pkt_id)).buffer).expect("send message failed");
+                println!("sent {:?} to {}", &serialize($msg((i+1) as u8, $dest, $pkt_id)).buffer, i);
             }
         }
     }
@@ -830,11 +958,20 @@ mod determinism {
         };
         (AddStep(_, $step:expr), $qfs:ident, $nb:expr) => {
             m_send_2arg!(AddStep, $step, $qfs, $nb)
-        }
+        };
+        (HasToSend4(_, $dest:expr, $pkt_id:expr), $qfs:ident, $nb:expr) => {
+            m_send_3arg!(HasToSend4, $dest, $pkt_id, $qfs, $nb)
+        };
+        (HasToSend6(_, $dest:expr, $pkt_id:expr), $qfs:ident, $nb:expr) => {
+            m_send_3arg!(HasToSend6, $dest, $pkt_id, $qfs, $nb)
+        };
+        (Sent($id:expr, $pkt_id:expr), $qfs:ident) => {
+            $qfs[$id-1].as_ref().unwrap().1.send(1, &serialize(Sent(($id) as u8, $pkt_id)).buffer).expect("send DelStep failed");
+        };
     }
 
     impl Config {    
-        fn test_config(nb: u8) -> Self {
+        fn test_config(nb: usize) -> Self {
             const QNAME: &str = "/nts_mq";
             const EXE_NAMES: [&CStr; 2] = [c"./client", c"./server"];
             const EXE1_ARGS: [&CStr; 5] = [c"./client", c"-i", c"127.0.0.1", c"-p", c"4443"];
@@ -857,34 +994,38 @@ mod determinism {
      */
     fn test_determinism_setup(nb_sender:usize) {
         //Setting up the environment
-        let _ = unlink_queues(NB_FOLLOWERS!() as u8);
-        let mut msgs: [Buffer; NB_FOLLOWERS!() as usize] = [Buffer::new() ; NB_FOLLOWERS!() as usize];
+        let mut sim = Simulation::new(Config::default_config());
+        sim.cfg.nb_follower = NB_FOLLOWERS!();
+        let _ = unlink_queues(sim.cfg.nb_follower as u8);
+        let mut msgs: [Buffer; NB_FOLLOWERS!() as usize] = [Buffer::new() ; NB_FOLLOWERS!()];
         let nb_f = NB_FOLLOWERS!();
-        let clo = |mut i| -> (PosixMq, PosixMq) {i += 1; follower_init_queues(i as u8, NB_FOLLOWERS!() as u8).expect("follower queues creating")};
+        let clo = |mut i| -> (PosixMq, PosixMq) {i += 1; follower_init_queues(i as u8, NB_FOLLOWERS!()).expect("follower queues creating")};
         let qfs: [Option<(PosixMq, PosixMq)> ; NB_FOLLOWERS!()] = custom_arr_tpm(clo);
+        let pkt_id = 1;
         //let mut already_received = false;
         
         for _iter in 0..2 {
             thread::scope(|sc| {
-                let qs = leader_init_queues(NB_FOLLOWERS!() as u8).expect("leader queues creating");
-                let t = sc.spawn(|| {Simulation::new(Config::test_config(NB_FOLLOWERS!())).main_loop(qs)});
+                let _ = unlink_queues(sim.cfg.nb_follower as u8);
+                sim.leader_init_queues().expect("leader queues creating");
+                let t = sc.spawn(|| {Simulation::new(Config::test_config(NB_FOLLOWERS!())).main_loop()});
                 let mut receiving_order: [usize ; NB_FOLLOWERS!()] = [0 ; NB_FOLLOWERS!()];
                 
-                m_send!(AddStep(_, 1), qfs, nb_sender);
+                m_send!(HasToSend4(_,Ipv4AddrC::new(1, 1, 1, 1), pkt_id), qfs, nb_sender);
                 m_send!(Stuck(_), qfs, nb_f);
                 
                 for i in 0..nb_sender {
                     thread::scope(|s| {
                         let mut ts: [Option<ScopedJoinHandle<Result<(u32, usize)>>> ; NB_FOLLOWERS!()] = [NONE_THREAD; NB_FOLLOWERS!()];
-                        m_receive!(s, qfs, msgs, nb_sender, ts);
+                        m_receive!(s, qfs, msgs, nb_sender, ts, pkt_id);
                         println!("\n\n\n\n\n\n\ni in nb_sender: {i}\niter: {_iter}\n\n\n\n\n\n\n");
-                        m_check!(ts, receiving_order[i], DelStep(_, 1), qfs);
+                        m_check!(ts, receiving_order[i], Sent(_, pkt_id), qfs);
                     });
                 }
 
                 thread::scope(|s| {
                     let mut ts: [Option<ScopedJoinHandle<Result<(u32, usize)>>> ; NB_FOLLOWERS!()] = [NONE_THREAD; NB_FOLLOWERS!()];
-                    m_receive!(s, qfs, msgs, nb_f, ts);
+                    m_receive!(s, qfs, msgs, nb_f, ts, pkt_id);
                     for i in 0..nb_f {
                         let _ = ts[i].take().expect("uninit thread handle").join().unwrap();
                     }
