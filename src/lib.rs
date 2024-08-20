@@ -48,14 +48,13 @@ impl Buffer {
 #[repr(C)]
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Message {
-    Progressed(u8),                 // 0
     Stuck(u8),                      // 1
     AddStep(u8, u64),               // 2
     DelStep(u8, u64),               // 3
     HasToSend4(u8, Ipv4AddrC, u64), // 4
     HasToSend6(u8, Ipv6AddrC, u64), // 5
     Send(u64),                      // 6
-    Sent(u64),                      // 7
+    Sent(u8, u64),                  // 7
     GetTime(u8),                    // 8
     GetRand(u8),                    // 9
     WakeUp(u64),                    // 10
@@ -66,10 +65,6 @@ impl From<Message> for Buffer {
     fn from(msg: Message) -> Self {
         let mut tab: [u8; SIZE_BUFFER] = [0; SIZE_BUFFER];
         match msg {
-            Message::Progressed(id) => {
-                tab[0] = 0;
-                tab[1] = id;
-            },
             Message::Stuck(id) => {
                 tab[0] = 1;
                 tab[1] = id;
@@ -137,8 +132,9 @@ impl From<Message> for Buffer {
                     i = i + 1;
                 }
             },
-            Message::Sent(pkt_id) => {
+            Message::Sent(id, pkt_id) => {
                 tab[0] = 7;
+                tab[1] = id;
                 let tt = pkt_id.to_ne_bytes();
                 let mut i = 0;
                 while i < 8 {
@@ -175,9 +171,6 @@ impl From<Message> for Buffer {
 impl Into<Message> for Buffer {
     fn into(self) -> Message {
         match self.buffer[0] {
-            0 => {
-                Message::Progressed(self.buffer[1])
-            },
             1 => {
                 Message::Stuck(self.buffer[1])
             },
@@ -208,7 +201,7 @@ impl Into<Message> for Buffer {
                 Message::Send(u64::from_ne_bytes(self.buffer[2..10].try_into().unwrap()))
             },
             7 => {
-                Message::Sent(u64::from_ne_bytes(self.buffer[2..10].try_into().unwrap()))
+                Message::Sent(self.buffer[1], u64::from_ne_bytes(self.buffer[2..10].try_into().unwrap()))
             },
             8 => {
                 Message::GetTime(self.buffer[1])

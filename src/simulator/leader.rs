@@ -1,5 +1,6 @@
 use network_time_simulator::SIZE_BUFFER;
 use posixmq::PosixMq;
+use std::io::ErrorKind as IOErrorKind;
 use std::path::Path;
 use std::io::Result;
 use std::fs;
@@ -19,9 +20,7 @@ use toml::de::Error as TomlError;
 #[derive(Copy, Clone, PartialEq, Debug)]
 enum State {
     Running,
-    Waiting,
     Blocked,
-    ToWakeUp,
     Finished,
 }
 
@@ -85,57 +84,6 @@ fn follower_init_queues(id: u8, nb: usize) -> Result<(PosixMq, PosixMq)> {
     return Ok((qi, qo));
 }
 
-/**
- * Deletes the queues created for the run
- * @arg nb: the number of queues to delete (i.e. the number of followers + 1)
- * @return: Ok on success
- **/
-fn unlink_queues(nb: u8) -> Result<()>{
-    for i in 0..nb {
-        posixmq::remove_queue(&format!("{}_{}", get_identifier(), i))?;
-    }
-    Ok(())
-}
-
-fn decision_process(states: &mut [State], msg: Message) -> Result<()> {
-    match msg {
-        Message::Progressed(id) => {
-            println!("Received Progressed from {}", id);
-            //some progress happened, let's wake up every process (except id)
-            //we could add context (e.g. on which file descriptor it is waiting) to guess which
-            //process should be woke up
-            //this would be easier if writing syscalls were also recorded
-            let ids = (0..states.len()).filter(|&i| i != (id-1) as usize);
-            for i in ids {
-                if states[i] != State::Finished {
-                    states[i] = State::ToWakeUp;
-                }
-            }
-            states[(id-1) as usize] = State::Waiting;
-            Ok(())
-        },
-        Message::Stuck(id) => {
-            println!("Received Stuck from {}", id);
-            //did not progress
-            states[(id-1) as usize] = State::Blocked;
-            let ids = (0..states.len()).filter(|&i| i != (id-1) as usize);
-            for i in ids {
-                println!("Test {i}");
-                if states[i] == State::Waiting {
-                    println!("{i} detected");
-                    states[i] = State::ToWakeUp;
-                }
-            }
-            Ok(())
-        },
-        _ => {
-            //this should not happen
-            Err(std::io::Error::new(std::io::ErrorKind::Other, String::from("Unexpected message")))
-        },
-    }
-}
-
-
 #[derive(Debug)]
 pub struct Config {
     nb_follower: usize,
@@ -162,12 +110,6 @@ impl Config {
             exe_args: vec![cstringify(&EXE1_ARGS), cstringify(&EXE2_ARGS)],
             random_number: RANDOM_NUMBER,
         }
-    }
-
-    fn default_config_nb(nb_follower: usize) -> Self {
-        let mut cfg = Self::default_config();
-        cfg.nb_follower = nb_follower;
-        return cfg;
     }
 
     pub fn new(path: &Path) -> std::result::Result<Config, TomlError> {
@@ -215,6 +157,32 @@ impl Config {
             random_number,
         })
     }
+
+    /**
+     * Deletes the queues created for the run
+     * @return: Ok on success
+     **/
+    fn unlink_queues(&self) -> Result<()>{
+        let mut ret = None;
+        for i in 0..self.nb_follower+1 {
+            match posixmq::remove_queue(&format!("{}_{}", get_identifier(), i)) {
+                Err(e) => {
+                    if e.kind() != IOErrorKind::NotFound {
+                        eprintln!("Cannot remove queue {}: {}", i, e);
+                        ret = Some(e);
+                    }
+                },
+                _ => {
+                    //All is ok
+                }
+            }
+        }
+        if let Some(e) = ret {
+            Err(e)
+        } else {
+            Ok(())
+        }
+    }
 }
 
 /**
@@ -228,6 +196,7 @@ pub struct TimestampActions {
     has_to_send: BTreeMap<u8, Vec<u64>>,
 }
 
+#[allow(dead_code)]
 impl TimestampActions {
     
     /**
@@ -309,18 +278,23 @@ pub struct Simulation {
     cfg: Config,
     states: Vec<State>,
     events: BTreeMap<u64, TimestampActions>,
-    final_code: u8,
     qs: Vec<PosixMq>,
+}
+
+impl Drop for Simulation {
+    fn drop(&mut self) {
+        let _ = self.cfg.unlink_queues();
+    }
 }
 
 impl Simulation {
 
     fn new (cfg: Config) -> Self {
         let nb_f = cfg.nb_follower;
+        let _ = cfg.unlink_queues();
         Self { cfg,
             states: vec![State::Running; nb_f],
             events: BTreeMap::new(),
-            final_code: 0,
             qs: Vec::with_capacity(nb_f+1)
         }
     }
@@ -412,11 +386,13 @@ impl Simulation {
             Message::Finished(id) => {
                 println!("Node {} has finished", id);
                 self.states[(id-1) as usize] = State::Finished;
-                // TODO: manage this
             },
-            msg => {
-                decision_process(&mut self.states[..], msg)?;
+            Message::Stuck(id) => {
+                self.states[(id-1) as usize] = State::Blocked;
             },
+            _ => {
+                //TODO
+            }
         }
         Ok(())
     }
@@ -432,57 +408,31 @@ impl Simulation {
      * Part of a timespot where the processes actually run
      * TODO: parse HasToSendX
      */
-    fn running_time_loop(&mut self) -> Result<()> {
+    fn running_time_loop(&mut self) -> Result<State> {
         let mut msg: Buffer = Buffer::new();
         self.events.insert(0, TimestampActions::new());
         loop {
             match self.qs[0].recv(&mut msg.buffer) {
                 Ok(_) => {
-                    println!("States before messages_handler {:?}", self.states);
                     self.messages_handler(&msg)?;
-                    println!("States after messages_handler {:?}", self.states);
                     let mut nb_blocked = 0;
                     let mut nb_finished = 0;
-                    for (s, q) in self.states.iter_mut().zip(self.qs[1..].iter()) {
+                    for s in self.states.iter_mut() {
                         match s {
                             State::Blocked => nb_blocked += 1,
-                            State::ToWakeUp => {
-                                    let msg = serialize(Message::WakeUp(*(self.events.first_key_value().unwrap().0)));
-                                    q.send(1, &msg.buffer)?;
-                                    println!("response WakeUp at {:?}, {:?}", q, msg.buffer);
-                                    *s = State::Running;
-                            },
-                            State::Finished => {
-                                nb_finished += 1;
-                                println!("nb_finished incremented");
-                            },
+                            State::Finished => nb_finished += 1,
                             _ => {},
                         }
                         
                     }
                     println!("number finished: {nb_finished}");
                     if nb_finished == self.cfg.nb_follower {
-                        return Ok(());
+                        return Ok(State::Finished);
                     }
                     if nb_blocked+nb_finished == self.cfg.nb_follower { //all followers are blocked or finished, we need to make a step in time
-                        let _ = self.events.pop_first();                // there should not remain any message in the queue
-                        if self.events.first_key_value() == None {
-                            // the simulation is finished
-                            println!("Simulation finished by all process beeing blocked with no more events");
-                            self.final_code = 1;
-                            return Ok(());
-                        }
-                        let msg = serialize(Message::WakeUp(*(self.events.first_key_value().unwrap().0)));
-                        for (s, q) in self.states.iter_mut().zip(self.qs[1..].iter()) {
-                            if s != &State::Finished {
-                                q.send(1, &msg.buffer)?;
-                                println!("response WakeUp at {:?}, {:?}", q, msg.buffer);
-                                *s = State::Running;
-                            }
-                        }
+                        return Ok(State::Blocked);
                     }
 
-                    println!("States after everything {:?}", self.states);
                 },
                 Err(e) =>  {
                     eprintln!("Message error: {e}");
@@ -493,10 +443,34 @@ impl Simulation {
     }
 
     /**
-     * Part of a timespot where the delayed send are actually sent
+     * Main loop
      */
-    fn main_loop(&mut self) -> Result<()> {
-        Ok(())
+    fn main_loop(&mut self) -> Result<u8> {
+        loop {
+            /*************** First half, sending time ***************/
+            let _ = self.sending_time_loop();
+
+            /************** Second half, running time ***************/
+            let msg = serialize(Message::WakeUp(*(self.events.first_key_value().unwrap().0)));
+            for (s, q) in self.states.iter_mut().zip(self.qs[1..].iter()) {
+                if s != &State::Finished {
+                    q.send(1, &msg.buffer)?;
+                    *s = State::Running;
+                }
+            }
+            if let Ok(State::Finished) = self.running_time_loop() {
+                println!("Simulation finished by all process finishing");
+                return Ok(0);
+            }
+
+            /************** Jumping to next timestamp ***************/
+            let _ = self.events.pop_first();
+            if self.events.first_key_value() == None {
+                // the simulation is finished
+                println!("Simulation finished by all process beeing blocked with no more events");
+                return Ok(1);
+            }
+        }
     }
 
     fn run(mut self) {
@@ -510,7 +484,6 @@ impl Simulation {
         self.main_loop().expect("main loop failed");
 
         std::thread::sleep(std::time::Duration::from_millis(500));
-        unlink_queues(self.cfg.nb_follower as u8).expect("unlink failed"); //delete all communication queues
     }
 }
 
@@ -538,39 +511,47 @@ fn main() {
 
 #[cfg(test)]
 mod unit_testing {
+    use ntest::timeout;
     use posixmq::PosixMq;
-    use std::io::Result;
     use serial_test::{serial, parallel};
-    use std::collections::VecDeque;
     use std::thread::{self};
     use std::time::Duration;
 
     use network_time_simulator::{*, Message::*};
     use crate::*;
 
-    #[test]
-    #[serial]
-    fn test_init_queues() { //TODO change default config to adapt to the test
-        let mut sim = Simulation::new(Config::default_config_nb(4));
-        sim.leader_init_queues().expect("creating leader queues");
-        let mut buf = vec![0; 100];
-        assert_eq!(sim.qs.len(), 5);
-        for i in 1..5 {
-            let qio = follower_init_queues(i, 1).expect("creating follower queues");
-            sim.qs[i as usize].send(SIZE_BUFFER as u32, b"Born?").expect("send first message failed");
-            assert_eq!(qio.0.recv_timeout(&mut buf, Duration::from_secs(1)).unwrap(), (SIZE_BUFFER as u32, "Born?".len()));
-            qio.1.send(SIZE_BUFFER as u32, b"Yes!").expect("send first message failed");
-            assert_eq!(sim.qs[0].recv_timeout(&mut buf, Duration::from_secs(1)).unwrap(), (SIZE_BUFFER as u32, "Yes!".len()));
+    const NB_QUEUES_TEST: usize = 4;
+
+
+    impl Config {
+        fn default_config_nb(nb_follower: usize) -> Self {
+            let mut cfg = Self::default_config();
+            cfg.nb_follower = nb_follower;
+            return cfg;
         }
-        unlink_queues(4).expect("error during unlinking");
     }
 
     #[test]
+    #[timeout(10000)]
+    #[serial]
+    fn test_init_queues() {
+        let mut sim = Simulation::new(Config::default_config_nb(NB_QUEUES_TEST));
+        sim.leader_init_queues().expect("creating leader queues");
+        let mut buf = vec![0; 100];
+        assert_eq!(sim.qs.len(), NB_QUEUES_TEST+1);
+        for i in 1..NB_QUEUES_TEST+1 {
+            let qio = follower_init_queues(i as u8, NB_QUEUES_TEST).expect("creating follower queues");
+            sim.qs[i].send(0 as u32, b"Born?").expect("send first message failed");
+            assert_eq!(qio.0.recv_timeout(&mut buf, Duration::from_secs(1)).unwrap(), (0 as u32, "Born?".len()));
+            qio.1.send(0 as u32, b"Yes!").expect("send first message failed");
+            assert_eq!(sim.qs[0].recv_timeout(&mut buf, Duration::from_secs(1)).unwrap(), (0 as u32, "Yes!".len()));
+        }
+    }
+
+    #[test]
+    #[timeout(10000)]
     #[parallel]
     fn test_serialize_deserialize() {
-        assert_eq!(deserialize(serialize(Progressed(42))), Progressed(42));
-        assert_ne!(deserialize(serialize(Progressed(42))), Progressed(43));
-
         assert_eq!(deserialize(serialize(Stuck(42))), Stuck(42));
         assert_ne!(deserialize(serialize(Stuck(42))), Stuck(43));
         
@@ -644,14 +625,14 @@ mod unit_testing {
     }
 
     #[test]
+    #[timeout(10000)]
     #[serial]
-    fn test_serialize_deserialize_mq() { //TODO change default config to adapt to the test
-        let mut sim = Simulation::new(Config::default_config());
-        let _ = unlink_queues(sim.cfg.nb_follower as u8);
+    fn test_serialize_deserialize_mq() {
+        let mut sim = Simulation::new(Config::default_config_nb(1));
         sim.leader_init_queues().expect("leader queues creating");
         let qio = follower_init_queues(1, 1).expect("follower queues creating");
         let mut msg: Buffer = Buffer::new();
-        let msgs = [Progressed(42), Stuck(42), AddStep(42, 43),
+        let msgs = [Stuck(42), AddStep(42, 43),
             HasToSend4(42, Ipv4AddrC::new(42, 43, 44, 45), 42), HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42),
             Send(42), Sent(1, 42), DelStep(42, 42), GetTime(42), GetRand(42), Finished(42)];
 
@@ -664,16 +645,14 @@ mod unit_testing {
         sim.qs[1].send(1, &serialize(WakeUp(42)).buffer).expect("send leader message failed");
         qio.0.recv(&mut msg.buffer).unwrap();
         assert_eq!(deserialize(msg), WakeUp(42));
-        let _ = unlink_queues(2);
     }
 
     fn mini_setup(nb_add_step: u64, nb_stuck: u64, nb_recv: u64, return_value: u8) {
         let mut sim = Simulation::new(Config::default_config());
-        let _ = unlink_queues(sim.cfg.nb_follower as u8);
         sim.leader_init_queues().expect("leader queues creating");
-        let qf1 = follower_init_queues(1, 2).expect("follower queues creating");
-        let qf2 = follower_init_queues(2, 2).expect("follower queues creating");
-        let t = thread::spawn(|| {Simulation::new(Config::default_config()).main_loop()});
+        let qf1 = follower_init_queues(1, 2).expect("creating follower queues");
+        let qf2 = follower_init_queues(2, 2).expect("creating follower queues");
+        let t = thread::spawn(move || {sim.main_loop()});
         for i in 1..nb_add_step+1 {
             println!("adding step");
             qf1.1.send(1, &serialize(AddStep(1, i)).buffer).expect("send add_step failed");
@@ -694,80 +673,44 @@ mod unit_testing {
         }
         qf1.1.send(1, &serialize(Finished(1)).buffer).expect("send finished failed");
         qf2.1.send(1, &serialize(Finished(2)).buffer).expect("send finished failed");
-        if let Ok(_) = t.join().unwrap() {
-            let _ = unlink_queues(2);
-            assert_eq!(sim.final_code, return_value);
+        if let Ok(ret) = t.join().unwrap() {
+            assert_eq!(ret, return_value);
         }
         else {
-            let _ = unlink_queues(2);
             assert!(false);
         }
     }
 
     #[test]
+    #[timeout(10000)]
     #[serial]
     fn direct_finished() {
         mini_setup(0, 0, 0, 0);
     }
 
     #[test]
+    #[timeout(30000)]
     #[serial]
     fn direct_blocked() {
         mini_setup(0, 1, 0, 1);
     }
 
     #[test]
+    #[timeout(10000)]
     #[serial]
     fn one_step() {
         mini_setup(1, 1, 1, 0);
     }
 
     #[test]
+    #[timeout(10000)]
     #[serial]
     fn too_much_steps() {
         mini_setup(2, 1, 1, 0);
     }
 
-    fn test_decision_process(id_to_wake_up: u8, first_progess: u8) -> Result<()> {
-        let mut msg_queue: VecDeque<Message> = VecDeque::from([]);
-        const SIZE_TEST: usize = 4;
-        let mut states: [State; SIZE_TEST] = [State::Blocked; SIZE_TEST];
-
-        decision_process(&mut states, Message::Progressed(first_progess))?;
-        while states[id_to_wake_up as usize] != State::ToWakeUp {
-            println!("States: {:?}", states);
-            for i in 0..SIZE_TEST {
-                if states[i] == State::ToWakeUp {
-                    states[i] = State::Running;
-                    msg_queue.push_back(Message::Stuck(i as u8 +1));
-                }
-            }
-            if let Some(msg) = msg_queue.pop_front() {
-                decision_process(&mut states, msg)?;
-            } else {
-                return Err(std::io::Error::new(std::io::ErrorKind::Other, String::from("no more messages")));
-            }
-        }
-        Ok(())
-    }
-
     #[test]
-    #[parallel]
-    fn test_one_to_wake_up() {
-        // tests if the decision process eventually wakes up every process
-        const SIZE_TEST: u8 = 4;
-        for id_progressing in 0..SIZE_TEST {
-            for id_to_wake_up in 0..SIZE_TEST {
-                println!("{id_progressing}, {id_to_wake_up}");
-                match test_decision_process(id_to_wake_up, id_progressing+1) {
-                    Ok(()) => assert!(true),
-                    _ => assert!(false),
-                }
-            }
-        }
-    }
-
-    #[test]
+    #[timeout(10000)]
     #[parallel]
     fn test_messages_handler() {
         // Setting up the environment
@@ -775,7 +718,6 @@ mod unit_testing {
         const SIZE_TEST: u8 = 4;
         let mut sim = Simulation::new(Config::default_config());
         sim.cfg.nb_follower = SIZE_TEST as usize;
-        //sim.qname = "nts_test_message_handler";
         for i in 0..sim.cfg.nb_follower { //start the followers
             if let Ok((qi, _)) = follower_init_queues(i as u8, sim.cfg.nb_follower) {
                 followers_qs.push(qi);
@@ -803,12 +745,12 @@ mod unit_testing {
         let _ = sim.messages_handler(&serialize(Message::DelStep(1, 1)));
         ta.to_wake_up[0] = 0;
         assert_eq!(sim.events.first_key_value(), Some((&1, &ta)));
-        
     }
 }
 
 #[cfg(test)]
 mod determinism {
+    use ntest::timeout;
     use posixmq::PosixMq;
     use std::io::Result;
     use std::thread::{self, ScopedJoinHandle};
@@ -923,6 +865,7 @@ mod determinism {
             }
         }
     }
+    #[allow(unused_macros)]
     macro_rules! m_send_2arg {
         ($msg:expr, $arg:expr, $qfs:ident, $nb:expr) => {
             for i in 0..$nb {
@@ -996,7 +939,6 @@ mod determinism {
         //Setting up the environment
         let mut sim = Simulation::new(Config::default_config());
         sim.cfg.nb_follower = NB_FOLLOWERS!();
-        let _ = unlink_queues(sim.cfg.nb_follower as u8);
         let mut msgs: [Buffer; NB_FOLLOWERS!() as usize] = [Buffer::new() ; NB_FOLLOWERS!()];
         let nb_f = NB_FOLLOWERS!();
         let clo = |mut i| -> (PosixMq, PosixMq) {i += 1; follower_init_queues(i as u8, NB_FOLLOWERS!()).expect("follower queues creating")};
@@ -1006,7 +948,6 @@ mod determinism {
         
         for _iter in 0..2 {
             thread::scope(|sc| {
-                let _ = unlink_queues(sim.cfg.nb_follower as u8);
                 sim.leader_init_queues().expect("leader queues creating");
                 let t = sc.spawn(|| {Simulation::new(Config::test_config(NB_FOLLOWERS!())).main_loop()});
                 let mut receiving_order: [usize ; NB_FOLLOWERS!()] = [0 ; NB_FOLLOWERS!()];
@@ -1032,12 +973,14 @@ mod determinism {
                 });
                 m_send!(Finished(_), qfs, nb_f);
                 let _ = t.join();
+                let _ = sim.cfg.unlink_queues();
             });
         }
     }
 
     #[test]
     #[serial]
+    #[timeout(10000)]
     fn test_determinism() {
         test_determinism_setup(2);
     }
