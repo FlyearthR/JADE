@@ -14,8 +14,6 @@ uint64_t receive_msg();
 
 struct timeval get_time();
 
-struct timeval waiting();
-
 struct timeval blocking();
 
 void add_event(struct timeval);

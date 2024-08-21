@@ -249,6 +249,13 @@ impl TimestampActions {
     }
 
     /**
+     * Check if the process is contained in the TimestampActions
+     */
+    fn contain_process(&self, id: u8) -> bool {
+        return self.to_wake_up.contains(&id);
+    }
+
+    /**
      * Returns the number of occurences of processes that have to be woken up
      */
     fn nb_process(&self) -> usize {
@@ -292,9 +299,11 @@ impl Simulation {
     fn new (cfg: Config) -> Self {
         let nb_f = cfg.nb_follower;
         let _ = cfg.unlink_queues();
+        let mut btm = BTreeMap::new();
+        btm.insert(0, TimestampActions::new());
         Self { cfg,
             states: vec![State::Running; nb_f],
-            events: BTreeMap::new(),
+            events: btm,
             qs: Vec::with_capacity(nb_f+1)
         }
     }
@@ -309,11 +318,8 @@ impl Simulation {
      * @return: the pid of the child on success
      **/
     fn run_follower(&self, id: u8, env: &[&CStr]) -> Result<i32> {
-        println!("Lauching {id}: {:?} {:?} {:?}", env, self.cfg.exe_names[(id-1) as usize],
-            &self.cfg.exe_args[(id-1) as usize]);
         match fork() {
             Ok(Fork::Parent(child)) => {
-                println!("Child: {}", child);
                 Ok(child)
             },
             Ok(Fork::Child) => {
@@ -353,38 +359,27 @@ impl Simulation {
     fn messages_handler(&mut self, message: &Buffer) -> Result<()> {
         match deserialize(*message) {
             Message::AddStep(id, t) => {
-                println!("{:?}", self.events);
-                println!("Received AddStep {} from {}", t, id);
                 if let Some(x) = self.events.get_mut(&t) {
-                    println!("first case");
                     x.add_process(id);
                 } else {
-                    println!("other case");
                     self.events.insert(t, TimestampActions::new_process(id));
                 }
-                println!("{:?}", self.events);
             },
             Message::DelStep(id, t) => {
-                println!("Received DelStep {} from {}", t, id);
                 if let Some(x) = self.events.get_mut(&t) {
                     x.del_process(id);
                 }
             },
             Message::GetTime(id) => {
-                println!("Received GetTime from {}", id);
                 //return head key of the BTreeMap
                 let msg = serialize(Message::WakeUp(*(self.events.first_key_value().unwrap().0)));
                 self.qs[id as usize].send(2, &msg.buffer)?;
-                println!("response WakeUp at {id}, {:?}", msg.buffer);
             },
             Message::GetRand(id) => {
-                println!("Received GetRand from {}", id);
                 let msg = serialize(Message::WakeUp(self.cfg.random_number));
                 self.qs[id as usize].send(2, &msg.buffer)?;
-                println!("response WakeUp at {id}, {:?}", msg.buffer);
             },
             Message::Finished(id) => {
-                println!("Node {} has finished", id);
                 self.states[(id-1) as usize] = State::Finished;
             },
             Message::Stuck(id) => {
@@ -425,7 +420,6 @@ impl Simulation {
                         }
                         
                     }
-                    println!("number finished: {nb_finished}");
                     if nb_finished == self.cfg.nb_follower {
                         return Ok(State::Finished);
                     }
@@ -474,7 +468,6 @@ impl Simulation {
     }
 
     fn run(mut self) {
-        println!("Hello, world!");
         for i in 0..self.cfg.nb_follower { //start the followers
             self.run_follower((i+1) as u8, &[CString::new((format!("ID={}", i+1)).to_string().as_str()).unwrap().as_c_str(),
                 CString::new((format!("LD_PRELOAD={}", LIB_NAME)).to_string().as_str()).unwrap().as_c_str()]).expect("run follower failed");
@@ -498,7 +491,6 @@ fn main() {
         // one argument passed
         2 => {
             let sim = Simulation::new(Config::new(Path::new(&args[1])).expect("Error parsing config file"));
-            println!("{:?}", sim.cfg);
             sim.run();
         },
         _ => {
@@ -653,18 +645,20 @@ mod unit_testing {
         let qf1 = follower_init_queues(1, 2).expect("creating follower queues");
         let qf2 = follower_init_queues(2, 2).expect("creating follower queues");
         let t = thread::spawn(move || {sim.main_loop()});
+        let mut msg: Buffer = Buffer::new();
+        qf1.0.recv(&mut msg.buffer).unwrap();
+        assert_eq!(deserialize(msg), WakeUp(0)); // checks that the first WakeUp message is sent
+        qf2.0.recv(&mut msg.buffer).unwrap();
+        assert_eq!(deserialize(msg), WakeUp(0));
         for i in 1..nb_add_step+1 {
-            println!("adding step");
             qf1.1.send(1, &serialize(AddStep(1, i)).buffer).expect("send add_step failed");
         }
         for _i in 1..nb_stuck+1 {
-            println!("getting stuck");
             qf1.1.send(1, &serialize(Stuck(1)).buffer).expect("send stuck failed");
             qf2.1.send(1, &serialize(Stuck(2)).buffer).expect("send stuck failed");
         }
 
         for i in 1..nb_recv+1 {
-            println!("receiving");
             let mut msg: Buffer = Buffer::new();
             qf1.0.recv(&mut msg.buffer).unwrap();
             assert_eq!(deserialize(msg), WakeUp(i));
@@ -725,26 +719,46 @@ mod unit_testing {
         }
         sim.leader_init_queues().unwrap();
 
+
         //test with one timestamp
         sim.messages_handler(&serialize(Message::AddStep(1, 1))).expect("message handler failing");
-        let mut ta = TimestampActions{ to_wake_up: vec![1], has_to_send: BTreeMap::new()};
-        assert_eq!(sim.events.first_key_value(), Some((&1, &ta)));
-
-        let _ = sim.messages_handler(&serialize(Message::AddStep(2, 1)));
-        ta.to_wake_up.push(2);
+        let _ = sim.events.pop_first(); // get rid of timestamp 0
         if let Some((&1, v2)) = sim.events.first_key_value() {
-            assert!(v2.to_wake_up.contains(&1));
-            assert!(v2.to_wake_up.contains(&2));
-        } else {assert!(false);}
-        assert_eq!(sim.events.first_key_value(), Some((&1, &ta))); //TODO: compare at a higher level, not the Vec's
+            assert!(v2.contain_process(1));
+            assert_eq!(v2.nb_process(), 1);
+        } else {
+            assert!(false);
+        }
 
         let _ = sim.messages_handler(&serialize(Message::AddStep(2, 1)));
-        ta.to_wake_up.push(2);
-        assert_eq!(sim.events.first_key_value(), Some((&1, &ta)));
+        if let Some((&1, v2)) = sim.events.first_key_value() {
+            assert!(v2.contain_process(1));
+            assert!(v2.contain_process(2));
+            assert_eq!(v2.nb_process(), 2);
+        } else {
+            assert!(false);
+        }
+
+        let _ = sim.messages_handler(&serialize(Message::AddStep(2, 1)));
+        if let Some((&1, v2)) = sim.events.first_key_value() {
+            let mut ta = v2.clone();
+            assert!(v2.contain_process(1));
+            assert!(v2.contain_process(2));
+            assert_eq!(v2.nb_process(), 3);
+            ta.del_process(2);
+            assert!(ta.contain_process(2));
+        } else {
+            assert!(false);
+        }
 
         let _ = sim.messages_handler(&serialize(Message::DelStep(1, 1)));
-        ta.to_wake_up[0] = 0;
-        assert_eq!(sim.events.first_key_value(), Some((&1, &ta)));
+        if let Some((&1, v2)) = sim.events.first_key_value() {
+            assert!(!v2.contain_process(1));
+            assert!(v2.contain_process(2));
+            assert_eq!(v2.nb_process(), 2);
+        } else {
+            assert!(false);
+        }
     }
 }
 
@@ -831,10 +845,8 @@ mod determinism {
                 match $ts[i].take().expect("Uninit thread handle").join().unwrap() {
                     Ok((0,0)) => {
                         assert!(true); //all is ok
-                        println!("i in Ok(0,0) NB_FOLLOWER: {i}");
                     },
                     Ok(_) => {
-                        println!("i in Ok(_) NB_FOLLOWER: {i}");
                         assert!(!already_received);
                         already_received = true;
                         if $id_order == 0 {
@@ -846,9 +858,7 @@ mod determinism {
                         id_received = i;
                     },
                     Err(x) => {
-                        println!("i in Err(x) NB_FOLLOWER: {i}");
-                        println!("\n\n\n\n\n\n\nThread panic detected\n\n\n\n\n\n\n");
-                        println!("{x}");
+                        println!("i in Err(x) NB_FOLLOWER: {i}\n{x}");
                         assert!(false);
                     },
                 };
@@ -870,7 +880,6 @@ mod determinism {
         ($msg:expr, $arg:expr, $qfs:ident, $nb:expr) => {
             for i in 0..$nb {
                 $qfs[i].as_ref().unwrap().1.send(1, &serialize($msg((i+1) as u8, $arg)).buffer).expect("send message failed");
-                println!("sent {:?} to {}", &serialize($msg((i+1) as u8, $arg)).buffer, i);
             }
         }
     }
@@ -878,7 +887,6 @@ mod determinism {
         ($msg:expr, $dest:expr, $pkt_id:expr, $qfs:ident, $nb:expr) => {
             for i in 0..$nb {
                 $qfs[i].as_ref().unwrap().1.send(1, &serialize($msg((i+1) as u8, $dest, $pkt_id)).buffer).expect("send message failed");
-                println!("sent {:?} to {}", &serialize($msg((i+1) as u8, $dest, $pkt_id)).buffer, i);
             }
         }
     }
@@ -959,7 +967,6 @@ mod determinism {
                     thread::scope(|s| {
                         let mut ts: [Option<ScopedJoinHandle<Result<(u32, usize)>>> ; NB_FOLLOWERS!()] = [NONE_THREAD; NB_FOLLOWERS!()];
                         m_receive!(s, qfs, msgs, nb_sender, ts, pkt_id);
-                        println!("\n\n\n\n\n\n\ni in nb_sender: {i}\niter: {_iter}\n\n\n\n\n\n\n");
                         m_check!(ts, receiving_order[i], Sent(_, pkt_id), qfs);
                     });
                 }

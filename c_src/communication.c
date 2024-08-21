@@ -65,19 +65,6 @@ struct timeval get_time()
     return u64_to_timeval_us(ret);
 }
 
-struct timeval waiting()
-{
-    //printf("waiting beginning\n");
-    fflush(stdout);
-    unsigned int ret = send_msg(Progressed, 0);
-    if (ret != 0)
-	exit(-7);
-    ret = receive_msg();
-    //printf("waiting end\n");
-    fflush(stdout);
-    return u64_to_timeval_us(ret);
-}
-
 struct timeval blocking()
 {
     //printf("blocking beginning\n");

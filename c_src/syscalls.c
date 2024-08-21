@@ -14,32 +14,28 @@
 
 int random_number = 42;
 
+int inline empty_fun()
+{
+        blocking();
+        return 1;
+}
+
 ssize_t recvfrom(int sockfd, void* buf, size_t len,
                         int flags, struct sockaddr * src_addr,
                         socklen_t * addrlen)
 {
-        //printf("recvfrom intercepted\n");
-        fflush(stdout);
         // TODO: configure socket as non blocking at opening time
         int flags_s = fcntl(sockfd, F_GETFL, 0);
         if (flags_s == -1)
                 return -1;
-        //printf("after fcntl\n");
-        fflush(stdout);
         fcntl(sockfd, F_SETFL, flags_s|O_NONBLOCK);
         LIBC_FUNCTION(ssize_t, recvfrom, int sockfd, void* buf, size_t len,
                         int flags, struct sockaddr * src_addr,
                         socklen_t * addrlen);
-        int ret = LIBC_FUNCTION_GET(recvfrom)(sockfd, buf, len, flags, src_addr, addrlen);
-        if (ret > 0)
-                return ret;
-        waiting();
+        int ret;
         do {
-                //printf("here?\n");
-                fflush(stdout);
                 ret = LIBC_FUNCTION_GET(recvfrom)(sockfd, buf, len, flags, src_addr, addrlen);
-		blocking();
-        } while (ret == -1);
+        } while (ret == -1 && empty_fun());
         return ret;
 }
 
@@ -57,9 +53,8 @@ int select(int nfds, fd_set *restrict readfds,
 	if (ret)
 		return ret;
         
-        //printf("time in select: {%i,; %i}\n", to.tv_sec, to.tv_usec);
 	add_event(to);
-	cur = waiting();
+	cur = blocking();
 	while (ret == 0 && before_timeval(cur, to)) {
 		ret = LIBC_FUNCTION_GET(select)(nfds, readfds, writefds, exceptfds, &zeros);
 		cur = blocking();
@@ -83,9 +78,8 @@ int pselect(int nfds, fd_set *restrict readfds,
         int ret = LIBC_FUNCTION_GET(pselect)(nfds, readfds, writefds, exceptfds, &zeros, sigmask);
         if (ret)
                 return ret;
-        //printf("time in pselect: {%i,; %i}\n", to.tv_sec, to.tv_usec);
 	add_event(to);
-        cur = waiting();
+        cur = blocking();
 	while (ret == 0 && before_timeval(cur, to)) {
                 ret = LIBC_FUNCTION_GET(pselect)(nfds, readfds, writefds, exceptfds, &zeros, sigmask);
 		cur = blocking();
@@ -94,19 +88,10 @@ int pselect(int nfds, fd_set *restrict readfds,
         return ret;
 }
 
-int inline empty_fun()
-{
-        blocking();
-        return 1;
-}
-
 int infinity_poll(struct pollfd *fds, nfds_t nfds, int timeout)
 {
 	LIBC_FUNCTION(int, poll, struct pollfd *fds, nfds_t nfds, int timeout);
-	int ret = LIBC_FUNCTION_GET(poll)(fds, nfds, 0);
-        if (ret)
-                return ret;
-        waiting();
+	int ret;
         do {
                 ret = LIBC_FUNCTION_GET(poll)(fds, nfds, 0);
         } while (ret == 0 && empty_fun());
