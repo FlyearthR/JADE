@@ -3,7 +3,7 @@ mod follower;
 pub const SIZE_BUFFER: usize = 26;
 
 #[repr(C)]
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub struct Ipv4AddrC {
     segments: [u8; 4],
 }
@@ -18,7 +18,7 @@ impl Ipv4AddrC {
 }
 
 #[repr(C)]
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub struct Ipv6AddrC {
     segments: [u16; 8],
 }

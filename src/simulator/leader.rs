@@ -1,21 +1,16 @@
+pub mod helper;
+
+use helper::{Config, TimestampActions, get_identifier};
 use network_time_simulator::SIZE_BUFFER;
 use posixmq::PosixMq;
-use std::io::ErrorKind as IOErrorKind;
-use std::path::Path;
 use std::io::Result;
-use std::fs;
 use std::env;
-use std::ffi::CStr;
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
 use std::collections::BTreeMap;
+use std::path::Path;
 use fork::{fork, Fork};
 use nix::unistd::execve;
-use network_time_simulator::Message;
-use network_time_simulator::serialize;
-use network_time_simulator::deserialize;
-use network_time_simulator::Buffer;
-use toml::Value;
-use toml::de::Error as TomlError;
+use network_time_simulator::{Message, serialize, deserialize, Buffer};
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 enum State {
@@ -40,23 +35,9 @@ pub const fn validate_cstr_contents(bytes: &[u8]) {
     }
 }
 
-fn cstringify(arr: &[&CStr]) -> Vec<CString> {
-    let mut ret: Vec<CString> = Vec::with_capacity(arr.len());
-    for e in arr.iter() {
-        ret.push(CString::from(*e));
-    }
-    return ret;
-}
 
 
 const LIB_NAME: &str = "syscalls.so";
-
-/**
- * Provide a unique (system-wide) identifier for message queues
- */
-fn get_identifier() -> String {
-    return "/nts_mq".to_string();
-}
 
 /**
  * Open one queue on which the follower will send message to the leader and
@@ -82,203 +63,6 @@ fn follower_init_queues(id: u8, nb: usize) -> Result<(PosixMq, PosixMq)> {
         .expect("failed to open queue qi for a follower");
     qi.set_cloexec(false)?;
     return Ok((qi, qo));
-}
-
-#[derive(Debug)]
-pub struct Config {
-    nb_follower: usize,
-    _qname: String,
-    exe_names: Vec<CString>,
-    exe_args: Vec<Vec<CString>>,
-    random_number: u64,
-}
-
-impl Config {
-    #[allow(dead_code)]
-    fn default_config() -> Self {
-        const NB_FOLLOWER: usize = 2;
-        const QNAME: &str = "/nts_mq";
-        const EXE_NAMES: [&CStr; 2] = [c"./client", c"./server"];
-        const EXE1_ARGS: [&CStr; 5] = [c"./client", c"-i", c"127.0.0.1", c"-p", c"4443"];
-        const EXE2_ARGS: [&CStr; 5] = [c"./server", c"-i", c"127.0.0.1", c"-p", c"4443"];
-        const RANDOM_NUMBER: u64 = 84;
-    
-        return Self {
-            nb_follower: NB_FOLLOWER,
-            _qname: QNAME.to_string(),
-            exe_names: cstringify(&EXE_NAMES),
-            exe_args: vec![cstringify(&EXE1_ARGS), cstringify(&EXE2_ARGS)],
-            random_number: RANDOM_NUMBER,
-        }
-    }
-
-    pub fn new(path: &Path) -> std::result::Result<Config, TomlError> {
-        // Read the file content
-        let content = fs::read_to_string(path).expect("Failed to read the file");
-
-        // Parse the content as a TOML Value
-        let value: Value = toml::from_str(&content)?;
-
-        // Extract the values from the TOML Value
-        let nb_follower:usize = value.get("nb_follower").and_then(Value::as_integer).unwrap_or(0) as usize;
-        let _qname = value.get("qname").and_then(Value::as_str).unwrap_or("").to_string();
-
-        let mut exe_names = Vec::new();
-        let mut exe_args = Vec::new();
-
-        if let Some(executables) = value.get("executables").and_then(Value::as_table) {
-            if let Some(exes) = executables.get("exe").and_then(Value::as_array) {
-                for exe in exes {
-                    if let Some(exe_table) = exe.as_table() {
-                        if let Some(path) = exe_table.get("path").and_then(Value::as_str) {
-                            exe_names.push(CString::new(path).unwrap());
-                        }
-
-                        if let Some(args) = exe_table.get("args").and_then(Value::as_array) {
-                            let args_vec = args.iter()
-                                .filter_map(|arg| arg.as_str().map(|s| CString::new(s).unwrap()))
-                                .collect();
-                            exe_args.push(args_vec);
-                        } else {
-                            exe_args.push(Vec::new());
-                        }
-                    }
-                }
-            }
-        }
-
-        let random_number = value.get("random_number").and_then(Value::as_integer).unwrap_or(0) as u64;
-
-        Ok(Config {
-            nb_follower,
-            _qname,
-            exe_names,
-            exe_args,
-            random_number,
-        })
-    }
-
-    /**
-     * Deletes the queues created for the run
-     * @return: Ok on success
-     **/
-    fn unlink_queues(&self) -> Result<()>{
-        let mut ret = None;
-        for i in 0..self.nb_follower+1 {
-            match posixmq::remove_queue(&format!("{}_{}", get_identifier(), i)) {
-                Err(e) => {
-                    if e.kind() != IOErrorKind::NotFound {
-                        eprintln!("Cannot remove queue {}: {}", i, e);
-                        ret = Some(e);
-                    }
-                },
-                _ => {
-                    //All is ok
-                }
-            }
-        }
-        if let Some(e) = ret {
-            Err(e)
-        } else {
-            Ok(())
-        }
-    }
-}
-
-/**
- * A TimestampActions gathers all the actions to perform at a specific timestpot.
- * @to_wake_up: the list of processes that have a known reason to be woken up a that timestamp
- * @has_to_send: a list of pairs (process that have something to send , packet IDs)
- */
-#[derive(Debug, Eq, PartialEq, Clone)]
-pub struct TimestampActions {
-    to_wake_up: Vec<u8>,
-    has_to_send: BTreeMap<u8, Vec<u64>>,
-}
-
-#[allow(dead_code)]
-impl TimestampActions {
-    
-    /**
-     * Create a new empty TimestampActions
-     */
-    fn new() -> Self {
-        TimestampActions {
-            to_wake_up: Vec::new(),
-            has_to_send: BTreeMap::new()
-        }
-    }
-    /**
-     * Create a new TimestampActions with one process to wake up
-     */
-    fn new_process(id: u8) -> Self {
-        TimestampActions {
-            to_wake_up: vec![id],
-            has_to_send: BTreeMap::new()
-        }
-    }
-
-    /**
-     * Create a new TimestampActions with one packet to send
-     */
-    fn new_pkt_id(id: u8, pkt_id: u64) -> Self {
-        let mut t = TimestampActions {
-            to_wake_up: Vec::new(),
-            has_to_send: BTreeMap::new()
-        };
-        t.add_packet(id, pkt_id);
-        return t;
-    }
-
-    /**
-     * Adds a process occurence to wake up
-     * Returns the number of process occurences
-     */
-    fn add_process(&mut self, id: u8) -> usize {
-        self.to_wake_up.push(id);
-        return self.to_wake_up.len();
-    }
-
-    /**
-     * Deletes a process occurence to wake up
-     * Returns the number of process occurences
-     */
-    fn del_process(&mut self, id: u8) -> usize {
-        self.to_wake_up.remove(self.to_wake_up.iter().position(|x| *x == id).unwrap());
-        return self.to_wake_up.len();
-    }
-
-    /**
-     * Check if the process is contained in the TimestampActions
-     */
-    fn contain_process(&self, id: u8) -> bool {
-        return self.to_wake_up.contains(&id);
-    }
-
-    /**
-     * Returns the number of occurences of processes that have to be woken up
-     */
-    fn nb_process(&self) -> usize {
-        return self.to_wake_up.len();
-    }
-
-    /**
-     * Adds a packet to send
-     */
-    fn add_packet(&mut self, id: u8, pkt_id: u64) {
-        if let Some(x) = self.has_to_send.get_mut(&id) {
-            x.push(pkt_id);
-        } else {
-            self.has_to_send.insert(id, vec![pkt_id]);
-        }
-    }
-
-    /**
-     * Returns the number of *processes* that have packets to send
-     */
-    fn nb_pkt(self) -> usize {
-        return self.has_to_send.len();
-    }
 }
 
 pub struct Simulation {
@@ -324,7 +108,7 @@ impl Simulation {
             },
             Ok(Fork::Child) => {
                 let _ = follower_init_queues(id, self.cfg.nb_follower);
-                execve(&self.cfg.exe_names[(id-1) as usize], &self.cfg.exe_args[(id-1) as usize], env)?;
+                execve(&self.cfg.exe[(id-1) as usize].path, &self.cfg.exe[(id-1) as usize].args, env)?;
                 Ok(0)
             }
             Err(_) => Err(std::io::Error::new(std::io::ErrorKind::Other, String::from("Fork failed"))),
@@ -356,7 +140,7 @@ impl Simulation {
         Ok(())
     }
 
-    fn messages_handler(&mut self, message: &Buffer) -> Result<()> {
+    fn messages_handler(&mut self, message: &Buffer, current_time: u64) -> Result<()> {
         match deserialize(*message) {
             Message::AddStep(id, t) => {
                 if let Some(x) = self.events.get_mut(&t) {
@@ -372,7 +156,7 @@ impl Simulation {
             },
             Message::GetTime(id) => {
                 //return head key of the BTreeMap
-                let msg = serialize(Message::WakeUp(*(self.events.first_key_value().unwrap().0)));
+                let msg = serialize(Message::WakeUp(current_time));
                 self.qs[id as usize].send(2, &msg.buffer)?;
             },
             Message::GetRand(id) => {
@@ -385,6 +169,22 @@ impl Simulation {
             Message::Stuck(id) => {
                 self.states[(id-1) as usize] = State::Blocked;
             },
+            Message::HasToSend4(id, ip, pkt_id) => {
+                let timestamp = current_time + self.cfg.topo.get_delay_v4(id, &ip).unwrap();
+                if let Some(x) = self.events.get_mut(&timestamp) {
+                    x.add_packet(id, pkt_id);
+                } else {
+                    self.events.insert(timestamp, TimestampActions::new_pkt_id(id, pkt_id));
+                }
+            },
+            Message::HasToSend6(id, ip, pkt_id) => {
+                let timestamp = current_time + self.cfg.topo.get_delay_v6(id, &ip).unwrap();
+                if let Some(x) = self.events.get_mut(&timestamp) {
+                    x.add_packet(id, pkt_id);
+                } else {
+                    self.events.insert(timestamp, TimestampActions::new_pkt_id(id, pkt_id));
+                }
+            },
             _ => {
                 //TODO
             }
@@ -395,21 +195,42 @@ impl Simulation {
     /**
      * Part of a timespot where the delayed send are actually sent
      */
-    fn sending_time_loop(&mut self) -> Result<()> {
+    fn sending_time_loop(&self, ta: TimestampActions) -> Result<()> {
+        for (process, pkt_id) in ta.flatten() {
+            let msg = serialize(Message::Send(pkt_id));
+            self.qs[process as usize].send(1, &msg.buffer)?;
+
+            let mut msg: Buffer = Buffer::new();
+            if let Ok(_) = self.qs[0].recv(&mut msg.buffer) {
+                if let Message::Sent(p, p_id) = deserialize(msg) {
+                    if p != process || p_id != pkt_id {
+                        println!("bad Sent received:\n\texpected: Sent({},{})\n\treceived: Sent({},{})",
+                        process, pkt_id, p, p_id);
+                        panic!("error");    
+                    }
+                } else {
+                    println!("bad message received:\n\texpected: Sent({},{})\n\treceived: {:?}",
+                        process, pkt_id, deserialize(msg));
+                    panic!("error");
+                }
+            }
+            else {
+                println!("could not receive Sent");
+                panic!("error");
+            }
+        }
         Ok(())
     }
 
     /**
      * Part of a timespot where the processes actually run
-     * TODO: parse HasToSendX
      */
-    fn running_time_loop(&mut self) -> Result<State> {
+    fn running_time_loop(&mut self, current_time: u64) -> Result<State> {
         let mut msg: Buffer = Buffer::new();
-        self.events.insert(0, TimestampActions::new());
         loop {
             match self.qs[0].recv(&mut msg.buffer) {
                 Ok(_) => {
-                    self.messages_handler(&msg)?;
+                    self.messages_handler(&msg, current_time)?;
                     let mut nb_blocked = 0;
                     let mut nb_finished = 0;
                     for s in self.states.iter_mut() {
@@ -440,26 +261,26 @@ impl Simulation {
      * Main loop
      */
     fn main_loop(&mut self) -> Result<u8> {
+        self.events.insert(0, TimestampActions::new());
         loop {
-            /*************** First half, sending time ***************/
-            let _ = self.sending_time_loop();
+            if let Some((time, ta)) = self.events.pop_first() {
+                /*************** First half, sending time ***************/
+                let _ = self.sending_time_loop(ta);
 
-            /************** Second half, running time ***************/
-            let msg = serialize(Message::WakeUp(*(self.events.first_key_value().unwrap().0)));
-            for (s, q) in self.states.iter_mut().zip(self.qs[1..].iter()) {
-                if s != &State::Finished {
-                    q.send(1, &msg.buffer)?;
-                    *s = State::Running;
+                /************** Second half, running time ***************/
+                let msg = serialize(Message::WakeUp(time));
+                for (s, q) in self.states.iter_mut().zip(self.qs[1..].iter()) {
+                    if s != &State::Finished {
+                        q.send(1, &msg.buffer)?;
+                        *s = State::Running;
+                    }
+                }
+                if let Ok(State::Finished) = self.running_time_loop(time) {
+                    println!("Simulation finished by all process finishing");
+                    return Ok(0);
                 }
             }
-            if let Ok(State::Finished) = self.running_time_loop() {
-                println!("Simulation finished by all process finishing");
-                return Ok(0);
-            }
-
-            /************** Jumping to next timestamp ***************/
-            let _ = self.events.pop_first();
-            if self.events.first_key_value() == None {
+            else {
                 // the simulation is finished
                 println!("Simulation finished by all process beeing blocked with no more events");
                 return Ok(1);
@@ -721,7 +542,7 @@ mod unit_testing {
 
 
         //test with one timestamp
-        sim.messages_handler(&serialize(Message::AddStep(1, 1))).expect("message handler failing");
+        sim.messages_handler(&serialize(Message::AddStep(1, 1)), 0).expect("message handler failing");
         let _ = sim.events.pop_first(); // get rid of timestamp 0
         if let Some((&1, v2)) = sim.events.first_key_value() {
             assert!(v2.contain_process(1));
@@ -730,7 +551,7 @@ mod unit_testing {
             assert!(false);
         }
 
-        let _ = sim.messages_handler(&serialize(Message::AddStep(2, 1)));
+        let _ = sim.messages_handler(&serialize(Message::AddStep(2, 1)), 0);
         if let Some((&1, v2)) = sim.events.first_key_value() {
             assert!(v2.contain_process(1));
             assert!(v2.contain_process(2));
@@ -739,7 +560,7 @@ mod unit_testing {
             assert!(false);
         }
 
-        let _ = sim.messages_handler(&serialize(Message::AddStep(2, 1)));
+        let _ = sim.messages_handler(&serialize(Message::AddStep(2, 1)), 0);
         if let Some((&1, v2)) = sim.events.first_key_value() {
             let mut ta = v2.clone();
             assert!(v2.contain_process(1));
@@ -751,7 +572,7 @@ mod unit_testing {
             assert!(false);
         }
 
-        let _ = sim.messages_handler(&serialize(Message::DelStep(1, 1)));
+        let _ = sim.messages_handler(&serialize(Message::DelStep(1, 1)), 0);
         if let Some((&1, v2)) = sim.events.first_key_value() {
             assert!(!v2.contain_process(1));
             assert!(v2.contain_process(2));
@@ -764,6 +585,7 @@ mod unit_testing {
 
 #[cfg(test)]
 mod determinism {
+    use helper::{cstringify, NetworkTopology, Process};
     use ntest::timeout;
     use posixmq::PosixMq;
     use std::io::Result;
@@ -928,13 +750,15 @@ mod determinism {
             const EXE1_ARGS: [&CStr; 5] = [c"./client", c"-i", c"127.0.0.1", c"-p", c"4443"];
             const EXE2_ARGS: [&CStr; 5] = [c"./server", c"-i", c"127.0.0.1", c"-p", c"4443"];
             const RANDOM_NUMBER: u64 = 84;
+            let processes = vec![Process::new(CString::from(EXE_NAMES[0]), CString::from(EXE_NAMES[0]), cstringify(&EXE1_ARGS)),
+                                            Process::new(CString::from(EXE_NAMES[1]), CString::from(EXE_NAMES[1]), cstringify(&EXE2_ARGS))];
         
             return Self {
                 nb_follower: nb,
                 _qname: QNAME.to_string(),
-                exe_names: cstringify(&EXE_NAMES),
-                exe_args: vec![cstringify(&EXE1_ARGS), cstringify(&EXE2_ARGS)],
+                exe: processes,
                 random_number: RANDOM_NUMBER,
+                topo: NetworkTopology::new(),
             }
         }
     }
