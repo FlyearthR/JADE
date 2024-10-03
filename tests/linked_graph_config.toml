@@ -1,0 +1,26 @@
+# Queue name
+qname = 'some_queue'
+
+# Random number
+random_number = 123
+
+# Number of followers
+nb_follower = 2
+
+# Executables
+[executables]
+[[executables.exe]]
+name = 'client'
+path = 'examples/miniP/client'
+args = ["./client", "-i", "127.0.0.1", "-p", "4443"]
+node_ids = [1]
+
+
+[[executables.exe]]
+name = 'server'
+path = 'examples/miniP/server'
+args = ["./server", "-i", "127.0.0.1", "-p", "4443"]
+node_ids = [2]
+
+# Graph
+graph = 'tests/linked_graph.gml'

@@ -6,7 +6,7 @@ use std::path::Path;
 use std::io::{Result, ErrorKind as IOErrorKind};
 use toml::de::Error as TomlError;
 use toml::Value;
-use gml_parser::{GMLObject, Graph};
+use gml_parser::{GMLObject, GMLValue, Graph, HasGMLAttributes, ReadableGMLAttributes};
 
 
 pub fn cstringify(arr: &[&CStr]) -> Vec<CString> {
@@ -27,8 +27,8 @@ pub fn get_identifier() -> String {
 #[derive(Debug)]
 pub struct NetworkTopology {
     grf: Graph,
-    ip4_node: HashMap<Ipv4AddrC, u8>,
-    ip6_node: HashMap<Ipv6AddrC, u8>,
+    ip4_node: HashMap<Ipv4AddrC, (u8, u8)>,
+    ip6_node: HashMap<Ipv6AddrC, (u8, u8)>,
 }
 
 impl NetworkTopology {
@@ -38,10 +38,54 @@ impl NetworkTopology {
     }
 
     fn from_graph(grf: Graph) -> Self {
+        let mut ip4_node: HashMap<Ipv4AddrC, (u8, u8)> = HashMap::new();
+        let mut ip6_node: HashMap<Ipv6AddrC, (u8, u8)> = HashMap::new();
+
+        for node in &grf.nodes {
+            for att in node.attributes() {
+                if att.0 == "interface" {
+                    let GMLValue::GMLObject(ref interface) = att.1 else {
+                        panic!("Failed to read the topology file: an interface should contains values")
+                    };
+                    let mut ip4s: Vec<Ipv4AddrC> = Vec::new();
+                    let mut ip6s: Vec<Ipv6AddrC> = Vec::new();
+                    let mut id = -1;
+                    for if_att in &(*interface).pairs {
+                        match (if_att.0.as_str(), &if_att.1) {
+                            ("id", &GMLValue::GMLInt(ref if_id)) => id = if_id.clone(),
+                            ("ip", &GMLValue::GMLObject(ref ip)) => {
+                                let ip_att = &ip.pairs;
+                                if ip_att[0].1 == GMLValue::GMLString("v4".to_string()) {
+                                    let GMLValue::GMLString(ref ip_addr) = ip_att[1].1 else {
+                                        panic!("Error parsing GML: an IP should contain a field ip");
+                                    };
+                                    ip4s.push(ip_addr.into());
+                                } else {
+                                    let GMLValue::GMLString(ref ip_addr) = ip_att[1].1 else {
+                                        panic!("Error parsing GML: an IP should contain a field ip");
+                                    };
+                                    ip6s.push(ip_addr.into());
+                                }
+                            }
+                            _ => panic!("Error parsing GML: unknown attribute in IP")
+                        }
+                    }
+                    if id == -1 {
+                        panic!("Error parsing GML: an interface should contain an id")
+                    }
+                    for ipv4 in ip4s {
+                        ip4_node.insert(ipv4, (node.id as u8, id as u8));
+                    }
+                    for ipv6 in ip6s {
+                        ip6_node.insert(ipv6, (node.id as u8, id as u8));
+                    }
+                }
+            }
+        }
         return Self {
             grf,
-            ip4_node: HashMap::new(),
-            ip6_node: HashMap::new(),
+            ip4_node,
+            ip6_node,
         };
     }
 
@@ -54,10 +98,12 @@ graph [
     }
 
     #[allow(dead_code)]
-    pub fn get_delay_v4(&self, id_src: u8, addr_dst: &Ipv4AddrC) -> Option<u64> {
+    pub fn get_delay_v4(&self, id_src: u8, id_if_src: u8, addr_dst: &Ipv4AddrC) -> Option<u64> {
         if let Some(peer) = self.ip4_node.get(addr_dst) {
             Some(self.grf.edges.iter()
-                .find(|&edge| edge.source == id_src as i64 && edge.target == *peer as i64)
+                .find(|&edge| edge.source == id_src as i64 && edge.target == peer.0 as i64
+                    && edge.get_attribute("source_if").unwrap().1 == GMLValue::GMLInt(id_if_src as i64)
+                    && edge.get_attribute("target_if").unwrap().1 == GMLValue::GMLInt(peer.1 as i64))
                 .and_then(|edge| edge.label.as_ref())?.parse::<u64>().unwrap())
         } else {
             None
@@ -65,10 +111,12 @@ graph [
     }
 
     #[allow(dead_code)]
-    pub fn get_delay_v6(&self, id_src: u8, addr_dst: &Ipv6AddrC) -> Option<u64> {
+    pub fn get_delay_v6(&self, id_src: u8, id_if_src: u8, addr_dst: &Ipv6AddrC) -> Option<u64> {
         if let Some(peer) = self.ip6_node.get(addr_dst) {
             Some(self.grf.edges.iter()
-                .find(|&edge| edge.source == id_src as i64 && edge.target == *peer as i64)
+                .find(|&edge| edge.source == id_src as i64 && edge.target == peer.0 as i64
+                    && edge.get_attribute("source_if").unwrap().1 == GMLValue::GMLInt(id_if_src as i64)
+                    && edge.get_attribute("target_if").unwrap().1 == GMLValue::GMLInt(peer.1 as i64))
                 .and_then(|edge| edge.label.as_ref())?.parse::<u64>().unwrap())
         } else {
             None
@@ -155,18 +203,11 @@ impl Config {
         }
     }
 
-    pub fn new(path: &Path) -> std::result::Result<Config, TomlError> {
-        // Read the file content
-        let content = fs::read_to_string(path).expect("Failed to read the file");
-
-        // Parse the content as a TOML Value
+    fn from(content: String) -> std::result::Result<Config, TomlError> {
         let value: Value = toml::from_str(&content)?;
 
-        // Extract the values from the TOML Value
         let nb_follower:usize = value.get("nb_follower").and_then(Value::as_integer).unwrap_or(0) as usize;
         let _qname = value.get("qname").and_then(Value::as_str).unwrap_or("").to_string();
-
-        // TODO transformer tout ça en une seul struc qui représente un exécutable
 
         let mut exe = Vec::new();
 
@@ -186,16 +227,36 @@ impl Config {
         }
 
         let random_number = value.get("random_number").and_then(Value::as_integer).unwrap_or(0) as u64;
-        let topo = NetworkTopology::from_graph(Graph::from_gml(
-            GMLObject::from_str(value.get("topology")
-            .and_then(Value::as_str).unwrap_or("")).unwrap()).unwrap());
-        Ok(Config {
+        if let Some(topo_path) = value.get("graph").and_then(Value::as_str) {
+            let topo =  NetworkTopology::from_graph(Graph::from_gml(
+                                        GMLObject::from_str(
+                                            &fs::read_to_string(Path::new(topo_path)).expect("Failed to read the topology file")
+                                            ).unwrap())
+                                        .unwrap());
+            return Ok(Config {
+                nb_follower,
+                _qname,
+                exe,
+                random_number,
+                topo,
+            });
+            
+        }
+        return Ok(Config {
             nb_follower,
             _qname,
             exe,
             random_number,
-            topo,
+            topo: NetworkTopology::new(),
         })
+
+    }
+
+    pub fn new(path: &Path) -> std::result::Result<Config, TomlError> {
+        let content = fs::read_to_string(path).expect("Failed to read the config file");
+
+        Self::from(content)
+        
     }
 
     /**
@@ -337,5 +398,27 @@ impl TimestampActions {
 
 #[cfg(test)]
 mod unit_testing {
+    use super::Config;
+    use std::ffi::CString;
+    use super::cstringify;
+    use std::path::Path;
 
+    #[test]
+    fn simple_config() {
+        let cfg = Config::new(Path::new("tests/mini_config.toml")).unwrap();
+        assert_eq!(cfg._qname, "some_queue");
+        assert_eq!(cfg.random_number, 123);
+        assert_eq!(cfg.exe[0].name, CString::from(c"client"));
+        assert_eq!(cfg.exe[0].path, CString::from(c"examples/miniP/client"));
+        assert_eq!(cfg.exe[0].args, cstringify(&[c"./client", c"-i", c"127.0.0.1", c"-p", c"4443"]));
+        assert_eq!(cfg.exe[1].name, CString::from(c"server"));
+        assert_eq!(cfg.exe[1].path, CString::from(c"examples/miniP/server"));
+        assert_eq!(cfg.exe[1].args, cstringify(&[c"./server", c"-i", c"127.0.0.1", c"-p", c"4443"]));
+    }
+
+    #[test]
+    fn delayed_links() {
+        let cfg = Config::new(Path::new("tests/linked_graph_config.toml")).unwrap();
+
+    }
 }

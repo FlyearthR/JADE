@@ -1,6 +1,8 @@
 mod follower;
 
-pub const SIZE_BUFFER: usize = 26;
+use std::str::FromStr;
+
+pub const SIZE_BUFFER: usize = 27;
 
 #[repr(C)]
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
@@ -14,6 +16,27 @@ impl Ipv4AddrC {
 
     pub fn octets(self) -> [u8; 4] {
         self.segments
+    }
+}
+impl From<std::net::Ipv4Addr> for Ipv4AddrC {
+    fn from(ip: std::net::Ipv4Addr) -> Self {
+        let ip_array = ip.octets();
+        Self::new(ip_array[0], ip_array[1], ip_array[2], ip_array[3])
+    }
+}
+impl From<&str> for Ipv4AddrC {
+    fn from(ip: &str) -> Self {
+        std::net::Ipv4Addr::from_str(ip).unwrap().into()
+    }
+}
+impl From<String> for Ipv4AddrC {
+    fn from(ip: String) -> Self {
+        ip.as_str().into()
+    }
+}
+impl From<&String> for Ipv4AddrC {
+    fn from(ip: &String) -> Self {
+        ip.as_str().into()
     }
 }
 
@@ -31,7 +54,28 @@ impl Ipv6AddrC {
         self.segments
     }
 }
-
+impl From<std::net::Ipv6Addr> for Ipv6AddrC {
+    fn from(ip: std::net::Ipv6Addr) -> Self {
+        let ip_array = ip.segments();
+        Self::new(ip_array[0], ip_array[1], ip_array[2], ip_array[3],
+            ip_array[4], ip_array[5], ip_array[6], ip_array[7])
+    }
+}
+impl From<&str> for Ipv6AddrC {
+    fn from(ip: &str) -> Self {
+        std::net::Ipv6Addr::from_str(ip).unwrap().into()
+    }
+}
+impl From<String> for Ipv6AddrC {
+    fn from(ip: String) -> Self {
+        ip.as_str().into()
+    }
+}
+impl From<&String> for Ipv6AddrC {
+    fn from(ip: &String) -> Self {
+        ip.as_str().into()
+    }
+}
 #[repr(C)]
 #[derive(Copy, Clone, PartialEq)]
 pub struct Buffer {
@@ -48,17 +92,17 @@ impl Buffer {
 #[repr(C)]
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Message {
-    Stuck(u8),                      // 1
-    AddStep(u8, u64),               // 2
-    DelStep(u8, u64),               // 3
-    HasToSend4(u8, Ipv4AddrC, u64), // 4
-    HasToSend6(u8, Ipv6AddrC, u64), // 5
-    Send(u64),                      // 6
-    Sent(u8, u64),                  // 7
-    GetTime(u8),                    // 8
-    GetRand(u8),                    // 9
-    WakeUp(u64),                    // 10
-    Finished(u8),                   // 11
+    Stuck(u8),                          // 1
+    AddStep(u8, u64),                   // 2
+    DelStep(u8, u64),                   // 3
+    HasToSend4(u8, u8, Ipv4AddrC, u64), // 4
+    HasToSend6(u8, u8, Ipv6AddrC, u64), // 5
+    Send(u64),                          // 6
+    Sent(u8, u64),                      // 7
+    GetTime(u8),                        // 8
+    GetRand(u8),                        // 9
+    WakeUp(u64),                        // 10
+    Finished(u8),                       // 11
 }
 
 impl From<Message> for Buffer {
@@ -89,37 +133,39 @@ impl From<Message> for Buffer {
                     i = i + 1;
                 }
             },
-            Message::HasToSend4(id, addr, pkt_id) => {
+            Message::HasToSend4(id, if_id, addr, pkt_id) => {
                 tab[0] = 4;
                 tab[1] = id;
+                tab[2] = if_id;
                 let t = addr.octets();
                 let mut i = 0;
                 while i < 4 {
-                    tab[i+2] = t[i];
+                    tab[i+3] = t[i];
                     i = i + 1;
                 }
                 let t1 = pkt_id.to_ne_bytes();
                 i = 0;
                 while i < 8 {
-                    tab[i+6] = t1[i];
+                    tab[i+7] = t1[i];
                     i = i + 1;
                 }
             },
-            Message::HasToSend6(id, addr, pkt_id) => {
+            Message::HasToSend6(id, if_id, addr, pkt_id) => {
                 tab[0] = 5;
                 tab[1] = id;
+                tab[2] = if_id;
                 let t = addr.segments();
                 let mut i = 0;
                 while i < 8 {
                     let tt = t[i].to_ne_bytes();
-                    tab[2*i+2] = tt[0];
-                    tab[2*i+3] = tt[1];
+                    tab[2*i+3] = tt[0];
+                    tab[2*i+4] = tt[1];
                     i = i + 1;
                 }
                 let t1 = pkt_id.to_ne_bytes();
                 i = 0;
                 while i < 8 {
-                    tab[i+18] = t1[i];
+                    tab[i+19] = t1[i];
                     i = i + 1;
                 }
             },
@@ -181,21 +227,21 @@ impl Into<Message> for Buffer {
                 Message::DelStep(self.buffer[1], u64::from_ne_bytes(self.buffer[2..10].try_into().unwrap()))
             },
             4 => {
-                Message::HasToSend4(self.buffer[1],
-                    Ipv4AddrC::new(self.buffer[2], self.buffer[3], self.buffer[4], self.buffer[5]),
-                    u64::from_ne_bytes(self.buffer[6..14].try_into().unwrap()))
+                Message::HasToSend4(self.buffer[1], self.buffer[2],
+                    Ipv4AddrC::new(self.buffer[3], self.buffer[4], self.buffer[5], self.buffer[6]),
+                    u64::from_ne_bytes(self.buffer[7..15].try_into().unwrap()))
             },
             5 => {
-                Message::HasToSend6(self.buffer[1],
-                    Ipv6AddrC::new(u16::from_ne_bytes(self.buffer[2..4].try_into().unwrap()), 
-                        u16::from_ne_bytes(self.buffer[4..6].try_into().unwrap()), 
-                        u16::from_ne_bytes(self.buffer[6..8].try_into().unwrap()), 
-                        u16::from_ne_bytes(self.buffer[8..10].try_into().unwrap()),
-                        u16::from_ne_bytes(self.buffer[10..12].try_into().unwrap()), 
-                        u16::from_ne_bytes(self.buffer[12..14].try_into().unwrap()), 
-                        u16::from_ne_bytes(self.buffer[14..16].try_into().unwrap()), 
-                        u16::from_ne_bytes(self.buffer[16..18].try_into().unwrap())),
-                    u64::from_ne_bytes(self.buffer[18..26].try_into().unwrap()))
+                Message::HasToSend6(self.buffer[1], self.buffer[2],
+                    Ipv6AddrC::new(u16::from_ne_bytes(self.buffer[3..5].try_into().unwrap()), 
+                        u16::from_ne_bytes(self.buffer[5..7].try_into().unwrap()), 
+                        u16::from_ne_bytes(self.buffer[7..9].try_into().unwrap()), 
+                        u16::from_ne_bytes(self.buffer[9..11].try_into().unwrap()),
+                        u16::from_ne_bytes(self.buffer[11..13].try_into().unwrap()), 
+                        u16::from_ne_bytes(self.buffer[13..15].try_into().unwrap()), 
+                        u16::from_ne_bytes(self.buffer[15..17].try_into().unwrap()), 
+                        u16::from_ne_bytes(self.buffer[17..19].try_into().unwrap())),
+                    u64::from_ne_bytes(self.buffer[19..27].try_into().unwrap()))
             },
             6 => {
                 Message::Send(u64::from_ne_bytes(self.buffer[2..10].try_into().unwrap()))

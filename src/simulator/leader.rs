@@ -169,16 +169,16 @@ impl Simulation {
             Message::Stuck(id) => {
                 self.states[(id-1) as usize] = State::Blocked;
             },
-            Message::HasToSend4(id, ip, pkt_id) => {
-                let timestamp = current_time + self.cfg.topo.get_delay_v4(id, &ip).unwrap();
+            Message::HasToSend4(id, if_id, ip, pkt_id) => {
+                let timestamp = current_time + self.cfg.topo.get_delay_v4(id, if_id, &ip).unwrap();
                 if let Some(x) = self.events.get_mut(&timestamp) {
                     x.add_packet(id, pkt_id);
                 } else {
                     self.events.insert(timestamp, TimestampActions::new_pkt_id(id, pkt_id));
                 }
             },
-            Message::HasToSend6(id, ip, pkt_id) => {
-                let timestamp = current_time + self.cfg.topo.get_delay_v6(id, &ip).unwrap();
+            Message::HasToSend6(id, if_id, ip, pkt_id) => {
+                let timestamp = current_time + self.cfg.topo.get_delay_v6(id, if_id, &ip).unwrap();
                 if let Some(x) = self.events.get_mut(&timestamp) {
                     x.add_packet(id, pkt_id);
                 } else {
@@ -376,46 +376,46 @@ mod unit_testing {
         assert_ne!(deserialize(serialize(DelStep(42, 42))), DelStep(42, 43));
         assert_ne!(deserialize(serialize(DelStep(42, 42))), DelStep(43, 42));
         
-        assert_eq!(deserialize(serialize(HasToSend4(42, Ipv4AddrC::new(42, 43, 44, 45), 42))),
-            HasToSend4(42, Ipv4AddrC::new(42, 43, 44, 45), 42));
-        assert_ne!(deserialize(serialize(HasToSend4(42, Ipv4AddrC::new(42, 43, 44, 45), 42))),
-            HasToSend4(43, Ipv4AddrC::new(42, 43, 44, 45), 42));
-        assert_ne!(deserialize(serialize(HasToSend4(42, Ipv4AddrC::new(42, 43, 44, 45), 42))),
-            HasToSend4(42, Ipv4AddrC::new(43, 43, 44, 45), 42));
-        assert_ne!(deserialize(serialize(HasToSend4(42, Ipv4AddrC::new(42, 43, 44, 45), 42))),
-            HasToSend4(42, Ipv4AddrC::new(42, 44, 44, 45), 42));
-        assert_ne!(deserialize(serialize(HasToSend4(42, Ipv4AddrC::new(42, 43, 44, 45), 42))),
-            HasToSend4(42, Ipv4AddrC::new(42, 43, 45, 45), 42));
-        assert_ne!(deserialize(serialize(HasToSend4(42, Ipv4AddrC::new(42, 43, 44, 45), 42))),
-            HasToSend4(42, Ipv4AddrC::new(42, 43, 44, 46), 42));
-        assert_ne!(deserialize(serialize(HasToSend4(42, Ipv4AddrC::new(42, 43, 44, 45), 42))),
-            HasToSend4(42, Ipv4AddrC::new(42, 43, 44, 45), 43));
+        assert_eq!(deserialize(serialize(HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42))),
+            HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42));
+        assert_ne!(deserialize(serialize(HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42))),
+            HasToSend4(43, 0, Ipv4AddrC::new(42, 43, 44, 45), 42));
+        assert_ne!(deserialize(serialize(HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42))),
+            HasToSend4(42, 0, Ipv4AddrC::new(43, 43, 44, 45), 42));
+        assert_ne!(deserialize(serialize(HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42))),
+            HasToSend4(42, 0, Ipv4AddrC::new(42, 44, 44, 45), 42));
+        assert_ne!(deserialize(serialize(HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42))),
+            HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 45, 45), 42));
+        assert_ne!(deserialize(serialize(HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42))),
+            HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 46), 42));
+        assert_ne!(deserialize(serialize(HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42))),
+            HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 43));
         
-        assert_eq!(deserialize(serialize(HasToSend6(42, Ipv6AddrC::new(42, 43, 43, 44, 46, 47, 48, 49), 42))),
-            HasToSend6(42, Ipv6AddrC::new(42, 43, 43, 44, 46, 47, 48, 49), 42));
+        assert_eq!(deserialize(serialize(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 43, 44, 46, 47, 48, 49), 42))),
+            HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 43, 44, 46, 47, 48, 49), 42));
 
-        assert_ne!(deserialize(serialize(HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
-            HasToSend6(43, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42));
+        assert_ne!(deserialize(serialize(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
+            HasToSend6(43, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42));
 
-        assert_ne!(deserialize(serialize(HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
-            HasToSend6(42, Ipv6AddrC::new(43, 43, 44, 45, 46, 47, 48, 49), 42));
-        assert_ne!(deserialize(serialize(HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
-            HasToSend6(42, Ipv6AddrC::new(42, 44, 44, 45, 46, 47, 48, 49), 42));
-        assert_ne!(deserialize(serialize(HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
-            HasToSend6(42, Ipv6AddrC::new(42, 43, 45, 45, 46, 47, 48, 49), 42));
-        assert_ne!(deserialize(serialize(HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
-            HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 46, 46, 47, 48, 49), 42));
-        assert_ne!(deserialize(serialize(HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
-            HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 47, 47, 48, 49), 42));
-        assert_ne!(deserialize(serialize(HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
-            HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 46, 48, 48, 49), 42));
-        assert_ne!(deserialize(serialize(HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
-            HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 49, 49), 42));
-        assert_ne!(deserialize(serialize(HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
-            HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 50), 42));
+        assert_ne!(deserialize(serialize(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
+            HasToSend6(42, 0, Ipv6AddrC::new(43, 43, 44, 45, 46, 47, 48, 49), 42));
+        assert_ne!(deserialize(serialize(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
+            HasToSend6(42, 0, Ipv6AddrC::new(42, 44, 44, 45, 46, 47, 48, 49), 42));
+        assert_ne!(deserialize(serialize(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
+            HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 45, 45, 46, 47, 48, 49), 42));
+        assert_ne!(deserialize(serialize(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
+            HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 46, 46, 47, 48, 49), 42));
+        assert_ne!(deserialize(serialize(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
+            HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 47, 47, 48, 49), 42));
+        assert_ne!(deserialize(serialize(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
+            HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 48, 48, 49), 42));
+        assert_ne!(deserialize(serialize(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
+            HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 49, 49), 42));
+        assert_ne!(deserialize(serialize(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
+            HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 50), 42));
 
-        assert_ne!(deserialize(serialize(HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
-            HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 43));
+        assert_ne!(deserialize(serialize(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
+            HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 43));
 
         assert_eq!(deserialize(serialize(Send(42))), Send(42));
         assert_ne!(deserialize(serialize(Send(42))), Send(43));
@@ -446,7 +446,7 @@ mod unit_testing {
         let qio = follower_init_queues(1, 1).expect("follower queues creating");
         let mut msg: Buffer = Buffer::new();
         let msgs = [Stuck(42), AddStep(42, 43),
-            HasToSend4(42, Ipv4AddrC::new(42, 43, 44, 45), 42), HasToSend6(42, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42),
+            HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42), HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42),
             Send(42), Sent(1, 42), DelStep(42, 42), GetTime(42), GetRand(42), Finished(42)];
 
         for m in msgs {
@@ -705,10 +705,10 @@ mod determinism {
             }
         }
     }
-    macro_rules! m_send_3arg {
+    macro_rules! m_send_4arg {
         ($msg:expr, $dest:expr, $pkt_id:expr, $qfs:ident, $nb:expr) => {
             for i in 0..$nb {
-                $qfs[i].as_ref().unwrap().1.send(1, &serialize($msg((i+1) as u8, $dest, $pkt_id)).buffer).expect("send message failed");
+                $qfs[i].as_ref().unwrap().1.send(1, &serialize($msg((i+1) as u8, 0, $dest, $pkt_id)).buffer).expect("send message failed");
             }
         }
     }
@@ -733,10 +733,10 @@ mod determinism {
             m_send_2arg!(AddStep, $step, $qfs, $nb)
         };
         (HasToSend4(_, $dest:expr, $pkt_id:expr), $qfs:ident, $nb:expr) => {
-            m_send_3arg!(HasToSend4, $dest, $pkt_id, $qfs, $nb)
+            m_send_4arg!(HasToSend4, $dest, $pkt_id, $qfs, $nb)
         };
         (HasToSend6(_, $dest:expr, $pkt_id:expr), $qfs:ident, $nb:expr) => {
-            m_send_3arg!(HasToSend6, $dest, $pkt_id, $qfs, $nb)
+            m_send_4arg!(HasToSend6, $dest, $pkt_id, $qfs, $nb)
         };
         (Sent($id:expr, $pkt_id:expr), $qfs:ident) => {
             $qfs[$id-1].as_ref().unwrap().1.send(1, &serialize(Sent(($id) as u8, $pkt_id)).buffer).expect("send DelStep failed");

@@ -21,6 +21,7 @@ serial_test = "3.0.0"
 arr_macro = "0.2.1"
 toml = "0.8.14"
 ntest = "0.9.3"
+gml_parser = "0.1.1"
 
 [profile.dev]
 panic = "abort"

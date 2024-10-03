@@ -10,10 +10,35 @@ nb_follower = 2
 # Executables
 [executables]
 [[executables.exe]]
+name = 'client'
 path = 'examples/miniP/client'
 args = ["./client", "-i", "127.0.0.1", "-p", "4443"]
 
 [[executables.exe]]
+name = 'server'
 path = 'examples/miniP/server'
 args = ["./server", "-i", "127.0.0.1", "-p", "4443"]
 
+# Graph
+graph = '
+graph [            
+   id 4           
+   node [         
+       id 0       
+       type "client"
+   ]              
+   node [         
+       id 1       
+       type "server"
+   ]              
+   edge [         
+       source 1   
+       target 0   
+       label 10
+   ]                            
+   edge [         
+       source 0   
+       target 1   
+       label 20
+   ]              
+]'
