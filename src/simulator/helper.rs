@@ -6,7 +6,7 @@ use std::path::Path;
 use std::io::{Result, ErrorKind as IOErrorKind};
 use toml::de::Error as TomlError;
 use toml::Value;
-use gml_parser::{GMLObject, GMLValue, Graph, HasGMLAttributes, ReadableGMLAttributes};
+use gml_parser::{Edge, GMLObject, GMLValue, Graph, HasGMLAttributes, ReadableGMLAttributes};
 
 
 pub fn cstringify(arr: &[&CStr]) -> Vec<CString> {
@@ -38,11 +38,14 @@ impl NetworkTopology {
     }
 
     fn from_graph(grf: Graph) -> Self {
+        println!("From graph called: {:?}", grf);
         let mut ip4_node: HashMap<Ipv4AddrC, (u8, u8)> = HashMap::new();
         let mut ip6_node: HashMap<Ipv6AddrC, (u8, u8)> = HashMap::new();
 
         for node in &grf.nodes {
+            println!("Parsing node {:?}", node);
             for att in node.attributes() {
+                println!("Parsing attribute {:?}", att);
                 if att.0 == "interface" {
                     let GMLValue::GMLObject(ref interface) = att.1 else {
                         panic!("Failed to read the topology file: an interface should contains values")
@@ -51,23 +54,28 @@ impl NetworkTopology {
                     let mut ip6s: Vec<Ipv6AddrC> = Vec::new();
                     let mut id = -1;
                     for if_att in &(*interface).pairs {
+                        println!("Parsing interface attribute {:?}", if_att);
                         match (if_att.0.as_str(), &if_att.1) {
                             ("id", &GMLValue::GMLInt(ref if_id)) => id = if_id.clone(),
                             ("ip", &GMLValue::GMLObject(ref ip)) => {
                                 let ip_att = &ip.pairs;
+                                // handle symmetric links
                                 if ip_att[0].1 == GMLValue::GMLString("v4".to_string()) {
                                     let GMLValue::GMLString(ref ip_addr) = ip_att[1].1 else {
                                         panic!("Error parsing GML: an IP should contain a field ip");
                                     };
+                                    println!("Parsing ipv4 {:?}", ip_addr);
                                     ip4s.push(ip_addr.into());
                                 } else {
                                     let GMLValue::GMLString(ref ip_addr) = ip_att[1].1 else {
                                         panic!("Error parsing GML: an IP should contain a field ip");
                                     };
+                                    println!("Parsing ipv6 {:?}", ip_addr);
                                     ip6s.push(ip_addr.into());
                                 }
-                            }
-                            _ => panic!("Error parsing GML: unknown attribute in IP")
+                            },
+                            ("label", _) => {},
+                            a => panic!("Error parsing GML: unknown attribute in IP: {:?}", a)
                         }
                     }
                     if id == -1 {
@@ -97,14 +105,42 @@ graph [
 ]"#)
     }
 
+    fn match_peers(edge: &Edge, id_src: u8, id_if_src: u8, id_dst: u8, id_if_dst: u8) -> bool {
+        let GMLValue::GMLInt(e_if_src) = edge.get_attribute("source_if").unwrap().1 else {panic!("No source interface for the edge {:?}", edge)};
+        let GMLValue::GMLInt(e_if_dst) = edge.get_attribute("target_if").unwrap().1 else {panic!("No target interface for the edge {:?}", edge)};
+        let GMLValue::GMLString(ref edge_type) = edge.get_attribute("type").unwrap().1 else {panic!("No type for the edge {:?}", edge)};
+        match edge_type.as_str() {
+            "symmetric" => {
+                println!("Comparing with {} {} => {} {}", id_src, id_if_src, id_dst, id_if_dst);
+                (edge.source == id_src as i64 && edge.target == id_dst as i64
+                && e_if_src == id_if_src as i64 && e_if_dst == id_if_dst as i64)
+                || (edge.source == id_dst as i64 && edge.target == id_src as i64
+                && e_if_src == id_if_dst as i64 && e_if_dst == id_if_src as i64)
+            },
+            "directed" => edge.source == id_src as i64 && edge.target == id_dst as i64
+                            && e_if_src == id_if_src as i64 && e_if_dst == id_if_dst as i64,
+            t => panic!("Bad link type : {t}"),
+        }
+
+    }
+
+    fn get_delay(&self, peer: (u8, u8), id_src: u8, id_if_src: u8) -> Option<u64> {
+        println!("Looking for the link {id_src} {id_if_src} => {0} {1}", peer.0, peer.1);
+        self.grf.edges.iter()
+            .find(|&edge| Self::match_peers(edge, id_src, id_if_src, peer.0, peer.1))
+            .and_then(|edge| {
+                let Some((_, GMLValue::GMLInt(metric))) = edge.get_attribute("metric")
+                else {panic!("Error parsing link metric")};
+                Some(*metric as u64)
+            })
+        
+    }
+
     #[allow(dead_code)]
     pub fn get_delay_v4(&self, id_src: u8, id_if_src: u8, addr_dst: &Ipv4AddrC) -> Option<u64> {
+        println!("{:?}", self.ip4_node);
         if let Some(peer) = self.ip4_node.get(addr_dst) {
-            Some(self.grf.edges.iter()
-                .find(|&edge| edge.source == id_src as i64 && edge.target == peer.0 as i64
-                    && edge.get_attribute("source_if").unwrap().1 == GMLValue::GMLInt(id_if_src as i64)
-                    && edge.get_attribute("target_if").unwrap().1 == GMLValue::GMLInt(peer.1 as i64))
-                .and_then(|edge| edge.label.as_ref())?.parse::<u64>().unwrap())
+            self.get_delay(*peer, id_src, id_if_src)
         } else {
             None
         }
@@ -113,11 +149,7 @@ graph [
     #[allow(dead_code)]
     pub fn get_delay_v6(&self, id_src: u8, id_if_src: u8, addr_dst: &Ipv6AddrC) -> Option<u64> {
         if let Some(peer) = self.ip6_node.get(addr_dst) {
-            Some(self.grf.edges.iter()
-                .find(|&edge| edge.source == id_src as i64 && edge.target == peer.0 as i64
-                    && edge.get_attribute("source_if").unwrap().1 == GMLValue::GMLInt(id_if_src as i64)
-                    && edge.get_attribute("target_if").unwrap().1 == GMLValue::GMLInt(peer.1 as i64))
-                .and_then(|edge| edge.label.as_ref())?.parse::<u64>().unwrap())
+            self.get_delay(*peer, id_src, id_if_src)
         } else {
             None
         }
@@ -228,6 +260,7 @@ impl Config {
 
         let random_number = value.get("random_number").and_then(Value::as_integer).unwrap_or(0) as u64;
         if let Some(topo_path) = value.get("graph").and_then(Value::as_str) {
+            println!("TOPO FILE {} {:?}",topo_path, &fs::read_to_string(Path::new(topo_path)));
             let topo =  NetworkTopology::from_graph(Graph::from_gml(
                                         GMLObject::from_str(
                                             &fs::read_to_string(Path::new(topo_path)).expect("Failed to read the topology file")
@@ -242,6 +275,7 @@ impl Config {
             });
             
         }
+        println!("Here");
         return Ok(Config {
             nb_follower,
             _qname,
@@ -254,6 +288,7 @@ impl Config {
 
     pub fn new(path: &Path) -> std::result::Result<Config, TomlError> {
         let content = fs::read_to_string(path).expect("Failed to read the config file");
+        println!("{}", content);
 
         Self::from(content)
         
@@ -402,6 +437,7 @@ mod unit_testing {
     use std::ffi::CString;
     use super::cstringify;
     use std::path::Path;
+    use network_time_simulator::Ipv4AddrC;
 
     #[test]
     fn simple_config() {
@@ -419,6 +455,8 @@ mod unit_testing {
     #[test]
     fn delayed_links() {
         let cfg = Config::new(Path::new("tests/linked_graph_config.toml")).unwrap();
+        assert_eq!(cfg.topo.get_delay_v4(2, 0, &Ipv4AddrC::from("192.168.1.2")), Some(20));
+        assert_eq!(cfg.topo.get_delay_v4(1, 0, &Ipv4AddrC::from("172.16.0.2")), Some(20));
 
     }
 }

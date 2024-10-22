@@ -7,6 +7,9 @@ random_number = 123
 # Number of followers
 nb_follower = 2
 
+# Graph
+graph = 'tests/linked_graph.gml'
+
 # Executables
 [executables]
 [[executables.exe]]
@@ -22,5 +25,3 @@ path = 'examples/miniP/server'
 args = ["./server", "-i", "127.0.0.1", "-p", "4443"]
 node_ids = [2]
 
-# Graph
-graph = 'tests/linked_graph.gml'

@@ -1,4 +1,6 @@
 graph [
+  lable "test"
+  id 4
   node [
     id 1
     label "Node 1"
@@ -42,7 +44,7 @@ graph [
     target_if 0
     label "Link"
     metric 20
-    type "symetric"
+    type "symmetric"
   ]
   edge [
     source 1
@@ -51,6 +53,6 @@ graph [
     target_if 0
     label "Link"
     metric 10
-    type "symetric"
+    type "symmetric"
   ]
 ]
