@@ -38,14 +38,11 @@ impl NetworkTopology {
     }
 
     fn from_graph(grf: Graph) -> Self {
-        println!("From graph called: {:?}", grf);
         let mut ip4_node: HashMap<Ipv4AddrC, (u8, u8)> = HashMap::new();
         let mut ip6_node: HashMap<Ipv6AddrC, (u8, u8)> = HashMap::new();
 
         for node in &grf.nodes {
-            println!("Parsing node {:?}", node);
             for att in node.attributes() {
-                println!("Parsing attribute {:?}", att);
                 if att.0 == "interface" {
                     let GMLValue::GMLObject(ref interface) = att.1 else {
                         panic!("Failed to read the topology file: an interface should contains values")
@@ -54,7 +51,6 @@ impl NetworkTopology {
                     let mut ip6s: Vec<Ipv6AddrC> = Vec::new();
                     let mut id = -1;
                     for if_att in &(*interface).pairs {
-                        println!("Parsing interface attribute {:?}", if_att);
                         match (if_att.0.as_str(), &if_att.1) {
                             ("id", &GMLValue::GMLInt(ref if_id)) => id = if_id.clone(),
                             ("ip", &GMLValue::GMLObject(ref ip)) => {
@@ -64,13 +60,11 @@ impl NetworkTopology {
                                     let GMLValue::GMLString(ref ip_addr) = ip_att[1].1 else {
                                         panic!("Error parsing GML: an IP should contain a field ip");
                                     };
-                                    println!("Parsing ipv4 {:?}", ip_addr);
                                     ip4s.push(ip_addr.into());
                                 } else {
                                     let GMLValue::GMLString(ref ip_addr) = ip_att[1].1 else {
                                         panic!("Error parsing GML: an IP should contain a field ip");
                                     };
-                                    println!("Parsing ipv6 {:?}", ip_addr);
                                     ip6s.push(ip_addr.into());
                                 }
                             },
@@ -111,7 +105,6 @@ graph [
         let GMLValue::GMLString(ref edge_type) = edge.get_attribute("type").unwrap().1 else {panic!("No type for the edge {:?}", edge)};
         match edge_type.as_str() {
             "symmetric" => {
-                println!("Comparing with {} {} => {} {}", id_src, id_if_src, id_dst, id_if_dst);
                 (edge.source == id_src as i64 && edge.target == id_dst as i64
                 && e_if_src == id_if_src as i64 && e_if_dst == id_if_dst as i64)
                 || (edge.source == id_dst as i64 && edge.target == id_src as i64
@@ -125,7 +118,6 @@ graph [
     }
 
     fn get_delay(&self, peer: (u8, u8), id_src: u8, id_if_src: u8) -> Option<u64> {
-        println!("Looking for the link {id_src} {id_if_src} => {0} {1}", peer.0, peer.1);
         self.grf.edges.iter()
             .find(|&edge| Self::match_peers(edge, id_src, id_if_src, peer.0, peer.1))
             .and_then(|edge| {
@@ -138,7 +130,6 @@ graph [
 
     #[allow(dead_code)]
     pub fn get_delay_v4(&self, id_src: u8, id_if_src: u8, addr_dst: &Ipv4AddrC) -> Option<u64> {
-        println!("{:?}", self.ip4_node);
         if let Some(peer) = self.ip4_node.get(addr_dst) {
             self.get_delay(*peer, id_src, id_if_src)
         } else {
@@ -260,7 +251,6 @@ impl Config {
 
         let random_number = value.get("random_number").and_then(Value::as_integer).unwrap_or(0) as u64;
         if let Some(topo_path) = value.get("graph").and_then(Value::as_str) {
-            println!("TOPO FILE {} {:?}",topo_path, &fs::read_to_string(Path::new(topo_path)));
             let topo =  NetworkTopology::from_graph(Graph::from_gml(
                                         GMLObject::from_str(
                                             &fs::read_to_string(Path::new(topo_path)).expect("Failed to read the topology file")
@@ -275,7 +265,6 @@ impl Config {
             });
             
         }
-        println!("Here");
         return Ok(Config {
             nb_follower,
             _qname,
@@ -288,7 +277,6 @@ impl Config {
 
     pub fn new(path: &Path) -> std::result::Result<Config, TomlError> {
         let content = fs::read_to_string(path).expect("Failed to read the config file");
-        println!("{}", content);
 
         Self::from(content)
         
@@ -412,7 +400,7 @@ impl TimestampActions {
     /**
      * Returns the number of *processes* that have packets to send
      */
-    pub fn nb_pkt(self) -> usize {
+    pub fn nb_pkt(&self) -> usize {
         return self.has_to_send.len();
     }
 
@@ -433,11 +421,12 @@ impl TimestampActions {
 
 #[cfg(test)]
 mod unit_testing {
-    use super::Config;
+    use super::{Config, TimestampActions};
     use std::ffi::CString;
     use super::cstringify;
     use std::path::Path;
     use network_time_simulator::Ipv4AddrC;
+    use toml::value::Time;
 
     #[test]
     fn simple_config() {
@@ -455,8 +444,91 @@ mod unit_testing {
     #[test]
     fn delayed_links() {
         let cfg = Config::new(Path::new("tests/linked_graph_config.toml")).unwrap();
+        // First edge
         assert_eq!(cfg.topo.get_delay_v4(2, 0, &Ipv4AddrC::from("192.168.1.2")), Some(20));
+        assert_eq!(cfg.topo.get_delay_v4(2, 0, &Ipv4AddrC::from("192.168.1.1")), Some(20));
         assert_eq!(cfg.topo.get_delay_v4(1, 0, &Ipv4AddrC::from("172.16.0.2")), Some(20));
+        // Second edge
+        assert_eq!(cfg.topo.get_delay_v4(1, 1, &Ipv4AddrC::from("172.16.0.2")), Some(10));
+        assert_eq!(cfg.topo.get_delay_v4(2, 0, &Ipv4AddrC::from("10.0.0.1")), Some(10));
+
+    }
+
+    #[test]
+    fn ta_test() {
+        let mut ta_n = TimestampActions::new();
+        assert!(!ta_n.contain_process(1));
+        assert_eq!(ta_n.nb_process(), 0);
+        assert_eq!(ta_n.nb_pkt(), 0);
+
+        let mut ta_pc = TimestampActions::new_process(1);
+        assert!(ta_pc.contain_process(1));
+        assert_eq!(ta_pc.nb_process(), 1);
+        assert_eq!(ta_pc.nb_pkt(), 0);
+
+        let ta_pk = TimestampActions::new_pkt_id(2, 2);
+        assert!(!ta_pk.contain_process(1));
+        assert_eq!(ta_pk.nb_process(), 0);
+        assert_eq!(ta_pk.nb_pkt(), 1);
+
+        assert_eq!(ta_n.add_process(1), 1);
+        assert_eq!(ta_n.nb_process(), 1);
+        assert!(ta_n.contain_process(1));
+        assert_eq!(ta_n, ta_pc);
+
+        assert_eq!(ta_n.add_process(1), 2);
+        assert_eq!(ta_n.nb_process(), 2);
+        assert!(ta_n.contain_process(1));
+        
+        assert_eq!(ta_n.add_process(1), 3);
+        assert_eq!(ta_n.nb_process(), 3);
+        assert!(ta_n.contain_process(1));
+        
+        assert_eq!(ta_n.del_process(1), 2);
+        assert_eq!(ta_n.nb_process(), 2);
+        assert!(ta_n.contain_process(1));
+        
+        assert_eq!(ta_n.del_process(1), 1);
+        assert_eq!(ta_n.nb_process(), 1);
+        assert!(ta_n.contain_process(1));
+        assert_eq!(ta_n, ta_pc);
+        
+        assert_eq!(ta_n.del_process(1), 0);
+        assert_eq!(ta_n.nb_process(), 0);
+        assert!(!ta_n.contain_process(1));
+        
+        ta_n.add_packet(2, 2);
+        assert_eq!(ta_n, ta_pk);
+
+        ta_pc.add_packet(3, 2);
+        assert_ne!(ta_n, ta_pc);
+
+        let ta_pc2 = TimestampActions::new_pkt_id(2, 3);
+        assert_ne!(ta_n, ta_pc2);
+
+        ta_pc.add_packet(2, 4);
+        ta_pc.add_packet(2, 5);
+        ta_pc.add_packet(3, 4);
+        assert_eq!(ta_pc.nb_pkt(), 2);
+
+        let mut ta_vec = ta_pc.flatten();
+        
+        assert!(ta_vec.contains(&(3,2)));
+        let index = ta_vec.iter().position(|x| *x == (3,2)).unwrap();
+        ta_vec.swap_remove(index);
+        
+        assert!(ta_vec.contains(&(2,4)));
+        let index = ta_vec.iter().position(|x| *x == (2,4)).unwrap();
+        ta_vec.swap_remove(index);
+        
+        assert!(ta_vec.contains(&(2,5)));
+        let index = ta_vec.iter().position(|x| *x == (2,5)).unwrap();
+        ta_vec.swap_remove(index);
+        
+        assert!(ta_vec.contains(&(3,4)));
+        let index = ta_vec.iter().position(|x| *x == (3,4)).unwrap();
+        ta_vec.swap_remove(index);
+        assert_eq!(ta_vec.len(), 0);
 
     }
 }
