@@ -65,6 +65,7 @@ fn follower_init_queues(id: u8, nb: usize) -> Result<(PosixMq, PosixMq)> {
     return Ok((qi, qo));
 }
 
+#[derive(Debug)]
 pub struct Simulation {
     cfg: Config,
     states: Vec<State>,
@@ -83,8 +84,7 @@ impl Simulation {
     fn new (cfg: Config) -> Self {
         let nb_f = cfg.nb_follower;
         let _ = cfg.unlink_queues();
-        let mut btm = BTreeMap::new();
-        btm.insert(0, TimestampActions::new());
+        let btm = BTreeMap::new();
         Self { cfg,
             states: vec![State::Running; nb_f],
             events: btm,
@@ -170,10 +170,13 @@ impl Simulation {
                 self.states[(id-1) as usize] = State::Blocked;
             },
             Message::HasToSend4(id, if_id, ip, pkt_id) => {
+                println!("id: {id}, if_id: {if_id}, ip: {:?}, pkt_id: {pkt_id}", ip);
                 let timestamp = current_time + self.cfg.topo.get_delay_v4(id, if_id, &ip).unwrap();
                 if let Some(x) = self.events.get_mut(&timestamp) {
+                    println!("Here");
                     x.add_packet(id, pkt_id);
                 } else {
+                    println!("There");
                     self.events.insert(timestamp, TimestampActions::new_pkt_id(id, pkt_id));
                 }
             },
@@ -196,7 +199,10 @@ impl Simulation {
      * Part of a timespot where the delayed send are actually sent
      */
     fn sending_time_loop(&self, ta: TimestampActions) -> Result<()> {
+        println!("\n\n\nSending loop\n\n\n");
+        println!("{:?}", ta);
         for (process, pkt_id) in ta.flatten() {
+            println!("{:?}", (process, pkt_id));
             let msg = serialize(Message::Send(pkt_id));
             self.qs[process as usize].send(1, &msg.buffer)?;
 
@@ -226,10 +232,12 @@ impl Simulation {
      * Part of a timespot where the processes actually run
      */
     fn running_time_loop(&mut self, current_time: u64) -> Result<State> {
+        println!("\n\n\nRunning loop\n\n\n");
         let mut msg: Buffer = Buffer::new();
         loop {
             match self.qs[0].recv(&mut msg.buffer) {
                 Ok(_) => {
+                    println!("Received message: {:?}", Into::<Message>::into(msg));
                     self.messages_handler(&msg, current_time)?;
                     let mut nb_blocked = 0;
                     let mut nb_finished = 0;
@@ -261,8 +269,18 @@ impl Simulation {
      * Main loop
      */
     fn main_loop(&mut self) -> Result<u8> {
-        self.events.insert(0, TimestampActions::new());
+        println!("{:?}", self);
+        let msg = serialize(Message::WakeUp(0));
+        for (s, q) in self.states.iter_mut().zip(self.qs[1..].iter()) {
+            q.send(1, &msg.buffer)?;
+            *s = State::Running;
+        }
+        if let Ok(State::Finished) = self.running_time_loop(0) {
+            println!("Simulation finished by all process finishing");
+            return Ok(0);
+        }
         loop {
+            println!("Boucle: {:?}", self.events);
             if let Some((time, ta)) = self.events.pop_first() {
                 /*************** First half, sending time ***************/
                 let _ = self.sending_time_loop(ta);
@@ -598,7 +616,7 @@ mod determinism {
 
     macro_rules! NB_FOLLOWERS {
         () => {
-            2 //must be root to get higher than 10
+            10 //must be root to get higher than 10
         };
     }
 
@@ -625,15 +643,18 @@ mod determinism {
                     $tab[i] = Some($s.spawn(move || {
                             match q.as_ref().unwrap().0.recv_timeout(&mut $msgs[i as usize].buffer, Duration::from_secs(1)) {
                                 Ok(x) => {
+                                    println!("Node {i} received {:?}", Into::<Message>::into($msgs[i as usize]));
                                     match $msgs[i as usize].into() {
                                         Send(id) => {
                                             assert_eq!(id, $pkt_id);
                                             if i as usize > $prioritized {
+                                                println!("Non-prioritized thread receive order to send: Send({})", id);
                                                 assert!(false);
                                             }
                                             Ok(x)
                                         },
-                                        _ => {
+                                        m => {
+                                        println!("Bad message received: {:?}", m);
                                             assert!(false); // should not receive anything else
                                             Ok((0,0))
                                         },
@@ -657,7 +678,7 @@ mod determinism {
      * Joins the receiving threads
      * Asserts that one and only one follower received a message
      * Set id_order if unset, asserts it's unchanged otherwise
-     * Sends a DelStep to the leader to acknoledge the packet has been sent
+     * Sends a Sent to the leader to acknoledge the packet has been sent
      */
     macro_rules! m_check {
         ($ts:ident, $id_order:expr, Sent(_, $pkt_id:expr), $qfs:ident) => {
@@ -679,8 +700,7 @@ mod determinism {
                         }
                         id_received = i;
                     },
-                    Err(x) => {
-                        println!("i in Err(x) NB_FOLLOWER: {i}\n{x}");
+                    Err(_) => {
                         assert!(false);
                     },
                 };
@@ -743,6 +763,62 @@ mod determinism {
         };
     }
 
+    impl NetworkTopology {
+        /**
+         * Return a star centred on 10.0.0.100
+         */
+        fn test_topo(nb: usize) -> Self {
+            let mut nodes: String = String::from(
+"  node [
+    id 100
+    label \"Node 100\"
+    interface [
+      id 0
+      label \"wlp4s0\"
+      ip [
+        type \"v4\"
+        ip \"10.0.0.100\"
+      ]
+    ]
+  ]
+");   
+            let mut edges: String = String::new();
+            for i in 1..nb+1 {
+                nodes.push_str(&format!(
+"  node [
+    id {}
+    label \"Node {}\"
+    interface [
+      id 0
+      label \"wlp4s0\"
+      ip [
+        type \"v4\"
+        ip \"10.0.0.{}\"
+      ]
+    ]
+  ]
+", i, i, i));
+                    edges.push_str(&format!(
+"  edge [
+    source {}
+    source_if 0
+    target 100
+    target_if 0
+    label \"Link\"
+    metric 20
+    type \"symmetric\"
+  ]
+", i));
+            }
+            let final_graph = format!(
+"graph [
+  label \"test\"
+  id 4
+{}{}]", nodes, edges);
+            return Self::load(&final_graph);
+        }
+    }
+
     impl Config {    
         fn test_config(nb: usize) -> Self {
             const QNAME: &str = "/nts_mq";
@@ -758,7 +834,7 @@ mod determinism {
                 _qname: QNAME.to_string(),
                 exe: processes,
                 random_number: RANDOM_NUMBER,
-                topo: NetworkTopology::new(),
+                topo: NetworkTopology::test_topo(nb),
             }
         }
     }
@@ -768,25 +844,42 @@ mod determinism {
      * This test checks that senders are woken up one at a time, following a deterministic order.
      */
     fn test_determinism_setup(nb_sender:usize) {
-        //Setting up the environment
-        let mut sim = Simulation::new(Config::default_config());
-        sim.cfg.nb_follower = NB_FOLLOWERS!();
-        let mut msgs: [Buffer; NB_FOLLOWERS!() as usize] = [Buffer::new() ; NB_FOLLOWERS!()];
-        let nb_f = NB_FOLLOWERS!();
-        let clo = |mut i| -> (PosixMq, PosixMq) {i += 1; follower_init_queues(i as u8, NB_FOLLOWERS!()).expect("follower queues creating")};
-        let qfs: [Option<(PosixMq, PosixMq)> ; NB_FOLLOWERS!()] = custom_arr_tpm(clo);
-        let pkt_id = 1;
+        
         //let mut already_received = false;
         
         for _iter in 0..2 {
+            //Setting up the environment
+            let mut sim = Simulation::new(Config::test_config(NB_FOLLOWERS!()));
+            let mut msgs: [Buffer; NB_FOLLOWERS!() as usize] = [Buffer::new() ; NB_FOLLOWERS!()];
+            let nb_f = NB_FOLLOWERS!();
+            let clo = |mut i| -> (PosixMq, PosixMq) {i += 1; follower_init_queues(i as u8, NB_FOLLOWERS!()).expect("follower queues creating")};
+            let qfs: [Option<(PosixMq, PosixMq)> ; NB_FOLLOWERS!()] = custom_arr_tpm(clo);
+            let pkt_id = 1;
             thread::scope(|sc| {
                 sim.leader_init_queues().expect("leader queues creating");
-                let t = sc.spawn(|| {Simulation::new(Config::test_config(NB_FOLLOWERS!())).main_loop()});
+                let t = sc.spawn(|| {sim.main_loop()});
                 let mut receiving_order: [usize ; NB_FOLLOWERS!()] = [0 ; NB_FOLLOWERS!()];
                 
-                m_send!(HasToSend4(_,Ipv4AddrC::new(1, 1, 1, 1), pkt_id), qfs, nb_sender);
+                m_send!(HasToSend4(_,Ipv4AddrC::new(10, 0, 0, 100), pkt_id), qfs, nb_sender);
                 m_send!(Stuck(_), qfs, nb_f);
                 
+                for i in 0..NB_FOLLOWERS!() {
+                    let Ok(_) = qfs[i as usize].as_ref().unwrap().0.recv(&mut msgs[i as usize].buffer) else {
+                            panic!("First received message should be WakeUp(0). Bad recv");
+                        };
+                    match msgs[i as usize].into() {
+                        WakeUp(0) => {
+                            println!("Node {} received its WakeUp(0)", i+1);
+                        } //Ok
+                        WakeUp(t) => {
+                            panic!("First received message should be WakeUp(0). Bad time: {:?}", t);
+                        }
+                        m => {    
+                            panic!("First received message should be WakeUp(0). Bad msg: {:?}", m);
+                        }
+                    }
+                }
+
                 for i in 0..nb_sender {
                     thread::scope(|s| {
                         let mut ts: [Option<ScopedJoinHandle<Result<(u32, usize)>>> ; NB_FOLLOWERS!()] = [NONE_THREAD; NB_FOLLOWERS!()];
@@ -794,6 +887,24 @@ mod determinism {
                         m_check!(ts, receiving_order[i], Sent(_, pkt_id), qfs);
                     });
                 }
+
+                for i in 0..NB_FOLLOWERS!() {
+                    let Ok(_) = qfs[i as usize].as_ref().unwrap().0.recv(&mut msgs[i as usize].buffer) else {
+                            panic!("First received message should be WakeUp(0). Bad recv");
+                        };
+                    match msgs[i as usize].into() {
+                        WakeUp(20) => {
+                            println!("Node {i} received its WakeUp(20)");
+                        } //Ok
+                        WakeUp(t) => {
+                            panic!("Third received message should be WakeUp(20). Bad time: {:?}", t);
+                        }
+                        m => {    
+                            panic!("Third received message should be WakeUp(20). Bad msg: {:?}", m);
+                        }
+                    }
+                }
+
 
                 thread::scope(|s| {
                     let mut ts: [Option<ScopedJoinHandle<Result<(u32, usize)>>> ; NB_FOLLOWERS!()] = [NONE_THREAD; NB_FOLLOWERS!()];
@@ -804,15 +915,14 @@ mod determinism {
                 });
                 m_send!(Finished(_), qfs, nb_f);
                 let _ = t.join();
-                let _ = sim.cfg.unlink_queues();
             });
         }
     }
 
     #[test]
     #[serial]
-    #[timeout(10000)]
+    #[timeout(100000)]
     fn test_determinism() {
-        test_determinism_setup(2);
+        test_determinism_setup(9);
     }
 }

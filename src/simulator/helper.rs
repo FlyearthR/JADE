@@ -33,7 +33,7 @@ pub struct NetworkTopology {
 
 impl NetworkTopology {
     #[allow(dead_code)]
-    fn load(graph: &str) -> Self {
+    pub fn load(graph: &str) -> Self {
         Self::from_graph(Graph::from_gml(GMLObject::from_str(graph).unwrap()).unwrap())
     }
 
@@ -426,7 +426,6 @@ mod unit_testing {
     use super::cstringify;
     use std::path::Path;
     use network_time_simulator::Ipv4AddrC;
-    use toml::value::Time;
 
     #[test]
     fn simple_config() {
