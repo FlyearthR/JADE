@@ -8,10 +8,6 @@
 #include "helper.h"
 #include "communication.h"
 
-#define LIBC_FUNCTION(ftype, fname, ...) ftype (* libc_##fname ) ( __VA_ARGS__ ); \
-    libc_##fname = dlsym(RTLD_NEXT, #fname )
-#define LIBC_FUNCTION_GET(fname) libc_##fname
-
 int random_number = 42;
 
 int inline empty_fun()
@@ -105,16 +101,11 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
                 return infinity_poll(fds, nfds, timeout);
         struct timeval cur = get_time();
         struct timeval to = add_timeval(cur, int_to_timeval_s(timeout));
-        //printf("poll: cur = {%i, %i}; int_to_timeval_s(timeout) = {%i, %i}; to = {%i, %i}\n",
-        //cur.tv_sec, cur.tv_usec,
-        //int_to_timeval_s(timeout).tv_sec, int_to_timeval_s(timeout).tv_usec,
-        //to.tv_sec, to.tv_usec);
 	int ret = LIBC_FUNCTION_GET(poll)(fds, nfds, 0);
         if (ret)
                 return ret;
-        //printf("time in poll: {%i,; %i}\n", to.tv_sec, to.tv_usec);
         add_event(to);
-        cur = waiting();
+        cur = blocking();
 	do {
                 ret = LIBC_FUNCTION_GET(poll)(fds, nfds, 0);
 	} while (ret == 0 && before_timeval(blocking(), to));
@@ -133,9 +124,8 @@ int ppoll(struct pollfd *fds, nfds_t nfds,
         int ret = LIBC_FUNCTION_GET(ppoll)(fds, nfds, &zeros, sigmask);
         if (ret)
                 return ret;
-        //printf("time in ppoll: {%i,; %i}\n", to.tv_sec, to.tv_usec);
         add_event(to);
-        cur = waiting();
+        cur = blocking();
 	do {
                 ret = LIBC_FUNCTION_GET(ppoll)(fds, nfds, &zeros, sigmask);
 	} while (ret == 0 && before_timeval(blocking(), to));
@@ -146,12 +136,10 @@ int ppoll(struct pollfd *fds, nfds_t nfds,
 int gettimeofday(struct timeval *restrict tv,
                         void * restrict tz)
 {       
-        //printf("gettimeofday intercepted\n");
 	LIBC_FUNCTION(int, gettimeofday, struct timeval *restrict tv,
                         void * restrict tz);
 	int ret = LIBC_FUNCTION_GET(gettimeofday)(tv, tz);
 	struct timeval t = get_time();
-        //printf("time: {%i,; %i}\n", t.tv_sec, t.tv_usec);
 	tv->tv_sec = t.tv_sec;
 	tv->tv_usec = t.tv_usec;
 	return ret;
@@ -159,16 +147,13 @@ int gettimeofday(struct timeval *restrict tv,
 
 unsigned int sleep(unsigned int seconds)
 {
-        //printf("sleep intercepted\n");
         fflush(stdout);
         fflush(stderr);
         struct timeval start = get_time();
-        //printf("time: {%i,; %i}\n", start.tv_sec, start.tv_usec);
         fflush(stdout);
         fflush(stderr);
         struct timeval end = start;
         end.tv_sec += seconds;
-        //printf("time in sleep: {%i,; %i}\n", end.tv_sec, end.tv_usec);
         add_event(end);
         while(before_timeval(blocking(), end));
         /* libc: Zero if the requested time has elapsed,
@@ -184,7 +169,6 @@ int usleep(useconds_t usec)
         struct timeval start = get_time();
         struct timeval end = {.tv_sec = 0, .tv_usec = usec};
         end = add_timeval(start, end);
-        //printf("time in usleep: {%i,; %i}\n", end.tv_sec, end.tv_usec);
         add_event(end);
         while(before_timeval(blocking(), end));
         return 0;
@@ -198,4 +182,20 @@ void srand(unsigned int seed)
 int rand(void)
 {
         return random_number;
+}
+
+ssize_t send(int sockfd, const void buf, size_t len, int flags)
+{
+        packet_elem* pe;
+        if ((pe = (packet_elem*)malloc(sizeof *pe)) == NULL) exit(-13);
+        if ((pe->pkt.buf = malloc(len)) == NULL) exit(-13);
+
+        pe->pkt.id = next_pkt_id++;
+        pe->pkt.sockfd = sockfd;
+        memcpy(pe->pkt.buf, buf, len);
+        pe->pkt.len = len;
+        pe->pkt.flags = flags;
+
+        LL_PREPEND(pkt_list, pe);
+        return len;
 }

@@ -34,3 +34,8 @@ struct timeval add_timeval(struct timeval t1, struct timeval t2)
         .tv_usec = (t1.tv_usec+t2.tv_usec)%1000000};
     return t;
 }
+
+int cmp_pkt(packet_elem pe1, packet_elem pe2)
+{
+    return pe2.pkt.id - pe1.pkt.id;
+}
