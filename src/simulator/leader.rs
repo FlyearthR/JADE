@@ -1,6 +1,7 @@
 pub mod helper;
 
-use helper::{Config, TimestampActions, get_identifier};
+use helper::{Config, TimestampActions};
+use libc::mq_attr;
 use network_time_simulator::SIZE_BUFFER;
 use posixmq::PosixMq;
 use std::io::Result;
@@ -37,7 +38,7 @@ pub const fn validate_cstr_contents(bytes: &[u8]) {
 
 
 
-const LIB_NAME: &str = "syscalls.so";
+const LIB_NAME: &str = "./syscalls.so";
 
 /**
  * Open one queue on which the follower will send message to the leader and
@@ -46,22 +47,33 @@ const LIB_NAME: &str = "syscalls.so";
  * @arg nb: the size of the queue (use the number of followers)
  * @return: on success return a pair of posix queues (follower_receiving_queue, follower_sending_queue)
  */
-fn follower_init_queues(id: u8, nb: usize) -> Result<(PosixMq, PosixMq)> {
+fn follower_init_queues(id: u8, nb: usize, qname: &String) -> Result<(PosixMq, PosixMq)> { // TODO: no more use
+    // TODO: (for later) find a way to use this to avoid passing through the env
+    println!("id: {}, nb: {}, qname: {:?}", id, nb, qname);
     let qo = posixmq::OpenOptions::writeonly() //the follower will send messages to the
         .max_msg_len(SIZE_BUFFER)                           //leader on this queue
         .capacity(nb)
         .create()
-        .open(&format!("{}_{}", get_identifier(), 0))
-        .expect("failed to open queue qo for a follower");
+        .open(&format!("{}_{}", qname, 0))
+        .expect(&format!("failed to open queue qo for a follower: {}", id).to_string());
     qo.set_cloexec(false)?;
+    /*let qo;
+    unsafe {
+        let c_str = CString::new(format!("{}_{}", qname, 0)).unwrap();
+        println!("c_str: {:?}", c_str);
+        qo = libc::mq_open(c_str.as_ptr() as *const i8, libc::O_WRONLY);
+        println!("qo: {:?}", qo);
+        libc::perror(c_str.as_ptr() as *const i8);
+    };*/
 
     let qi = posixmq::OpenOptions::readonly() //the follower will receive the messages of
         .max_msg_len(SIZE_BUFFER)                          //the leader on this queue
         .capacity(nb)
         .create()    
-        .open(&format!("{}_{}", get_identifier(), id))
-        .expect("failed to open queue qi for a follower");
+        .open(&format!("{}_{}", qname, id))
+        .expect(&format!("failed to open queue qi for a follower: {}", id).to_string());
     qi.set_cloexec(false)?;
+    println!("follower_init_queues: qi {:?}, qo {:?}", qi, qo);
     return Ok((qi, qo));
 }
 
@@ -107,7 +119,7 @@ impl Simulation {
                 Ok(child)
             },
             Ok(Fork::Child) => {
-                let _ = follower_init_queues(id, self.cfg.nb_follower);
+                let _ = follower_init_queues(id, self.cfg.nb_follower, &self.cfg._qname);
                 execve(&self.cfg.exe[(id-1) as usize].path, &self.cfg.exe[(id-1) as usize].args, env)?;
                 Ok(0)
             }
@@ -126,7 +138,7 @@ impl Simulation {
                 .max_msg_len(SIZE_BUFFER)
                 .capacity(self.cfg.nb_follower)
                 .create()
-                .open(&format!("{}_{}", get_identifier(), 0))
+                .open(&format!("{}_{}", self.cfg._qname, 0))
                 ?);
 
         for i in 0..self.cfg.nb_follower {
@@ -134,7 +146,7 @@ impl Simulation {
                     .max_msg_len(SIZE_BUFFER)
                     .capacity(self.cfg.nb_follower)
                     .create()
-                    .open(&format!("{}_{}", get_identifier(), i+1))
+                    .open(&format!("{}_{}", self.cfg._qname, i+1))
                     ?);
         }
         Ok(())
@@ -143,6 +155,7 @@ impl Simulation {
     fn messages_handler(&mut self, message: &Buffer, current_time: u64) -> Result<()> {
         match deserialize(*message) {
             Message::AddStep(id, t) => {
+                println!("Adding a step {} for node {}", t, id);
                 if let Some(x) = self.events.get_mut(&t) {
                     x.add_process(id);
                 } else {
@@ -150,33 +163,36 @@ impl Simulation {
                 }
             },
             Message::DelStep(id, t) => {
+                println!("Deleting a step {} for node {}", t, id);
                 if let Some(x) = self.events.get_mut(&t) {
                     x.del_process(id);
                 }
             },
             Message::GetTime(id) => {
                 //return head key of the BTreeMap
+                println!("Getting time for node {}", id);
                 let msg = serialize(Message::WakeUp(current_time));
                 self.qs[id as usize].send(2, &msg.buffer)?;
             },
             Message::GetRand(id) => {
+                println!("Getting random for node {}", id);
                 let msg = serialize(Message::WakeUp(self.cfg.random_number));
                 self.qs[id as usize].send(2, &msg.buffer)?;
             },
             Message::Finished(id) => {
+                println!("Node {} has finished", id);
                 self.states[(id-1) as usize] = State::Finished;
             },
             Message::Stuck(id) => {
+                println!("Node {} is stuck", id);
                 self.states[(id-1) as usize] = State::Blocked;
             },
             Message::HasToSend4(id, if_id, ip, pkt_id) => {
-                println!("id: {id}, if_id: {if_id}, ip: {:?}, pkt_id: {pkt_id}", ip);
+                println!("Node {} has to send packet {} via {} to {:?}", id, pkt_id, if_id, ip);
                 let timestamp = current_time + self.cfg.topo.get_delay_v4(id, if_id, &ip).unwrap();
                 if let Some(x) = self.events.get_mut(&timestamp) {
-                    println!("Here");
                     x.add_packet(id, pkt_id);
                 } else {
-                    println!("There");
                     self.events.insert(timestamp, TimestampActions::new_pkt_id(id, pkt_id));
                 }
             },
@@ -199,10 +215,8 @@ impl Simulation {
      * Part of a timespot where the delayed send are actually sent
      */
     fn sending_time_loop(&self, ta: TimestampActions) -> Result<()> {
-        println!("\n\n\nSending loop\n\n\n");
-        println!("{:?}", ta);
         for (process, pkt_id) in ta.flatten() {
-            println!("{:?}", (process, pkt_id));
+            println!("Process {:?} should send packet {:?}", process, pkt_id);
             let msg = serialize(Message::Send(pkt_id));
             self.qs[process as usize].send(1, &msg.buffer)?;
 
@@ -210,18 +224,18 @@ impl Simulation {
             if let Ok(_) = self.qs[0].recv(&mut msg.buffer) {
                 if let Message::Sent(p, p_id) = deserialize(msg) {
                     if p != process || p_id != pkt_id {
-                        println!("bad Sent received:\n\texpected: Sent({},{})\n\treceived: Sent({},{})",
+                        eprintln!("bad Sent received:\n\texpected: Sent({},{})\n\treceived: Sent({},{})",
                         process, pkt_id, p, p_id);
                         panic!("error");    
                     }
                 } else {
-                    println!("bad message received:\n\texpected: Sent({},{})\n\treceived: {:?}",
+                    eprintln!("bad message received:\n\texpected: Sent({},{})\n\treceived: {:?}",
                         process, pkt_id, deserialize(msg));
                     panic!("error");
                 }
             }
             else {
-                println!("could not receive Sent");
+                eprintln!("could not receive Sent");
                 panic!("error");
             }
         }
@@ -232,12 +246,12 @@ impl Simulation {
      * Part of a timespot where the processes actually run
      */
     fn running_time_loop(&mut self, current_time: u64) -> Result<State> {
-        println!("\n\n\nRunning loop\n\n\n");
         let mut msg: Buffer = Buffer::new();
         loop {
+            println!("Running time loop");
             match self.qs[0].recv(&mut msg.buffer) {
                 Ok(_) => {
-                    println!("Received message: {:?}", Into::<Message>::into(msg));
+                    println!("Leader received {:?}", Into::<Message>::into(msg));
                     self.messages_handler(&msg, current_time)?;
                     let mut nb_blocked = 0;
                     let mut nb_finished = 0;
@@ -269,18 +283,22 @@ impl Simulation {
      * Main loop
      */
     fn main_loop(&mut self) -> Result<u8> {
-        println!("{:?}", self);
+        println!("Reaching main loop");
         let msg = serialize(Message::WakeUp(0));
         for (s, q) in self.states.iter_mut().zip(self.qs[1..].iter()) {
+            //println!("(s, q): {:?}", (&s, q));
             q.send(1, &msg.buffer)?;
+            //println!("sent {:?}", msg.buffer);
             *s = State::Running;
         }
+        println!("Before if");
         if let Ok(State::Finished) = self.running_time_loop(0) {
-            println!("Simulation finished by all process finishing");
+            eprintln!("Simulation finished by all process finishing");
             return Ok(0);
         }
+        println!("After if");
         loop {
-            println!("Boucle: {:?}", self.events);
+            println!("Events: {:?}", self.events);
             if let Some((time, ta)) = self.events.pop_first() {
                 /*************** First half, sending time ***************/
                 let _ = self.sending_time_loop(ta);
@@ -294,28 +312,39 @@ impl Simulation {
                     }
                 }
                 if let Ok(State::Finished) = self.running_time_loop(time) {
-                    println!("Simulation finished by all process finishing");
+                    eprintln!("Simulation finished by all process finishing");
                     return Ok(0);
                 }
             }
             else {
                 // the simulation is finished
-                println!("Simulation finished by all process beeing blocked with no more events");
+                eprintln!("Simulation finished by all process beeing blocked with no more events");
                 return Ok(1);
             }
         }
     }
 
     fn run(mut self) {
+        /*unsafe {
+            let c_str = CString::new(format!("{}_{}", &self.cfg._qname, 0)).unwrap();
+            println!("c_str: {:?}", c_str);
+            println!("_qo: {:?}", libc::mq_open(c_str.as_ptr() as *const i8, libc::O_WRONLY));
+            libc::perror(c_str.as_ptr() as *const i8);
+        };*/
+        self.leader_init_queues().expect("leader queues initialisation failed"); //open the communication queues
         for i in 0..self.cfg.nb_follower { //start the followers
+            //println!("{:?} {:?}", (i+1) as u8, &[CString::new((format!("ID={}", i+1)).to_string().as_str()).unwrap().as_c_str(),
+            //CString::new((format!("LD_PRELOAD={}", LIB_NAME)).to_string().as_str()).unwrap().as_c_str()]);
             self.run_follower((i+1) as u8, &[CString::new((format!("ID={}", i+1)).to_string().as_str()).unwrap().as_c_str(),
                 CString::new((format!("LD_PRELOAD={}", LIB_NAME)).to_string().as_str()).unwrap().as_c_str()]).expect("run follower failed");
+                // TODO: add in the env the name of the queue
+        //std::thread::sleep(std::time::Duration::from_millis(5000));
         }
-        self.leader_init_queues().expect("leader queues initialisation failed"); //open the communication queues
+
+
 
         self.main_loop().expect("main loop failed");
 
-        std::thread::sleep(std::time::Duration::from_millis(500));
     }
 }
 
@@ -325,7 +354,7 @@ fn main() {
     match args.len() {
         // no arguments passed
         1 => {
-            println!("Please provide a config file");
+            eprintln!("Please provide a config file");
         },
         // one argument passed
         2 => {
@@ -333,7 +362,7 @@ fn main() {
             sim.run();
         },
         _ => {
-            println!("Please provide a config file");
+            eprintln!("Please provide a config file");
         }
     }
 
@@ -371,7 +400,7 @@ mod unit_testing {
         let mut buf = vec![0; 100];
         assert_eq!(sim.qs.len(), NB_QUEUES_TEST+1);
         for i in 1..NB_QUEUES_TEST+1 {
-            let qio = follower_init_queues(i as u8, NB_QUEUES_TEST).expect("creating follower queues");
+            let qio = follower_init_queues(i as u8, NB_QUEUES_TEST, &"/nts_test".to_string()).expect("creating follower queues");
             sim.qs[i].send(0 as u32, b"Born?").expect("send first message failed");
             assert_eq!(qio.0.recv_timeout(&mut buf, Duration::from_secs(1)).unwrap(), (0 as u32, "Born?".len()));
             qio.1.send(0 as u32, b"Yes!").expect("send first message failed");
@@ -461,7 +490,7 @@ mod unit_testing {
     fn test_serialize_deserialize_mq() {
         let mut sim = Simulation::new(Config::default_config_nb(1));
         sim.leader_init_queues().expect("leader queues creating");
-        let qio = follower_init_queues(1, 1).expect("follower queues creating");
+        let qio = follower_init_queues(1, 1, &"/nts_test".to_string()).expect("follower queues creating");
         let mut msg: Buffer = Buffer::new();
         let msgs = [Stuck(42), AddStep(42, 43),
             HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42), HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42),
@@ -481,8 +510,8 @@ mod unit_testing {
     fn mini_setup(nb_add_step: u64, nb_stuck: u64, nb_recv: u64, return_value: u8) {
         let mut sim = Simulation::new(Config::default_config());
         sim.leader_init_queues().expect("leader queues creating");
-        let qf1 = follower_init_queues(1, 2).expect("creating follower queues");
-        let qf2 = follower_init_queues(2, 2).expect("creating follower queues");
+        let qf1 = follower_init_queues(1, 2, &"/nts_test".to_string()).expect("creating follower queues");
+        let qf2 = follower_init_queues(2, 2, &"/nts_test".to_string()).expect("creating follower queues");
         let t = thread::spawn(move || {sim.main_loop()});
         let mut msg: Buffer = Buffer::new();
         qf1.0.recv(&mut msg.buffer).unwrap();
@@ -552,7 +581,7 @@ mod unit_testing {
         let mut sim = Simulation::new(Config::default_config());
         sim.cfg.nb_follower = SIZE_TEST as usize;
         for i in 0..sim.cfg.nb_follower { //start the followers
-            if let Ok((qi, _)) = follower_init_queues(i as u8, sim.cfg.nb_follower) {
+            if let Ok((qi, _)) = follower_init_queues(i as u8, sim.cfg.nb_follower, &"/nts_test".to_string()) {
                 followers_qs.push(qi);
             }
         }
@@ -561,7 +590,6 @@ mod unit_testing {
 
         //test with one timestamp
         sim.messages_handler(&serialize(Message::AddStep(1, 1)), 0).expect("message handler failing");
-        let _ = sim.events.pop_first(); // get rid of timestamp 0
         if let Some((&1, v2)) = sim.events.first_key_value() {
             assert!(v2.contain_process(1));
             assert_eq!(v2.nb_process(), 1);
@@ -643,18 +671,17 @@ mod determinism {
                     $tab[i] = Some($s.spawn(move || {
                             match q.as_ref().unwrap().0.recv_timeout(&mut $msgs[i as usize].buffer, Duration::from_secs(1)) {
                                 Ok(x) => {
-                                    println!("Node {i} received {:?}", Into::<Message>::into($msgs[i as usize]));
                                     match $msgs[i as usize].into() {
                                         Send(id) => {
                                             assert_eq!(id, $pkt_id);
                                             if i as usize > $prioritized {
-                                                println!("Non-prioritized thread receive order to send: Send({})", id);
+                                                eprintln!("Non-prioritized thread receive order to send: Send({})", id);
                                                 assert!(false);
                                             }
                                             Ok(x)
                                         },
                                         m => {
-                                        println!("Bad message received: {:?}", m);
+                                            eprintln!("Bad message received: {:?}", m);
                                             assert!(false); // should not receive anything else
                                             Ok((0,0))
                                         },
@@ -821,7 +848,7 @@ mod determinism {
 
     impl Config {    
         fn test_config(nb: usize) -> Self {
-            const QNAME: &str = "/nts_mq";
+            const QNAME: &str = "/nts_test";
             const EXE_NAMES: [&CStr; 2] = [c"./client", c"./server"];
             const EXE1_ARGS: [&CStr; 5] = [c"./client", c"-i", c"127.0.0.1", c"-p", c"4443"];
             const EXE2_ARGS: [&CStr; 5] = [c"./server", c"-i", c"127.0.0.1", c"-p", c"4443"];
@@ -852,7 +879,7 @@ mod determinism {
             let mut sim = Simulation::new(Config::test_config(NB_FOLLOWERS!()));
             let mut msgs: [Buffer; NB_FOLLOWERS!() as usize] = [Buffer::new() ; NB_FOLLOWERS!()];
             let nb_f = NB_FOLLOWERS!();
-            let clo = |mut i| -> (PosixMq, PosixMq) {i += 1; follower_init_queues(i as u8, NB_FOLLOWERS!()).expect("follower queues creating")};
+            let clo = |mut i| -> (PosixMq, PosixMq) {i += 1; follower_init_queues(i as u8, NB_FOLLOWERS!(), &"/nts_test".to_string()).expect("follower queues creating")};
             let qfs: [Option<(PosixMq, PosixMq)> ; NB_FOLLOWERS!()] = custom_arr_tpm(clo);
             let pkt_id = 1;
             thread::scope(|sc| {
@@ -869,7 +896,6 @@ mod determinism {
                         };
                     match msgs[i as usize].into() {
                         WakeUp(0) => {
-                            println!("Node {} received its WakeUp(0)", i+1);
                         } //Ok
                         WakeUp(t) => {
                             panic!("First received message should be WakeUp(0). Bad time: {:?}", t);
@@ -894,7 +920,6 @@ mod determinism {
                         };
                     match msgs[i as usize].into() {
                         WakeUp(20) => {
-                            println!("Node {i} received its WakeUp(20)");
                         } //Ok
                         WakeUp(t) => {
                             panic!("Third received message should be WakeUp(20). Bad time: {:?}", t);

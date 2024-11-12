@@ -5,12 +5,11 @@
 #include <dlfcn.h>
 #include <unistd.h>
 #include <arpa/inet.h>
-#include "helper.h"
 #include "communication.h"
 
 int random_number = 42;
 
-int inline empty_fun()
+int empty_fun()
 {
         blocking();
         return 1;
@@ -21,15 +20,19 @@ ssize_t recvfrom(int sockfd, void* buf, size_t len,
                         socklen_t * addrlen)
 {
         // TODO: configure socket as non blocking at opening time
+        printf("inside recvfrom\n");
         int flags_s = fcntl(sockfd, F_GETFL, 0);
         if (flags_s == -1)
                 return -1;
+        printf("inside recvfrom 2\n");
         fcntl(sockfd, F_SETFL, flags_s|O_NONBLOCK);
         LIBC_FUNCTION(ssize_t, recvfrom, int sockfd, void* buf, size_t len,
                         int flags, struct sockaddr * src_addr,
                         socklen_t * addrlen);
+        printf("inside recvfrom 3\n");
         int ret;
         do {
+        printf("inside recvfrom loop\n");
                 ret = LIBC_FUNCTION_GET(recvfrom)(sockfd, buf, len, flags, src_addr, addrlen);
         } while (ret == -1 && empty_fun());
         return ret;
@@ -147,20 +150,18 @@ int gettimeofday(struct timeval *restrict tv,
 
 unsigned int sleep(unsigned int seconds)
 {
-        fflush(stdout);
-        fflush(stderr);
+        if (seconds == 0)
+                return 0;
         struct timeval start = get_time();
-        fflush(stdout);
-        fflush(stderr);
         struct timeval end = start;
         end.tv_sec += seconds;
         add_event(end);
         while(before_timeval(blocking(), end));
-        /* libc: Zero if the requested time has elapsed,
-           or the number of seconds left to sleep, if the call was  interrupted
-           by a signal handler.
-           We do not currently support signals
-        */
+        // libc: Zero if the requested time has elapsed,
+        //   or the number of seconds left to sleep, if the call was  interrupted
+        //   by a signal handler.
+        //   We do not currently support signals
+        //
         return 0;
 }
 
@@ -184,18 +185,95 @@ int rand(void)
         return random_number;
 }
 
-ssize_t send(int sockfd, const void buf, size_t len, int flags)
+ssize_t send(int sockfd, const void* buf, size_t len, int flags)
 {
         packet_elem* pe;
         if ((pe = (packet_elem*)malloc(sizeof *pe)) == NULL) exit(-13);
         if ((pe->pkt.buf = malloc(len)) == NULL) exit(-13);
 
         pe->pkt.id = next_pkt_id++;
+        pe->pkt.tos = send_t;
         pe->pkt.sockfd = sockfd;
-        memcpy(pe->pkt.buf, buf, len);
+        memcpy((void*) pe->pkt.buf, buf, len);
         pe->pkt.len = len;
         pe->pkt.flags = flags;
+        pe->pkt.dest_addr = NULL;
+        pe->pkt.addrlen = 0;
 
         LL_PREPEND(pkt_list, pe);
+
+        // TODO: add to send the HasToSend
+        return len;
+}
+
+ssize_t sendto(int sockfd, const void* buf, size_t len, int flags,
+                      const struct sockaddr *dest_addr, socklen_t addrlen)
+{
+        printf("sendto intercepted\n");
+        fflush(stdout);
+        packet_elem* pe;
+        if ((pe = (packet_elem*)malloc(sizeof *pe)) == NULL) exit(-13);
+        if ((pe->pkt.buf = malloc(len)) == NULL) exit(-13);
+
+        pe->pkt.id = next_pkt_id++;
+        pe->pkt.tos = sendto_t;
+        pe->pkt.sockfd = sockfd;
+        memcpy((void*) pe->pkt.buf, buf, len);
+        pe->pkt.len = len;
+        pe->pkt.flags = flags;
+        if ((pe->pkt.dest_addr = (struct sockaddr*)malloc(addrlen)) == NULL) exit(-13);
+        memcpy((void*) pe->pkt.dest_addr, dest_addr, addrlen);
+        pe->pkt.addrlen = addrlen;
+
+        LL_PREPEND(pkt_list, pe);
+        printf("packet prepended\n");
+        fflush(stdout);
+
+        switch(dest_addr->sa_family) {
+        case AF_INET:
+            char* ip = (char*) (&((struct sockaddr_in*)dest_addr)->sin_addr.s_addr);
+            Message m = {
+                .tag = HasToSend4,
+                .has_to_send4 = {
+                        ._0 = ID,
+                        ._1 = 0, // TODO: find interface id
+                        ._2 = {.segments = {ip[0], ip[1], ip[2], ip[3]}},
+                        ._3 = pe->pkt.id
+                        }
+                };
+            send_msg(m);
+            break;
+
+        case AF_INET6:
+            Message m2 = {
+                .tag = HasToSend6,
+                .has_to_send6 = {
+                        ._0 = ID,
+                        ._1 = 0, // TODO: find interface id
+                        ._2 = {
+                                .segments = {
+                                        ((struct sockaddr_in6 *)dest_addr)->sin6_addr.__in6_u.__u6_addr16[0],
+                                        ((struct sockaddr_in6 *)dest_addr)->sin6_addr.__in6_u.__u6_addr16[1],
+                                        ((struct sockaddr_in6 *)dest_addr)->sin6_addr.__in6_u.__u6_addr16[2],
+                                        ((struct sockaddr_in6 *)dest_addr)->sin6_addr.__in6_u.__u6_addr16[3],
+                                        ((struct sockaddr_in6 *)dest_addr)->sin6_addr.__in6_u.__u6_addr16[4],
+                                        ((struct sockaddr_in6 *)dest_addr)->sin6_addr.__in6_u.__u6_addr16[5],
+                                        ((struct sockaddr_in6 *)dest_addr)->sin6_addr.__in6_u.__u6_addr16[6],
+                                        ((struct sockaddr_in6 *)dest_addr)->sin6_addr.__in6_u.__u6_addr16[7]
+                                        }
+                                },
+                        ._3 = pe->pkt.id
+                        }
+                };
+            send_msg(m2);
+            break;
+
+        default:
+            fprintf(stderr, "Unknown AF\n");
+            return 0;
+    }
+
+        printf("sendto interception end\n");
+        fflush(stdout);
         return len;
 }

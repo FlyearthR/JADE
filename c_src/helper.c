@@ -1,5 +1,9 @@
 #include "helper.h"
 
+packet_elem* pkt_list;
+
+uint64_t next_pkt_id;
+
 int before_timeval(struct timeval t1, struct timeval t2)
 {
     return t1.tv_sec != t2.tv_sec ? t1.tv_sec < t2.tv_sec : t1.tv_usec < t2.tv_usec;
@@ -35,7 +39,7 @@ struct timeval add_timeval(struct timeval t1, struct timeval t2)
     return t;
 }
 
-int cmp_pkt(packet_elem pe1, packet_elem pe2)
+int cmp_pkt(packet_elem* pe1, packet_elem* pe2)
 {
-    return pe2.pkt.id - pe1.pkt.id;
+    return pe2->pkt.id - pe1->pkt.id;
 }

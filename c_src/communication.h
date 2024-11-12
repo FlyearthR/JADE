@@ -8,7 +8,17 @@
 #include "helper.h"
 #include "rust_lib.h"
 
-int send_msg(Message_Tag m, unsigned int attr);
+
+#define ID id
+
+#define FDI fdi
+#define FDO fdo
+
+extern int id;
+extern int fdi;
+extern int fdo;
+
+int send_msg(Message m);
 
 uint64_t receive_msg();
 
@@ -21,3 +31,5 @@ void add_event(struct timeval);
 void suppress_event(struct timeval);
 
 int get_random();
+
+void sender(uint64_t pkt_id);

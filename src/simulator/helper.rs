@@ -17,13 +17,6 @@ pub fn cstringify(arr: &[&CStr]) -> Vec<CString> {
     return ret;
 }
 
-/**
- * Provide a unique (system-wide) identifier for message queues
- */
-pub fn get_identifier() -> String {
-    return "/nts_mq".to_string();
-}
-
 #[derive(Debug)]
 pub struct NetworkTopology {
     grf: Graph,
@@ -210,7 +203,7 @@ impl Config {
     #[allow(dead_code)]
     pub fn default_config() -> Self {
         const NB_FOLLOWER: usize = 2;
-        const QNAME: &str = "/nts_mq";
+        const QNAME: &str = "/nts_test";
         const EXE_NAMES: [&CStr; 2] = [c"./client", c"./server"];
         const EXE1_ARGS: [&CStr; 5] = [c"./client", c"-i", c"127.0.0.1", c"-p", c"4443"];
         const EXE2_ARGS: [&CStr; 5] = [c"./server", c"-i", c"127.0.0.1", c"-p", c"4443"];
@@ -289,7 +282,7 @@ impl Config {
     pub fn unlink_queues(&self) -> Result<()>{
         let mut ret = None;
         for i in 0..self.nb_follower+1 {
-            match posixmq::remove_queue(&format!("{}_{}", get_identifier(), i)) {
+            match posixmq::remove_queue(&format!("{}_{}", self._qname, i)) {
                 Err(e) => {
                     if e.kind() != IOErrorKind::NotFound {
                         eprintln!("Cannot remove queue {}: {}", i, e);
