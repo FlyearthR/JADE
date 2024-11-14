@@ -5,17 +5,17 @@
 
 #define SIZE_BUFFER 27
 
-typedef struct Buffer {
-  uint8_t buffer[SIZE_BUFFER];
-} Buffer;
+typedef struct Ipv6AddrC {
+  uint16_t segments[8];
+} Ipv6AddrC;
 
 typedef struct Ipv4AddrC {
   uint8_t segments[4];
 } Ipv4AddrC;
 
-typedef struct Ipv6AddrC {
-  uint16_t segments[8];
-} Ipv6AddrC;
+typedef struct Buffer {
+  uint8_t buffer[SIZE_BUFFER];
+} Buffer;
 
 typedef enum Message_Tag {
   Stuck,
@@ -89,6 +89,19 @@ typedef struct Message {
   };
 } Message;
 
-struct Buffer serialize(struct Message msg);
+struct Ipv6AddrC new(uint16_t a,
+                     uint16_t b,
+                     uint16_t c,
+                     uint16_t d,
+                     uint16_t e,
+                     uint16_t f,
+                     uint16_t g,
+                     uint16_t h);
 
-struct Message deserialize(struct Buffer msg);
+struct Ipv6AddrC ip6_from_str(const char *ip);
+
+struct Ipv4AddrC ip4_from_str(const char *ip);
+
+struct Buffer *serialize(struct Message msg);
+
+struct Message *deserialize(struct Buffer msg);

@@ -11,6 +11,7 @@ int random_number = 42;
 
 int empty_fun()
 {
+        //printf("empty_fun called\n");
         blocking();
         return 1;
 }
@@ -20,20 +21,26 @@ ssize_t recvfrom(int sockfd, void* buf, size_t len,
                         socklen_t * addrlen)
 {
         // TODO: configure socket as non blocking at opening time
-        printf("inside recvfrom\n");
+        //printf("inside recvfrom\n");
+        fflush(stdout);
         int flags_s = fcntl(sockfd, F_GETFL, 0);
         if (flags_s == -1)
                 return -1;
-        printf("inside recvfrom 2\n");
-        fcntl(sockfd, F_SETFL, flags_s|O_NONBLOCK);
+        //printf("inside recvfrom 2\n");
+        fflush(stdout);
+        fcntl(sockfd, F_SETFL, O_NONBLOCK);
         LIBC_FUNCTION(ssize_t, recvfrom, int sockfd, void* buf, size_t len,
                         int flags, struct sockaddr * src_addr,
                         socklen_t * addrlen);
-        printf("inside recvfrom 3\n");
+        //printf("inside recvfrom 3\n");
+        fflush(stdout);
         int ret;
         do {
         printf("inside recvfrom loop\n");
+        fflush(stdout);
                 ret = LIBC_FUNCTION_GET(recvfrom)(sockfd, buf, len, flags, src_addr, addrlen);
+                perror("recvfrom: ");
+                fflush(stderr);
         } while (ret == -1 && empty_fun());
         return ret;
 }
@@ -53,9 +60,11 @@ int select(int nfds, fd_set *restrict readfds,
 		return ret;
         
 	add_event(to);
+        //printf("select called\n");
 	cur = blocking();
 	while (ret == 0 && before_timeval(cur, to)) {
 		ret = LIBC_FUNCTION_GET(select)(nfds, readfds, writefds, exceptfds, &zeros);
+        //printf("select loop called\n");
 		cur = blocking();
 	} 
 	suppress_event(to);
@@ -78,9 +87,11 @@ int pselect(int nfds, fd_set *restrict readfds,
         if (ret)
                 return ret;
 	add_event(to);
+        //printf("pselect called\n");
         cur = blocking();
 	while (ret == 0 && before_timeval(cur, to)) {
                 ret = LIBC_FUNCTION_GET(pselect)(nfds, readfds, writefds, exceptfds, &zeros, sigmask);
+        //printf("pselect loop called\n");
 		cur = blocking();
 	}
 	suppress_event(to);
@@ -108,9 +119,11 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
         if (ret)
                 return ret;
         add_event(to);
+        //printf("poll called\n");
         cur = blocking();
 	do {
                 ret = LIBC_FUNCTION_GET(poll)(fds, nfds, 0);
+        //printf("poll loop called\n");
 	} while (ret == 0 && before_timeval(blocking(), to));
 	suppress_event(to);
         return ret;
@@ -128,9 +141,11 @@ int ppoll(struct pollfd *fds, nfds_t nfds,
         if (ret)
                 return ret;
         add_event(to);
+        //printf("ppoll called\n");
         cur = blocking();
 	do {
                 ret = LIBC_FUNCTION_GET(ppoll)(fds, nfds, &zeros, sigmask);
+        //printf("ppoll loop called\n");
 	} while (ret == 0 && before_timeval(blocking(), to));
         suppress_event(to);
         return ret;
@@ -156,6 +171,7 @@ unsigned int sleep(unsigned int seconds)
         struct timeval end = start;
         end.tv_sec += seconds;
         add_event(end);
+        //printf("sleep called (multiple blocking possible)\n");
         while(before_timeval(blocking(), end));
         // libc: Zero if the requested time has elapsed,
         //   or the number of seconds left to sleep, if the call was  interrupted
@@ -167,10 +183,13 @@ unsigned int sleep(unsigned int seconds)
 
 int usleep(useconds_t usec)
 {
+        if (usec == 0)
+                return 0;
         struct timeval start = get_time();
         struct timeval end = {.tv_sec = 0, .tv_usec = usec};
         end = add_timeval(start, end);
         add_event(end);
+        //printf("usleep called (multiple blocking possible)\n");
         while(before_timeval(blocking(), end));
         return 0;
 }
@@ -209,7 +228,7 @@ ssize_t send(int sockfd, const void* buf, size_t len, int flags)
 ssize_t sendto(int sockfd, const void* buf, size_t len, int flags,
                       const struct sockaddr *dest_addr, socklen_t addrlen)
 {
-        printf("sendto intercepted\n");
+        //printf("sendto intercepted\n");
         fflush(stdout);
         packet_elem* pe;
         if ((pe = (packet_elem*)malloc(sizeof *pe)) == NULL) exit(-13);
@@ -226,7 +245,7 @@ ssize_t sendto(int sockfd, const void* buf, size_t len, int flags,
         pe->pkt.addrlen = addrlen;
 
         LL_PREPEND(pkt_list, pe);
-        printf("packet prepended\n");
+        //printf("packet prepended\n");
         fflush(stdout);
 
         switch(dest_addr->sa_family) {
@@ -273,7 +292,7 @@ ssize_t sendto(int sockfd, const void* buf, size_t len, int flags,
             return 0;
     }
 
-        printf("sendto interception end\n");
-        fflush(stdout);
+        //printf("sendto interception end\n");
+        //fflush(stdout);
         return len;
 }
