@@ -1,5 +1,6 @@
 CC = gcc
 CFLAGS = -g
+INSTANCE = 9_clients_1_server
 
 .PHONY: syscalls.so all test API leader clean little_clean
 
@@ -19,8 +20,8 @@ usetest: all
 	cp -f target/syscalls/syscalls.so testing/syscalls.so
 	$(CC) ${CFLAGS} examples/simple_client.c -o testing/simple_client
 	${CC} ${CFLAGS} examples/simple_server.c -o testing/simple_server
-	cp -f tests/1_client_1_server.* testing/
-	cd testing && RUST_BACKTRACE=1 ./simulator 9_clients_1_server.toml
+	cp -f tests/$(INSTANCE).* testing/
+	cd testing && RUST_BACKTRACE=1 ./simulator $(INSTANCE).toml
 
 testffi: API
 	cd c_src && $(MAKE) test_ffi && cp test_ffi ../testing/test_ffi
@@ -58,9 +59,8 @@ clean:
 	rm -f c_src/*.o
 	rm -f c_src/*.so
 	rm -f c_src/*.a
-	rm -f examples/miniP_client
-	rm -f examples/miniP_server
+	rm -f examples/*_client
+	rm -f examples/*_server
 
 little_clean:
-	cd target/examples && rm -f miniP_server && rm -f miniP_client
-	cd testing && rm -f miniP_server && rm -f miniP_client
+	rm testing/*
