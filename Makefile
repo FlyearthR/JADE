@@ -6,18 +6,32 @@ CFLAGS = -g
 test: all
 	cargo test --package network_time_simulator --bin simulator -- unit_testing --show-output --nocapture
 	cargo test --package network_time_simulator --bin simulator -- determinism --show-output --nocapture
-	cp -f target/debug/leader testing/leader
-	cp -f target/syscalls/syscalls.so testing/syscalls.so
-	cp -f target/examples/miniP_client tests/client
-	cp -f target/examples/miniP_server tests/server
-	cd testing && RUST_BACKTRACE=1 ./leader
 
-all: syscalls.so leader examples API 
+diff: all
+	$(MAKE) usetest | grep Sen[dt]\( > testing/sim.1.sendt.log
+	cp testing/test.log testing/sim.1.test.log
+	$(MAKE) usetest | grep Sen[dt]\( > testing/sim.2.sendt.log
+	cp testing/test.log testing/sim.2.test.log
+	./tests/compare_diff.sh
+
+usetest: all
+	cp -f target/debug/simulator testing/simulator
+	cp -f target/syscalls/syscalls.so testing/syscalls.so
+	$(CC) ${CFLAGS} examples/simple_client.c -o testing/simple_client
+	${CC} ${CFLAGS} examples/simple_server.c -o testing/simple_server
+	cp -f tests/1_client_1_server.* testing/
+	cd testing && RUST_BACKTRACE=1 ./simulator 9_clients_1_server.toml
+
+testffi: API
+	cd c_src && $(MAKE) test_ffi && cp test_ffi ../testing/test_ffi
+	./testing/test_ffi
+
+all: syscalls.so simulator examples API 
 
 syscalls.so: API
 	cd c_src && $(MAKE) syscalls.so
 
-examples: target/examples/miniP_client target/examples/miniP_server
+examples: target/examples/miniP_client target/examples/miniP_server target/examples/simple_client target/examples/simple_server
 
 target/examples/miniP_client:
 	cd examples/miniP && $(CC) ${CFLAGS} miniP_client.c -o ../../target/examples/miniP_client
@@ -25,13 +39,19 @@ target/examples/miniP_client:
 target/examples/miniP_server:
 	cd examples/miniP && ${CC} ${CFLAGS} miniP_server.c -o ../../target/examples/miniP_server
 
-leader:
+target/examples/simple_client:
+	cd examples/ && $(CC) ${CFLAGS} simple_client.c -o ../../target/examples/simple_client
+
+target/examples/simple_server:
+	cd examples/ && ${CC} ${CFLAGS} simple_server.c -o ../../target/examples/simple_server
+
+simulator:
 	cargo build
 
 API:
 	cbindgen --crate network_time_simulator --output c_src/rust_lib.h --lang c
 	CARGO_TARGET_DIR=target/lib cargo build --manifest-path src/Cargo.toml
-	cp target/lib/debug/libAPI.a c_src/libAPI.a
+	cp target/lib/debug/libapi.a c_src/libAPI.a
 
 clean:
 	rm -f testing/*
