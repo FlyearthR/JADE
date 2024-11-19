@@ -63,4 +63,4 @@ clean:
 	rm -f examples/*_server
 
 little_clean:
-	rm testing/*
+	rm -f testing/*
