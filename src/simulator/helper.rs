@@ -18,7 +18,7 @@ pub fn cstringify(arr: &[&CStr]) -> Vec<CString> {
 }
 
 #[derive(Debug)]
-pub struct NetworkTopology {
+pub struct NetworkTopology { 
     grf: Graph,
     ip4_node: HashMap<Ipv4AddrC, (u8, u8)>,
     ip6_node: HashMap<Ipv6AddrC, (u8, u8)>,
@@ -191,7 +191,7 @@ impl Process {
 }
 
 #[derive(Debug)]
-pub struct Config {
+pub struct Config { //TODO : here objet config
     pub nb_follower: usize,
     pub _qname: String,
     pub exe: Vec<Process>,

@@ -92,10 +92,12 @@ impl Drop for Simulation {
 
 impl Simulation {
 
-    fn new (cfg: Config) -> Self {
+    fn new (cfg: Config) -> Self { // TODO : use config to create network namespace
         let nb_f = cfg.nb_follower;
         let _ = cfg.unlink_queues();
         let btm = BTreeMap::new();
+        //let mut ns = ...; vec de stack
+        //println!()
         Self { cfg,
             states: vec![State::Running; nb_f],
             events: btm,
