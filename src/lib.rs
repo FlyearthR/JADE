@@ -46,7 +46,8 @@ pub struct Ipv6AddrC {
     segments: [u16; 8],
 }
 impl Ipv6AddrC {
-    pub fn new(a: u16, b: u16, c: u16, d: u16, e: u16, f: u16, g: u16, h: u16) -> Self {
+    #[no_mangle]
+    pub extern "C" fn new(a: u16, b: u16, c: u16, d: u16, e: u16, f: u16, g: u16, h: u16) -> Self {
         Self { segments: [a, b, c, d, e, f, g, h] }
     }
 
@@ -76,6 +77,19 @@ impl From<&String> for Ipv6AddrC {
         ip.as_str().into()
     }
 }
+#[no_mangle]
+extern "C" fn ip6_from_str(ip: *const std::ffi::c_char) -> Ipv6AddrC {
+    unsafe {
+        std::ffi::CStr::from_ptr(ip).to_str().expect("IPv6 could not be parsed to rust string").into()
+    }
+}
+#[no_mangle]
+extern "C" fn ip4_from_str(ip: *const std::ffi::c_char) -> Ipv4AddrC {
+    unsafe {
+        std::ffi::CStr::from_ptr(ip).to_str().expect("IPv4 could not be parsed to rust string").into()
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, PartialEq)]
 pub struct Buffer {
@@ -265,12 +279,21 @@ impl Into<Message> for Buffer {
     }
 }
 
-#[no_mangle]
-pub extern "C" fn serialize(msg: Message) -> Buffer {
+pub fn serialize_rust(msg: Message) -> Buffer {
     Buffer::from(msg)
 }
 
-#[no_mangle]
-pub extern "C" fn deserialize(msg: Buffer) -> Message {
+pub fn deserialize_rust(msg: Buffer) -> Message {
     Buffer::into(msg)
+}
+
+#[no_mangle]
+pub extern "C" fn serialize(msg: Message) -> *mut Buffer {
+    Box::into_raw(Box::new(Buffer::from(msg)))
+
+}
+
+#[no_mangle]
+pub extern "C" fn deserialize(msg: Buffer) -> *mut Message {
+    Box::into_raw(Box::new(Buffer::into(msg)))
 }

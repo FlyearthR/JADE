@@ -1,7 +1,6 @@
 pub mod helper;
 
 use helper::{Config, TimestampActions};
-use libc::mq_attr;
 use network_time_simulator::SIZE_BUFFER;
 use posixmq::PosixMq;
 use std::io::Result;
@@ -11,7 +10,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use fork::{fork, Fork};
 use nix::unistd::execve;
-use network_time_simulator::{Message, serialize, deserialize, Buffer};
+use network_time_simulator::{Message, serialize_rust, deserialize_rust, Buffer};
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 enum State {
@@ -153,7 +152,7 @@ impl Simulation {
     }
 
     fn messages_handler(&mut self, message: &Buffer, current_time: u64) -> Result<()> {
-        match deserialize(*message) {
+        match deserialize_rust(*message) {
             Message::AddStep(id, t) => {
                 println!("Adding a step {} for node {}", t, id);
                 if let Some(x) = self.events.get_mut(&t) {
@@ -171,12 +170,12 @@ impl Simulation {
             Message::GetTime(id) => {
                 //return head key of the BTreeMap
                 println!("Getting time for node {}", id);
-                let msg = serialize(Message::WakeUp(current_time));
+                let msg = serialize_rust(Message::WakeUp(current_time));
                 self.qs[id as usize].send(2, &msg.buffer)?;
             },
             Message::GetRand(id) => {
                 println!("Getting random for node {}", id);
-                let msg = serialize(Message::WakeUp(self.cfg.random_number));
+                let msg = serialize_rust(Message::WakeUp(self.cfg.random_number));
                 self.qs[id as usize].send(2, &msg.buffer)?;
             },
             Message::Finished(id) => {
@@ -217,20 +216,22 @@ impl Simulation {
     fn sending_time_loop(&self, ta: TimestampActions) -> Result<()> {
         for (process, pkt_id) in ta.flatten() {
             println!("Process {:?} should send packet {:?}", process, pkt_id);
-            let msg = serialize(Message::Send(pkt_id));
+            let msg = serialize_rust(Message::Send(pkt_id));
+            println!("{} Send({})", process, pkt_id);
             self.qs[process as usize].send(1, &msg.buffer)?;
 
             let mut msg: Buffer = Buffer::new();
             if let Ok(_) = self.qs[0].recv(&mut msg.buffer) {
-                if let Message::Sent(p, p_id) = deserialize(msg) {
+                if let Message::Sent(p, p_id) = deserialize_rust(msg) {
                     if p != process || p_id != pkt_id {
                         eprintln!("bad Sent received:\n\texpected: Sent({},{})\n\treceived: Sent({},{})",
                         process, pkt_id, p, p_id);
                         panic!("error");    
                     }
+                    println!("{} Sent({})", p, p_id);
                 } else {
                     eprintln!("bad message received:\n\texpected: Sent({},{})\n\treceived: {:?}",
-                        process, pkt_id, deserialize(msg));
+                        process, pkt_id, deserialize_rust(msg));
                     panic!("error");
                 }
             }
@@ -263,6 +264,7 @@ impl Simulation {
                         }
                         
                     }
+                    println!("nb-finished: {}, nf_blocked: {}, nb_follower: {}", nb_finished, nb_blocked, self.cfg.nb_follower);
                     if nb_finished == self.cfg.nb_follower {
                         return Ok(State::Finished);
                     }
@@ -284,7 +286,7 @@ impl Simulation {
      */
     fn main_loop(&mut self) -> Result<u8> {
         println!("Reaching main loop");
-        let msg = serialize(Message::WakeUp(0));
+        let msg = serialize_rust(Message::WakeUp(0));
         for (s, q) in self.states.iter_mut().zip(self.qs[1..].iter()) {
             //println!("(s, q): {:?}", (&s, q));
             q.send(1, &msg.buffer)?;
@@ -304,7 +306,7 @@ impl Simulation {
                 let _ = self.sending_time_loop(ta);
 
                 /************** Second half, running time ***************/
-                let msg = serialize(Message::WakeUp(time));
+                let msg = serialize_rust(Message::WakeUp(time));
                 for (s, q) in self.states.iter_mut().zip(self.qs[1..].iter()) {
                     if s != &State::Finished {
                         q.send(1, &msg.buffer)?;
@@ -412,76 +414,76 @@ mod unit_testing {
     #[timeout(10000)]
     #[parallel]
     fn test_serialize_deserialize() {
-        assert_eq!(deserialize(serialize(Stuck(42))), Stuck(42));
-        assert_ne!(deserialize(serialize(Stuck(42))), Stuck(43));
+        assert_eq!(deserialize_rust(serialize_rust(Stuck(42))), Stuck(42));
+        assert_ne!(deserialize_rust(serialize_rust(Stuck(42))), Stuck(43));
         
-        assert_eq!(deserialize(serialize(AddStep(42, 43))), AddStep(42, 43));
-        assert_ne!(deserialize(serialize(AddStep(42, 43))), AddStep(42, 44));
-        assert_ne!(deserialize(serialize(AddStep(42, 43))), AddStep(43, 43));
+        assert_eq!(deserialize_rust(serialize_rust(AddStep(42, 43))), AddStep(42, 43));
+        assert_ne!(deserialize_rust(serialize_rust(AddStep(42, 43))), AddStep(42, 44));
+        assert_ne!(deserialize_rust(serialize_rust(AddStep(42, 43))), AddStep(43, 43));
         
-        assert_eq!(deserialize(serialize(DelStep(42, 42))), DelStep(42, 42));
-        assert_ne!(deserialize(serialize(DelStep(42, 42))), DelStep(42, 43));
-        assert_ne!(deserialize(serialize(DelStep(42, 42))), DelStep(43, 42));
+        assert_eq!(deserialize_rust(serialize_rust(DelStep(42, 42))), DelStep(42, 42));
+        assert_ne!(deserialize_rust(serialize_rust(DelStep(42, 42))), DelStep(42, 43));
+        assert_ne!(deserialize_rust(serialize_rust(DelStep(42, 42))), DelStep(43, 42));
         
-        assert_eq!(deserialize(serialize(HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42))),
+        assert_eq!(deserialize_rust(serialize_rust(HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42))),
             HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42));
-        assert_ne!(deserialize(serialize(HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42))),
+        assert_ne!(deserialize_rust(serialize_rust(HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42))),
             HasToSend4(43, 0, Ipv4AddrC::new(42, 43, 44, 45), 42));
-        assert_ne!(deserialize(serialize(HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42))),
+        assert_ne!(deserialize_rust(serialize_rust(HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42))),
             HasToSend4(42, 0, Ipv4AddrC::new(43, 43, 44, 45), 42));
-        assert_ne!(deserialize(serialize(HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42))),
+        assert_ne!(deserialize_rust(serialize_rust(HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42))),
             HasToSend4(42, 0, Ipv4AddrC::new(42, 44, 44, 45), 42));
-        assert_ne!(deserialize(serialize(HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42))),
+        assert_ne!(deserialize_rust(serialize_rust(HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42))),
             HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 45, 45), 42));
-        assert_ne!(deserialize(serialize(HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42))),
+        assert_ne!(deserialize_rust(serialize_rust(HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42))),
             HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 46), 42));
-        assert_ne!(deserialize(serialize(HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42))),
+        assert_ne!(deserialize_rust(serialize_rust(HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42))),
             HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 43));
         
-        assert_eq!(deserialize(serialize(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 43, 44, 46, 47, 48, 49), 42))),
+        assert_eq!(deserialize_rust(serialize_rust(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 43, 44, 46, 47, 48, 49), 42))),
             HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 43, 44, 46, 47, 48, 49), 42));
 
-        assert_ne!(deserialize(serialize(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
+        assert_ne!(deserialize_rust(serialize_rust(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
             HasToSend6(43, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42));
 
-        assert_ne!(deserialize(serialize(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
+        assert_ne!(deserialize_rust(serialize_rust(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
             HasToSend6(42, 0, Ipv6AddrC::new(43, 43, 44, 45, 46, 47, 48, 49), 42));
-        assert_ne!(deserialize(serialize(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
+        assert_ne!(deserialize_rust(serialize_rust(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
             HasToSend6(42, 0, Ipv6AddrC::new(42, 44, 44, 45, 46, 47, 48, 49), 42));
-        assert_ne!(deserialize(serialize(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
+        assert_ne!(deserialize_rust(serialize_rust(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
             HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 45, 45, 46, 47, 48, 49), 42));
-        assert_ne!(deserialize(serialize(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
+        assert_ne!(deserialize_rust(serialize_rust(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
             HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 46, 46, 47, 48, 49), 42));
-        assert_ne!(deserialize(serialize(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
+        assert_ne!(deserialize_rust(serialize_rust(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
             HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 47, 47, 48, 49), 42));
-        assert_ne!(deserialize(serialize(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
+        assert_ne!(deserialize_rust(serialize_rust(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
             HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 48, 48, 49), 42));
-        assert_ne!(deserialize(serialize(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
+        assert_ne!(deserialize_rust(serialize_rust(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
             HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 49, 49), 42));
-        assert_ne!(deserialize(serialize(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
+        assert_ne!(deserialize_rust(serialize_rust(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
             HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 50), 42));
 
-        assert_ne!(deserialize(serialize(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
+        assert_ne!(deserialize_rust(serialize_rust(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
             HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 43));
 
-        assert_eq!(deserialize(serialize(Send(42))), Send(42));
-        assert_ne!(deserialize(serialize(Send(42))), Send(43));
+        assert_eq!(deserialize_rust(serialize_rust(Send(42))), Send(42));
+        assert_ne!(deserialize_rust(serialize_rust(Send(42))), Send(43));
 
-        assert_eq!(deserialize(serialize(Sent(1, 42))), Sent(1, 42));
-        assert_ne!(deserialize(serialize(Sent(1, 42))), Sent(1, 43));
-        assert_ne!(deserialize(serialize(Sent(1, 42))), Sent(2, 42));
+        assert_eq!(deserialize_rust(serialize_rust(Sent(1, 42))), Sent(1, 42));
+        assert_ne!(deserialize_rust(serialize_rust(Sent(1, 42))), Sent(1, 43));
+        assert_ne!(deserialize_rust(serialize_rust(Sent(1, 42))), Sent(2, 42));
 
-        assert_eq!(deserialize(serialize(GetTime(42))), GetTime(42));
-        assert_ne!(deserialize(serialize(GetTime(42))), GetTime(43));
+        assert_eq!(deserialize_rust(serialize_rust(GetTime(42))), GetTime(42));
+        assert_ne!(deserialize_rust(serialize_rust(GetTime(42))), GetTime(43));
         
-        assert_eq!(deserialize(serialize(GetRand(42))), GetRand(42));
-        assert_ne!(deserialize(serialize(GetRand(42))), GetRand(43));
+        assert_eq!(deserialize_rust(serialize_rust(GetRand(42))), GetRand(42));
+        assert_ne!(deserialize_rust(serialize_rust(GetRand(42))), GetRand(43));
         
-        assert_eq!(deserialize(serialize(WakeUp(42))), WakeUp(42));
-        assert_ne!(deserialize(serialize(WakeUp(42))), WakeUp(43));
+        assert_eq!(deserialize_rust(serialize_rust(WakeUp(42))), WakeUp(42));
+        assert_ne!(deserialize_rust(serialize_rust(WakeUp(42))), WakeUp(43));
         
-        assert_eq!(deserialize(serialize(Finished(42))), Finished(42));
-        assert_ne!(deserialize(serialize(Finished(42))), Finished(43));
+        assert_eq!(deserialize_rust(serialize_rust(Finished(42))), Finished(42));
+        assert_ne!(deserialize_rust(serialize_rust(Finished(42))), Finished(43));
     }
 
     #[test]
@@ -498,13 +500,13 @@ mod unit_testing {
 
         for m in msgs {
             let check = m.clone();
-            qio.1.send(SIZE_BUFFER as u32, &serialize(m).buffer).expect("send follower message failed");
+            qio.1.send(SIZE_BUFFER as u32, &serialize_rust(m).buffer).expect("send follower message failed");
             sim.qs[0].recv(&mut msg.buffer).unwrap();
-            assert_eq!(deserialize(msg), check);
+            assert_eq!(deserialize_rust(msg), check);
         }
-        sim.qs[1].send(1, &serialize(WakeUp(42)).buffer).expect("send leader message failed");
+        sim.qs[1].send(1, &serialize_rust(WakeUp(42)).buffer).expect("send leader message failed");
         qio.0.recv(&mut msg.buffer).unwrap();
-        assert_eq!(deserialize(msg), WakeUp(42));
+        assert_eq!(deserialize_rust(msg), WakeUp(42));
     }
 
     fn mini_setup(nb_add_step: u64, nb_stuck: u64, nb_recv: u64, return_value: u8) {
@@ -515,26 +517,26 @@ mod unit_testing {
         let t = thread::spawn(move || {sim.main_loop()});
         let mut msg: Buffer = Buffer::new();
         qf1.0.recv(&mut msg.buffer).unwrap();
-        assert_eq!(deserialize(msg), WakeUp(0)); // checks that the first WakeUp message is sent
+        assert_eq!(deserialize_rust(msg), WakeUp(0)); // checks that the first WakeUp message is sent
         qf2.0.recv(&mut msg.buffer).unwrap();
-        assert_eq!(deserialize(msg), WakeUp(0));
+        assert_eq!(deserialize_rust(msg), WakeUp(0));
         for i in 1..nb_add_step+1 {
-            qf1.1.send(1, &serialize(AddStep(1, i)).buffer).expect("send add_step failed");
+            qf1.1.send(1, &serialize_rust(AddStep(1, i)).buffer).expect("send add_step failed");
         }
         for _i in 1..nb_stuck+1 {
-            qf1.1.send(1, &serialize(Stuck(1)).buffer).expect("send stuck failed");
-            qf2.1.send(1, &serialize(Stuck(2)).buffer).expect("send stuck failed");
+            qf1.1.send(1, &serialize_rust(Stuck(1)).buffer).expect("send stuck failed");
+            qf2.1.send(1, &serialize_rust(Stuck(2)).buffer).expect("send stuck failed");
         }
 
         for i in 1..nb_recv+1 {
             let mut msg: Buffer = Buffer::new();
             qf1.0.recv(&mut msg.buffer).unwrap();
-            assert_eq!(deserialize(msg), WakeUp(i));
+            assert_eq!(deserialize_rust(msg), WakeUp(i));
             qf2.0.recv(&mut msg.buffer).unwrap();
-            assert_eq!(deserialize(msg), WakeUp(i));
+            assert_eq!(deserialize_rust(msg), WakeUp(i));
         }
-        qf1.1.send(1, &serialize(Finished(1)).buffer).expect("send finished failed");
-        qf2.1.send(1, &serialize(Finished(2)).buffer).expect("send finished failed");
+        qf1.1.send(1, &serialize_rust(Finished(1)).buffer).expect("send finished failed");
+        qf2.1.send(1, &serialize_rust(Finished(2)).buffer).expect("send finished failed");
         if let Ok(ret) = t.join().unwrap() {
             assert_eq!(ret, return_value);
         }
@@ -589,7 +591,7 @@ mod unit_testing {
 
 
         //test with one timestamp
-        sim.messages_handler(&serialize(Message::AddStep(1, 1)), 0).expect("message handler failing");
+        sim.messages_handler(&serialize_rust(Message::AddStep(1, 1)), 0).expect("message handler failing");
         if let Some((&1, v2)) = sim.events.first_key_value() {
             assert!(v2.contain_process(1));
             assert_eq!(v2.nb_process(), 1);
@@ -597,7 +599,7 @@ mod unit_testing {
             assert!(false);
         }
 
-        let _ = sim.messages_handler(&serialize(Message::AddStep(2, 1)), 0);
+        let _ = sim.messages_handler(&serialize_rust(Message::AddStep(2, 1)), 0);
         if let Some((&1, v2)) = sim.events.first_key_value() {
             assert!(v2.contain_process(1));
             assert!(v2.contain_process(2));
@@ -606,7 +608,7 @@ mod unit_testing {
             assert!(false);
         }
 
-        let _ = sim.messages_handler(&serialize(Message::AddStep(2, 1)), 0);
+        let _ = sim.messages_handler(&serialize_rust(Message::AddStep(2, 1)), 0);
         if let Some((&1, v2)) = sim.events.first_key_value() {
             let mut ta = v2.clone();
             assert!(v2.contain_process(1));
@@ -618,7 +620,7 @@ mod unit_testing {
             assert!(false);
         }
 
-        let _ = sim.messages_handler(&serialize(Message::DelStep(1, 1)), 0);
+        let _ = sim.messages_handler(&serialize_rust(Message::DelStep(1, 1)), 0);
         if let Some((&1, v2)) = sim.events.first_key_value() {
             assert!(!v2.contain_process(1));
             assert!(v2.contain_process(2));
@@ -740,7 +742,7 @@ mod determinism {
     macro_rules! m_send_1arg {
         ($msg:expr, $qfs:ident, $nb:expr) => {
             for i in 0..NB_FOLLOWERS!() {
-                $qfs[i].as_ref().unwrap().1.send(1, &serialize($msg((i+1) as u8)).buffer).expect("send message failed");
+                $qfs[i].as_ref().unwrap().1.send(1, &serialize_rust($msg((i+1) as u8)).buffer).expect("send message failed");
             }
         }
     }
@@ -748,14 +750,14 @@ mod determinism {
     macro_rules! m_send_2arg {
         ($msg:expr, $arg:expr, $qfs:ident, $nb:expr) => {
             for i in 0..$nb {
-                $qfs[i].as_ref().unwrap().1.send(1, &serialize($msg((i+1) as u8, $arg)).buffer).expect("send message failed");
+                $qfs[i].as_ref().unwrap().1.send(1, &serialize_rust($msg((i+1) as u8, $arg)).buffer).expect("send message failed");
             }
         }
     }
     macro_rules! m_send_4arg {
         ($msg:expr, $dest:expr, $pkt_id:expr, $qfs:ident, $nb:expr) => {
             for i in 0..$nb {
-                $qfs[i].as_ref().unwrap().1.send(1, &serialize($msg((i+1) as u8, 0, $dest, $pkt_id)).buffer).expect("send message failed");
+                $qfs[i].as_ref().unwrap().1.send(1, &serialize_rust($msg((i+1) as u8, 0, $dest, $pkt_id)).buffer).expect("send message failed");
             }
         }
     }
@@ -771,7 +773,7 @@ mod determinism {
             m_send_1arg!(Finished, $qfs, $nb)
         };
         (DelStep($id:expr, $step:expr), $qfs:ident) => {
-            $qfs[$id-1].as_ref().unwrap().1.send(1, &serialize(DelStep(($id) as u8, $step)).buffer).expect("send DelStep failed");
+            $qfs[$id-1].as_ref().unwrap().1.send(1, &serialize_rust(DelStep(($id) as u8, $step)).buffer).expect("send DelStep failed");
         };
         (DelStep(_, $step:expr), $qfs:ident, $nb:expr) => {
             m_send_2arg!(DelStep, $step, $qfs, $nb)
@@ -786,7 +788,7 @@ mod determinism {
             m_send_4arg!(HasToSend6, $dest, $pkt_id, $qfs, $nb)
         };
         (Sent($id:expr, $pkt_id:expr), $qfs:ident) => {
-            $qfs[$id-1].as_ref().unwrap().1.send(1, &serialize(Sent(($id) as u8, $pkt_id)).buffer).expect("send DelStep failed");
+            $qfs[$id-1].as_ref().unwrap().1.send(1, &serialize_rust(Sent(($id) as u8, $pkt_id)).buffer).expect("send DelStep failed");
         };
     }
 
