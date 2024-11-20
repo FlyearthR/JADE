@@ -1,0 +1,27 @@
+# Queue name
+qname = '/some_queue'
+
+# Random number
+random_number = 123
+
+# Number of followers
+nb_follower = 2
+
+# Graph
+graph = '1_client_1_server.gml'
+
+# Executables
+[executables]
+[[executables.exe]]
+name = 'client'
+path = 'simple_client'
+args = ["./simple_client", "-i", "10.0.0.20", "-p", "8080", "-I", "1", "-s", "1000", "-n", "20"]
+node_ids = [1]
+
+
+[[executables.exe]]
+name = 'server'
+path = 'simple_server'
+args = ["./simple_server", "-p", "8080", "-m", "20", "-n", "1", "-l", "test.log"]
+node_ids = [11]
+
