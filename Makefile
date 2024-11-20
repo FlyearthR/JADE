@@ -27,7 +27,7 @@ testffi: API
 	cd c_src && $(MAKE) test_ffi && cp test_ffi ../testing/test_ffi
 	./testing/test_ffi
 
-all: syscalls.so simulator examples API 
+all: syscalls.so simulator API 
 
 syscalls.so: API
 	cd c_src && $(MAKE) syscalls.so
@@ -61,6 +61,7 @@ clean:
 	rm -f c_src/*.a
 	rm -f examples/*_client
 	rm -f examples/*_server
+	rm -rf target/syscalls
 
 little_clean:
 	rm -f testing/*
