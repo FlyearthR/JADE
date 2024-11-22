@@ -21,7 +21,7 @@ usetest: all
 	$(CC) ${CFLAGS} examples/simple_client.c -o testing/simple_client
 	${CC} ${CFLAGS} examples/simple_server.c -o testing/simple_server
 	cp -f tests/$(INSTANCE).* testing/
-	cd testing && RUST_BACKTRACE=1 ./simulator $(INSTANCE).toml
+	cd testing && sudo RUST_BACKTRACE=1 ./simulator $(INSTANCE).toml
 
 testffi: API
 	cd c_src && $(MAKE) test_ffi && cp test_ffi ../testing/test_ffi

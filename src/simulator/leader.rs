@@ -1,5 +1,6 @@
 pub mod helper;
 
+use gml_parser::Edge;
 use helper::{Config, TimestampActions};
 use netns_rs::NetNs;
 use network_time_simulator::SIZE_BUFFER;
@@ -93,26 +94,27 @@ impl Drop for Simulation {
 
 impl Simulation {
 
-    fn new (cfg: Config) -> Self { // TODO : use config to create network namespace
+    fn new (cfg: Config) -> Self { // TODO Alix: use config to create network namespace
         let nb_f = cfg.nb_follower;
         let _ = cfg.unlink_queues();
         let btm = BTreeMap::new();
-        let mut vec: Vec<NetNs> = Vec::new(); //create namespace vector
-        //get ref graph
-        //let graph = cfg.topo.grf; //comment otherwise ref is lost
-        //println!("here graph");
-        //println!("{:?}",cfg.topo.grf); fonctionne
-        //loop on the nodes
+        //let mut vec: Vec<NetNs> = Vec::new(); //create namespace vector
+
+        //create the namespaces
         for node in cfg.topo.grf.nodes.iter(){
-            //println!("{:?}", node)
-            let mut ns = NetNs::new(ns_name)
+            let mut ns = NetNs::new(node.id.to_string()).unwrap(); //use node id as name
         }
-        //let mut ns = ...; vec de stack
-        //println!()
+
+    
+        for node in cfg.topo.grf.nodes.iter(){
+            let ns = NetNs::get(node.id.to_string()).unwrap();
+            ns.remove().unwrap();
+        }
+
         Self { cfg,
             states: vec![State::Running; nb_f],
             events: btm,
-            qs: Vec::with_capacity(nb_f+1)
+            qs: Vec::with_capacity(nb_f+1),
         }
     }
 
@@ -308,6 +310,12 @@ impl Simulation {
         }
         //println!("Before if");
         if let Ok(State::Finished) = self.running_time_loop(0) {
+            //TODO Alix : remove namespaces 
+            /*
+            * let ns = NetNs::get("my_netns").unwrap();
+            * ns.remove().unwrap();
+            */
+            
             eprintln!("Simulation finished by all process finishing");
             return Ok(0);
         }
