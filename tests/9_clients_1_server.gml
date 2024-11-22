@@ -111,18 +111,6 @@ graph [
   ]
   node [
     id 10
-    label "Node 1"
-    interface [
-      id 0
-      label "eth-0"
-      ip [
-        type "v4"
-        ip "10.0.0.10"
-      ]
-    ]
-  ]
-  node [
-    id 10
     label "Server"
     interface [
       id 0
