@@ -1,6 +1,7 @@
 pub mod helper;
 
 use helper::{Config, TimestampActions};
+use netns_rs::NetNs;
 use network_time_simulator::SIZE_BUFFER;
 use posixmq::PosixMq;
 use std::io::Result;
@@ -48,7 +49,7 @@ const LIB_NAME: &str = "./syscalls.so";
  */
 fn follower_init_queues(id: u8, nb: usize, qname: &String) -> Result<(PosixMq, PosixMq)> { // TODO: no more use
     // TODO: (for later) find a way to use this to avoid passing through the env
-    println!("id: {}, nb: {}, qname: {:?}", id, nb, qname);
+    //println!("id: {}, nb: {}, qname: {:?}", id, nb, qname);
     let qo = posixmq::OpenOptions::writeonly() //the follower will send messages to the
         .max_msg_len(SIZE_BUFFER)                           //leader on this queue
         .capacity(nb)
@@ -72,7 +73,7 @@ fn follower_init_queues(id: u8, nb: usize, qname: &String) -> Result<(PosixMq, P
         .open(&format!("{}_{}", qname, id))
         .expect(&format!("failed to open queue qi for a follower: {}", id).to_string());
     qi.set_cloexec(false)?;
-    println!("follower_init_queues: qi {:?}, qo {:?}", qi, qo);
+    //println!("follower_init_queues: qi {:?}, qo {:?}", qi, qo);
     return Ok((qi, qo));
 }
 
@@ -96,6 +97,16 @@ impl Simulation {
         let nb_f = cfg.nb_follower;
         let _ = cfg.unlink_queues();
         let btm = BTreeMap::new();
+        let mut vec: Vec<NetNs> = Vec::new(); //create namespace vector
+        //get ref graph
+        //let graph = cfg.topo.grf; //comment otherwise ref is lost
+        //println!("here graph");
+        //println!("{:?}",cfg.topo.grf); fonctionne
+        //loop on the nodes
+        for node in cfg.topo.grf.nodes.iter(){
+            //println!("{:?}", node)
+            let mut ns = NetNs::new(ns_name)
+        }
         //let mut ns = ...; vec de stack
         //println!()
         Self { cfg,
@@ -156,7 +167,7 @@ impl Simulation {
     fn messages_handler(&mut self, message: &Buffer, current_time: u64) -> Result<()> {
         match deserialize_rust(*message) {
             Message::AddStep(id, t) => {
-                println!("Adding a step {} for node {}", t, id);
+                //println!("Adding a step {} for node {}", t, id);
                 if let Some(x) = self.events.get_mut(&t) {
                     x.add_process(id);
                 } else {
@@ -164,32 +175,32 @@ impl Simulation {
                 }
             },
             Message::DelStep(id, t) => {
-                println!("Deleting a step {} for node {}", t, id);
+                //println!("Deleting a step {} for node {}", t, id);
                 if let Some(x) = self.events.get_mut(&t) {
                     x.del_process(id);
                 }
             },
             Message::GetTime(id) => {
                 //return head key of the BTreeMap
-                println!("Getting time for node {}", id);
+                //println!("Getting time for node {}", id);
                 let msg = serialize_rust(Message::WakeUp(current_time));
                 self.qs[id as usize].send(2, &msg.buffer)?;
             },
             Message::GetRand(id) => {
-                println!("Getting random for node {}", id);
+                //println!("Getting random for node {}", id);
                 let msg = serialize_rust(Message::WakeUp(self.cfg.random_number));
                 self.qs[id as usize].send(2, &msg.buffer)?;
             },
             Message::Finished(id) => {
-                println!("Node {} has finished", id);
+                //println!("Node {} has finished", id);
                 self.states[(id-1) as usize] = State::Finished;
             },
             Message::Stuck(id) => {
-                println!("Node {} is stuck", id);
+                //println!("Node {} is stuck", id);
                 self.states[(id-1) as usize] = State::Blocked;
             },
             Message::HasToSend4(id, if_id, ip, pkt_id) => {
-                println!("Node {} has to send packet {} via {} to {:?}", id, pkt_id, if_id, ip);
+                //println!("Node {} has to send packet {} via {} to {:?}", id, pkt_id, if_id, ip);
                 let timestamp = current_time + self.cfg.topo.get_delay_v4(id, if_id, &ip).unwrap();
                 if let Some(x) = self.events.get_mut(&timestamp) {
                     x.add_packet(id, pkt_id);
@@ -217,9 +228,9 @@ impl Simulation {
      */
     fn sending_time_loop(&self, ta: TimestampActions) -> Result<()> {
         for (process, pkt_id) in ta.flatten() {
-            println!("Process {:?} should send packet {:?}", process, pkt_id);
+            //println!("Process {:?} should send packet {:?}", process, pkt_id);
             let msg = serialize_rust(Message::Send(pkt_id));
-            println!("{} Send({})", process, pkt_id);
+            //println!("{} Send({})", process, pkt_id);
             self.qs[process as usize].send(1, &msg.buffer)?;
 
             let mut msg: Buffer = Buffer::new();
@@ -230,7 +241,7 @@ impl Simulation {
                         process, pkt_id, p, p_id);
                         panic!("error");    
                     }
-                    println!("{} Sent({})", p, p_id);
+                    //println!("{} Sent({})", p, p_id);
                 } else {
                     eprintln!("bad message received:\n\texpected: Sent({},{})\n\treceived: {:?}",
                         process, pkt_id, deserialize_rust(msg));
@@ -251,10 +262,10 @@ impl Simulation {
     fn running_time_loop(&mut self, current_time: u64) -> Result<State> {
         let mut msg: Buffer = Buffer::new();
         loop {
-            println!("Running time loop");
+            //println!("Running time loop");
             match self.qs[0].recv(&mut msg.buffer) {
                 Ok(_) => {
-                    println!("Leader received {:?}", Into::<Message>::into(msg));
+                    //println!("Leader received {:?}", Into::<Message>::into(msg));
                     self.messages_handler(&msg, current_time)?;
                     let mut nb_blocked = 0;
                     let mut nb_finished = 0;
@@ -266,7 +277,7 @@ impl Simulation {
                         }
                         
                     }
-                    println!("nb-finished: {}, nf_blocked: {}, nb_follower: {}", nb_finished, nb_blocked, self.cfg.nb_follower);
+                    //println!("nb-finished: {}, nf_blocked: {}, nb_follower: {}", nb_finished, nb_blocked, self.cfg.nb_follower);
                     if nb_finished == self.cfg.nb_follower {
                         return Ok(State::Finished);
                     }
@@ -287,7 +298,7 @@ impl Simulation {
      * Main loop
      */
     fn main_loop(&mut self) -> Result<u8> {
-        println!("Reaching main loop");
+        //println!("Reaching main loop");
         let msg = serialize_rust(Message::WakeUp(0));
         for (s, q) in self.states.iter_mut().zip(self.qs[1..].iter()) {
             //println!("(s, q): {:?}", (&s, q));
@@ -295,14 +306,14 @@ impl Simulation {
             //println!("sent {:?}", msg.buffer);
             *s = State::Running;
         }
-        println!("Before if");
+        //println!("Before if");
         if let Ok(State::Finished) = self.running_time_loop(0) {
             eprintln!("Simulation finished by all process finishing");
             return Ok(0);
         }
-        println!("After if");
+        //println!("After if");
         loop {
-            println!("Events: {:?}", self.events);
+            //println!("Events: {:?}", self.events);
             if let Some((time, ta)) = self.events.pop_first() {
                 /*************** First half, sending time ***************/
                 let _ = self.sending_time_loop(ta);

@@ -19,7 +19,7 @@ pub fn cstringify(arr: &[&CStr]) -> Vec<CString> {
 
 #[derive(Debug)]
 pub struct NetworkTopology { 
-    grf: Graph,
+    pub grf: Graph,
     ip4_node: HashMap<Ipv4AddrC, (u8, u8)>,
     ip6_node: HashMap<Ipv6AddrC, (u8, u8)>,
 }
