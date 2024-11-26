@@ -1,9 +1,11 @@
 pub mod helper;
 
+use futures::executor::block_on;
 use gml_parser::Edge;
 use helper::{Config, TimestampActions};
 use netns_rs::NetNs;
 use network_time_simulator::SIZE_BUFFER;
+use nix::sys::ptrace::Request;
 use posixmq::PosixMq;
 use std::io::Result;
 use std::env;
@@ -13,6 +15,9 @@ use std::path::Path;
 use fork::{fork, Fork};
 use nix::unistd::execve;
 use network_time_simulator::{Message, serialize_rust, deserialize_rust, Buffer};
+use futures::Future;
+use netlink_packet_route::link::LinkFlags;
+use rtnetlink::{Handle, new_connection};
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 enum State {
@@ -88,6 +93,15 @@ pub struct Simulation {
 
 impl Drop for Simulation {
     fn drop(&mut self) {
+        for node in self.cfg.topo.grf.nodes.iter(){
+            if let Ok(ns) = NetNs::get(node.id.to_string()){
+                if let Err(err) = ns.remove(){
+                    eprintln!("Failed to remove namespace {}",node.id);
+                }
+            }else {
+                eprintln!("Namespace {} doesn't exist", node.id);
+            }
+        }
         let _ = self.cfg.unlink_queues();
     }
 }
@@ -98,24 +112,37 @@ impl Simulation {
         let nb_f = cfg.nb_follower;
         let _ = cfg.unlink_queues();
         let btm = BTreeMap::new();
-        //let mut vec: Vec<NetNs> = Vec::new(); //create namespace vector
 
-        //create the namespaces
-        for node in cfg.topo.grf.nodes.iter(){
-            let mut ns = NetNs::new(node.id.to_string()).unwrap(); //use node id as name
-        }
-
-    
-        for node in cfg.topo.grf.nodes.iter(){
-            let ns = NetNs::get(node.id.to_string()).unwrap();
-            ns.remove().unwrap();
-        }
+        let cfg = tokio::runtime::Runtime::new()
+            .expect("Failed to create runtime")
+            .block_on(Self::create_namespaces(cfg))
+            .expect("Failed to create namespaces");
 
         Self { cfg,
             states: vec![State::Running; nb_f],
             events: btm,
             qs: Vec::with_capacity(nb_f+1),
         }
+    }
+
+    async fn create_namespaces(cfg: Config) -> Result<Config>{
+    //fn create_namespaces(cfg: Config) -> Result<Config>{
+        //create the namespaces
+        for node in cfg.topo.grf.nodes.iter(){
+           NetNs::new(node.id.to_string()).expect(&format!("Failed to create namespace {}", node.id)); //use node id as name
+        }
+
+        //TODO Alix : doc : handle = trait for asynchronous context pipeline
+        let (connection, handle, _) = new_connection().unwrap();
+
+
+        //add the links between the namespaces
+        for edge in cfg.topo.grf.edges.iter(){
+            println!("{:?}", edge);
+            let mut request = 1;
+        }
+
+        Ok(cfg)
     }
 
     /**

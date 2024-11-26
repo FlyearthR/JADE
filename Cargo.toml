@@ -23,6 +23,11 @@ toml = "0.8.14"
 ntest = "0.9.3"
 gml_parser = "0.1.1"
 libc = "0.2.162"
+netns-rs = "0.1.0"
+rtnetlink = "0.14.1"
+futures = "0.3.31"
+netlink-packet-route = "0.21.0"
+tokio = {version = "1", features = ["full"]}
 
 [profile.dev]
 panic = "abort"
