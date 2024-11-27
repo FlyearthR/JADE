@@ -3,10 +3,12 @@ pub mod helper;
 use futures::executor::block_on;
 use gml_parser::Edge;
 use helper::{Config, TimestampActions};
+use libc::CGROUP2_SUPER_MAGIC;
 use netns_rs::NetNs;
 use network_time_simulator::SIZE_BUFFER;
 use nix::sys::ptrace::Request;
 use posixmq::PosixMq;
+use std::fmt::format;
 use std::io::Result;
 use std::env;
 use std::ffi::{CStr, CString};
@@ -16,7 +18,7 @@ use fork::{fork, Fork};
 use nix::unistd::execve;
 use network_time_simulator::{Message, serialize_rust, deserialize_rust, Buffer};
 use futures::Future;
-use netlink_packet_route::link::LinkFlags;
+//use netlink_packet_route::link::LinkFlag;
 use rtnetlink::{Handle, new_connection};
 
 #[derive(Copy, Clone, PartialEq, Debug)]
@@ -95,7 +97,7 @@ impl Drop for Simulation {
     fn drop(&mut self) {
         for node in self.cfg.topo.grf.nodes.iter(){
             if let Ok(ns) = NetNs::get(node.id.to_string()){
-                if let Err(err) = ns.remove(){
+                if let Err(_err) = ns.remove(){
                     eprintln!("Failed to remove namespace {}",node.id);
                 }
             }else {
@@ -129,17 +131,35 @@ impl Simulation {
     //fn create_namespaces(cfg: Config) -> Result<Config>{
         //create the namespaces
         for node in cfg.topo.grf.nodes.iter(){
-           NetNs::new(node.id.to_string()).expect(&format!("Failed to create namespace {}", node.id)); //use node id as name
+            if let Ok(ns) = NetNs::get(node.id.to_string()){
+                eprintln!("Namespace {:?} already exists", node.id);
+            }else {
+                NetNs::new(node.id.to_string()).expect(&format!("Failed to create namespace {:?}", node.id)); //use node id as name
+            }
         }
 
         //TODO Alix : doc : handle = trait for asynchronous context pipeline
         let (connection, handle, _) = new_connection().unwrap();
+        tokio::spawn(connection);
 
-
+        //println!("{:?}", cfg.topo.grf.nodes);
         //add the links between the namespaces
         for edge in cfg.topo.grf.edges.iter(){
             println!("{:?}", edge);
-            let mut request = 1;
+            //let source_idx = edge.source as usize;
+            let name1 = format!("veth_{}_{}", edge.source, edge.target);
+            let name2 = format!("veth_{}_{}", edge.target, edge.source);
+            println!("{} {}", name1, name2);
+            //ip link add name1 type veth peer name name2
+            let mut request = handle.link().add().veth(name1, name2);//todo change
+
+            //request.execute().expect("Failed to add link between namespaces");   
+
+            //request.message_mut().header.flags.push(LinkFlag::Up);
+            //request.message_mut().header.change_mask.retain(
+              //  |f| *f != LinkFlag::Up);
+            request.execute().await.map_err(|e| format!("{}", e));
+       
         }
 
         Ok(cfg)
