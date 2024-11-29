@@ -7,7 +7,7 @@ pub const SIZE_BUFFER: usize = 27;
 #[repr(C)]
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub struct Ipv4AddrC {
-    segments: [u8; 4],
+    pub segments: [u8; 4],
 }
 impl Ipv4AddrC {
     pub fn new(a: u8, b: u8, c: u8, d: u8) -> Self {

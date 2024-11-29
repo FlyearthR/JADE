@@ -1,15 +1,19 @@
 pub mod helper;
 
+use futures::executor::block_on;
 use helper::{Config, TimestampActions};
+use netlink_packet_route::link::{self, LinkMessage};
 use netns_rs::NetNs;
 use network_time_simulator::SIZE_BUFFER;
+use nix::sys::socket::Ipv4Addr;
 use posixmq::PosixMq;
 use std::io::Result;
 use std::env;
 use std::ffi::{CStr, CString};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::os::fd::AsRawFd;
 use std::path::Path;
+use std::net::IpAddr;
 use fork::{fork, Fork};
 use nix::unistd::execve;
 use network_time_simulator::{Message, serialize_rust, deserialize_rust, Buffer};
@@ -91,7 +95,7 @@ pub struct Simulation {
 
 impl Drop for Simulation {
     fn drop(&mut self) {
-        for node in self.cfg.topo.grf.nodes.iter(){
+        /*for node in self.cfg.topo.grf.nodes.iter(){
             if let Ok(ns) = NetNs::get(node.id.to_string()){
                 if let Err(_err) = ns.remove(){
                     eprintln!("Failed to remove namespace {}",node.id);
@@ -99,14 +103,14 @@ impl Drop for Simulation {
             }else {
                 eprintln!("Namespace {} doesn't exist", node.id);
             }
-        }
+        }*/
         let _ = self.cfg.unlink_queues();
     }
 }
 
 impl Simulation {
 
-    fn new (cfg: Config) -> Self { // TODO Alix: use config to create network namespace
+    fn new (cfg: Config) -> Self {
         let nb_f = cfg.nb_follower;
         let _ = cfg.unlink_queues();
         let btm = BTreeMap::new();
@@ -183,20 +187,81 @@ impl Simulation {
 
             // Get the name space file descriptor
             let source_ns_fd = source_ns.file().as_raw_fd();
-            let target_ns_fd= target_ns.file().as_raw_fd();
+            let target_ns_fd: i32= target_ns.file().as_raw_fd();
+
+            // Get ip addresses
+            //ipv4
+            let ipv4addrc_source = cfg.topo.ip4_node.iter().
+            find_map(|(key,&val)| if val == (edge.source.try_into().unwrap(),0) {Some(key)} else {None}).unwrap();
+            //println!("{:?}",ipv4_source);
+            let ipv4addrc_target = cfg.topo.ip4_node.iter().
+            find_map(|(key,&val)| if val == (edge.target.try_into().unwrap(),0) {Some(key)} else {None}).unwrap();
+
+            let ipv4_source = std::net::Ipv4Addr::new(
+                ipv4addrc_source.segments[0],
+                ipv4addrc_source.segments[1],
+                ipv4addrc_source.segments[2],
+                ipv4addrc_source.segments[3]
+            );
+
+            let ipv4_target = std::net::Ipv4Addr::new(
+                ipv4addrc_target.segments[0],
+                ipv4addrc_target.segments[1],
+                ipv4addrc_target.segments[2],
+                ipv4addrc_target.segments[3]
+            );
+
+            //ipv6
+            /*let ipv6addrc_source = cfg.topo.ip6_node.iter().
+            find_map(|(key,&val)| if val == (edge.source.try_into().unwrap(),0) {Some(key)} else {None}).unwrap();
+            println!("{:?}",ipv6addrc_source);
+            let ipv6addrc_target = cfg.topo.ip6_node.iter().
+            find_map(|(key,&val)| if val == (edge.target.try_into().unwrap(),0) {Some(key)} else {None}).unwrap();
+
+            let ipv4_source = std::net::Ipv4Addr::new(
+                ipv4addrc_source.segments[0],
+                ipv4addrc_source.segments[1],
+                ipv4addrc_source.segments[2],
+                ipv4addrc_source.segments[3]
+            );
+
+            let ipv4_target = std::net::Ipv4Addr::new(
+                ipv4addrc_target.segments[0],
+                ipv4addrc_target.segments[1],
+                ipv4addrc_target.segments[2],
+                ipv4addrc_target.segments[3]
+            );*/
 
             // Put the interface in the correspondig namespace and set it up
             let mut link_set_req1 = handle.link().set(link1.header.index);
             link_set_req1 = link_set_req1.setns_by_fd(source_ns_fd);
             link_set_req1 = link_set_req1.up();
-            link_set_req1.execute().await.map_err(|e| Error::new(ErrorKind::Other,format!("Failed to move {} to namespace {}: {}", name1, edge.source, e)))?;
+            link_set_req1.execute().await
+            .map_err(|e| Error::new(ErrorKind::Other,format!("Failed to move {} to namespace {}: {}", name1, edge.source, e)))?;
 
             let mut link_set_req2 = handle.link().set(link2.header.index);
             link_set_req2 = link_set_req2.setns_by_fd(target_ns_fd);
             link_set_req2 = link_set_req2.up();
             link_set_req2.execute().await.map_err(|e| Error::new(ErrorKind::Other,format!("Failed to move {} to namespace {}: {}", name2, edge.target, e)))?;
-        }
+            
+            //go to the right namespace
+            source_ns.enter();
+            //create new handle
 
+            let (connection_source, handle_source, _) = new_connection().unwrap();
+            tokio::spawn(connection_source);
+
+            let mut addr_req1 = handle_source.address().add(link1.header.index, IpAddr::V4(ipv4_source), 24);
+            block_on(addr_req1.execute());
+
+            target_ns.enter();
+
+            let (connection_target, handle_target, _) = new_connection().unwrap();
+            tokio::spawn(connection_target);
+
+            let mut addr_req2 = handle_target.address().add(link2.header.index, IpAddr::V4(ipv4_target), 24);
+            block_on(addr_req2.execute());
+        }
         Ok(cfg)
     }
 
@@ -392,11 +457,6 @@ impl Simulation {
         }
         //println!("Before if");
         if let Ok(State::Finished) = self.running_time_loop(0) {
-            //TODO Alix : remove namespaces 
-            /*
-            * let ns = NetNs::get("my_netns").unwrap();
-            * ns.remove().unwrap();
-            */
             
             eprintln!("Simulation finished by all process finishing");
             return Ok(0);
