@@ -13,13 +13,16 @@ use std::io::Result;
 use std::env;
 use std::ffi::{CStr, CString};
 use std::collections::BTreeMap;
+use std::os::fd::{AsFd, AsRawFd};
 use std::path::Path;
 use fork::{fork, Fork};
 use nix::unistd::execve;
 use network_time_simulator::{Message, serialize_rust, deserialize_rust, Buffer};
-use futures::Future;
-//use netlink_packet_route::link::LinkFlag;
+use futures::{Future, TryStreamExt};
+use netlink_packet_route::link::LinkFlag;
 use rtnetlink::{Handle, new_connection};
+use std::io::{Error, ErrorKind};
+use std::{thread, time};
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 enum State {
@@ -127,39 +130,73 @@ impl Simulation {
         }
     }
 
+    //TODO Alix doc
     async fn create_namespaces(cfg: Config) -> Result<Config>{
-    //fn create_namespaces(cfg: Config) -> Result<Config>{
-        //create the namespaces
+        // Create the namespaces
         for node in cfg.topo.grf.nodes.iter(){
             if let Ok(ns) = NetNs::get(node.id.to_string()){
                 eprintln!("Namespace {:?} already exists", node.id);
             }else {
-                NetNs::new(node.id.to_string()).expect(&format!("Failed to create namespace {:?}", node.id)); //use node id as name
+                let ns = NetNs::new(node.id.to_string()).expect(&format!("Failed to create namespace {:?}", node.id)); //use node id as name
             }
         }
 
-        //TODO Alix : doc : handle = trait for asynchronous context pipeline
         let (connection, handle, _) = new_connection().unwrap();
         tokio::spawn(connection);
 
-        //println!("{:?}", cfg.topo.grf.nodes);
-        //add the links between the namespaces
+        // Add the links between the namespaces
         for edge in cfg.topo.grf.edges.iter(){
-            println!("{:?}", edge);
-            //let source_idx = edge.source as usize;
+            
+            // Interface names
+            // Interface veth_sourceNode_targetNode is the interface of sourceNode that is connected to targetNode
             let name1 = format!("veth_{}_{}", edge.source, edge.target);
             let name2 = format!("veth_{}_{}", edge.target, edge.source);
-            println!("{} {}", name1, name2);
-            //ip link add name1 type veth peer name name2
-            let mut request = handle.link().add().veth(name1, name2);//todo change
 
-            //request.execute().expect("Failed to add link between namespaces");   
+            // Create veth pair
+            let request = handle.link().add().veth(name1.clone(), name2.clone());//todo change
+            if let Err(error) = request.execute().await.map_err(|e| format!("{}", e)){
+                println!("Could not create veth pair: {}", error);
+            }
 
-            //request.message_mut().header.flags.push(LinkFlag::Up);
-            //request.message_mut().header.change_mask.retain(
-              //  |f| *f != LinkFlag::Up);
-            request.execute().await.map_err(|e| format!("{}", e));
-       
+            // Get interface index
+            let links1: Vec<_> = handle.link().get().match_name(name1.clone())
+                .execute()
+                .try_collect()
+                .await
+                .map_err(|e| Error::new(ErrorKind::Other, format!("Failed to get interface information: {}", e)))?;
+            
+            let link1 = links1.into_iter().next()
+            .ok_or_else(|| Error::new(ErrorKind::NotFound, format!("Interface {} not found", name1)))?;
+            
+            let links2: Vec<_> = handle.link().get().match_name(name2.clone())
+                .execute()
+                .try_collect()
+                .await
+                .map_err(|e| Error::new(ErrorKind::Other, format!("Failed to get interface information: {}", e)))?;
+            
+            let link2 = links2.into_iter().next()
+            .ok_or_else(|| Error::new(ErrorKind::NotFound, format!("Interface {} not found", name1)))?;
+
+            // Get namespace
+            let source_ns = NetNs::get(edge.source.to_string())
+                .map_err(|e| Error::new(ErrorKind::Other, format!("Failed to get source namespace: {}", e)))?;
+            let target_ns = NetNs::get(edge.target.to_string())
+                .map_err(|e| Error::new(ErrorKind::Other, format!("Failed to get target namespace: {}", e)))?;
+
+            // Get the name space file descriptor
+            let source_ns_fd = source_ns.file().as_raw_fd();
+            let target_ns_fd= target_ns.file().as_raw_fd();
+
+            // Put the interface in the correspondig namespace and set it up
+            let mut link_set_req1 = handle.link().set(link1.header.index);
+            link_set_req1 = link_set_req1.setns_by_fd(source_ns_fd);
+            link_set_req1 = link_set_req1.up();
+            link_set_req1.execute().await.map_err(|e| Error::new(ErrorKind::Other,format!("Failed to move {} to namespace {}: {}", name1, edge.source, e)))?;
+
+            let mut link_set_req2 = handle.link().set(link2.header.index);
+            link_set_req2 = link_set_req2.setns_by_fd(target_ns_fd);
+            link_set_req2 = link_set_req2.up();
+            link_set_req2.execute().await.map_err(|e| Error::new(ErrorKind::Other,format!("Failed to move {} to namespace {}: {}", name2, edge.target, e)))?;
         }
 
         Ok(cfg)
