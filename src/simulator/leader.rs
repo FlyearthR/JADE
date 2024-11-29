@@ -1,28 +1,21 @@
 pub mod helper;
 
-use futures::executor::block_on;
-use gml_parser::Edge;
 use helper::{Config, TimestampActions};
-use libc::CGROUP2_SUPER_MAGIC;
 use netns_rs::NetNs;
 use network_time_simulator::SIZE_BUFFER;
-use nix::sys::ptrace::Request;
 use posixmq::PosixMq;
-use std::fmt::format;
 use std::io::Result;
 use std::env;
 use std::ffi::{CStr, CString};
 use std::collections::BTreeMap;
-use std::os::fd::{AsFd, AsRawFd};
+use std::os::fd::AsRawFd;
 use std::path::Path;
 use fork::{fork, Fork};
 use nix::unistd::execve;
 use network_time_simulator::{Message, serialize_rust, deserialize_rust, Buffer};
-use futures::{Future, TryStreamExt};
-use netlink_packet_route::link::LinkFlag;
-use rtnetlink::{Handle, new_connection};
+use futures::TryStreamExt;
+use rtnetlink::new_connection;
 use std::io::{Error, ErrorKind};
-use std::{thread, time};
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 enum State {
@@ -130,14 +123,19 @@ impl Simulation {
         }
     }
 
-    //TODO Alix doc
+    /**
+     * Create one namespace for each node and one link for each edge. Attach the interface to
+     * the corresponding namespace and sets the interfaces up
+     * @arg cfg: the configuration of the current simulation
+     * @return: the configuration of the current simulation 
+     **/
     async fn create_namespaces(cfg: Config) -> Result<Config>{
         // Create the namespaces
         for node in cfg.topo.grf.nodes.iter(){
-            if let Ok(ns) = NetNs::get(node.id.to_string()){
+            if let Ok(_) = NetNs::get(node.id.to_string()){
                 eprintln!("Namespace {:?} already exists", node.id);
             }else {
-                let ns = NetNs::new(node.id.to_string()).expect(&format!("Failed to create namespace {:?}", node.id)); //use node id as name
+                NetNs::new(node.id.to_string()).expect(&format!("Failed to create namespace {:?}", node.id)); //use node id as name
             }
         }
 
