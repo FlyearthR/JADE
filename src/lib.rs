@@ -24,6 +24,12 @@ impl From<std::net::Ipv4Addr> for Ipv4AddrC {
         Self::new(ip_array[0], ip_array[1], ip_array[2], ip_array[3])
     }
 }
+impl Into<std::net::Ipv4Addr> for Ipv4AddrC {
+    fn into(self)->std::net::Ipv4Addr{
+        let ip_array = self.octets();
+        std::net::Ipv4Addr::new(ip_array[0], ip_array[1], ip_array[2], ip_array[3])
+    }
+}
 impl From<&str> for Ipv4AddrC {
     fn from(ip: &str) -> Self {
         std::net::Ipv4Addr::from_str(ip).unwrap().into()
@@ -43,7 +49,7 @@ impl From<&String> for Ipv4AddrC {
 #[repr(C)]
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub struct Ipv6AddrC {
-    segments: [u16; 8],
+    pub segments: [u16; 8],
 }
 impl Ipv6AddrC {
     #[no_mangle]
@@ -60,6 +66,14 @@ impl From<std::net::Ipv6Addr> for Ipv6AddrC {
         let ip_array = ip.segments();
         Self::new(ip_array[0], ip_array[1], ip_array[2], ip_array[3],
             ip_array[4], ip_array[5], ip_array[6], ip_array[7])
+    }
+}
+
+impl Into<std::net::Ipv6Addr> for Ipv6AddrC {
+    fn into(self)->std::net::Ipv6Addr{
+        let ip_array = self.segments();
+        std::net::Ipv6Addr::new(ip_array[0], ip_array[1], ip_array[2], ip_array[3],
+            ip_array[4],ip_array[5],ip_array[6],ip_array[7])
     }
 }
 impl From<&str> for Ipv6AddrC {
