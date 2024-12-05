@@ -4,14 +4,13 @@ use fork::{fork, Fork};
 use futures::executor::block_on;
 use futures::TryStreamExt;
 use helper::{Config, TimestampActions};
-use netlink_packet_route::link::{self, LinkMessage};
 use netns_rs::NetNs;
 use network_time_simulator::SIZE_BUFFER;
 use network_time_simulator::{deserialize_rust, serialize_rust, Buffer, Message};
 use nix::unistd::execve;
 use posixmq::PosixMq;
 use rtnetlink::new_connection;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::env;
 use std::ffi::{CStr, CString};
 use std::io::Result;
@@ -93,6 +92,7 @@ pub struct Simulation {
 
 impl Drop for Simulation {
     fn drop(&mut self) {
+        //delete the namespaces
         for node in self.cfg.topo.grf.nodes.iter() {
             if let Ok(ns) = NetNs::get(node.id.to_string()) {
                 if let Err(_err) = ns.remove() {
@@ -131,7 +131,7 @@ impl Simulation {
      * @arg cfg: the configuration of the current simulation
      * @return: the configuration of the current simulation
      **/
-    async fn create_namespaces(mut cfg: Config) -> Result<Config> {
+    async fn create_namespaces(cfg: Config) -> Result<Config> {
         // Create the namespaces
         for node in cfg.topo.grf.nodes.iter() {
             if let Ok(_) = NetNs::get(node.id.to_string()) {
@@ -202,7 +202,7 @@ impl Simulation {
                 )
             })?;
 
-            // Get namespace    
+            // Get namespace
             let source_ns = NetNs::get(edge.source.to_string()).map_err(|e| {
                 Error::new(
                     ErrorKind::Other,
@@ -219,12 +219,13 @@ impl Simulation {
 
             // Get the name space file descriptor
             let source_ns_fd = source_ns.file().as_raw_fd();
-            let target_ns_fd= target_ns.file().as_raw_fd();
+            let target_ns_fd = target_ns.file().as_raw_fd();
 
             // Get ip addresses
             // ipv4
-            let ipv4_source:std::net::Ipv4Addr = cfg
-                .topo.ip4_node
+            let ipv4_source: std::net::Ipv4Addr = cfg
+                .topo
+                .ip4_node
                 .iter()
                 .find_map(|(key, &val)| {
                     if val.0 == edge.source.try_into().unwrap() {
@@ -237,7 +238,7 @@ impl Simulation {
                 .try_into()
                 .unwrap();
 
-            let ipv4_target:Ipv4Addr = cfg
+            let ipv4_target: Ipv4Addr = cfg
                 .topo
                 .ip4_node
                 .iter()
@@ -264,22 +265,24 @@ impl Simulation {
             // println!("{:?}\n\n",cfg.topo.ip4_node);
 
             // ipv6
-            let ipv6_source:Ipv6Addr = cfg
-            .topo.ip6_node
-            .iter()
-            .find_map(|(key, &val)| {
-                if val.0 == edge.source.try_into().unwrap() {
-                    Some(key.clone())
-                } else {
-                    None
-                }
-            })
-            .expect("Source IPv6 address not found")
-            .try_into()
-            .unwrap();
+            let ipv6_source: Ipv6Addr = cfg
+                .topo
+                .ip6_node
+                .iter()
+                .find_map(|(key, &val)| {
+                    if val.0 == edge.source.try_into().unwrap() {
+                        Some(key.clone())
+                    } else {
+                        None
+                    }
+                })
+                .expect("Source IPv6 address not found")
+                .try_into()
+                .unwrap();
 
-            let ipv6_target:Ipv6Addr = cfg
-                .topo.ip6_node
+            let ipv6_target: Ipv6Addr = cfg
+                .topo
+                .ip6_node
                 .iter()
                 .find_map(|(key, &val)| {
                     if val.0 == edge.target.try_into().unwrap() {
@@ -313,14 +316,19 @@ impl Simulation {
                 Error::new(
                     ErrorKind::Other,
                     format!(
-                          "Failed to move {} to namespace {}: {}",
+                        "Failed to move {} to namespace {}: {}",
                         name2, edge.target, e
                     ),
                 )
             })?;
+            
 
             //go to the right namespace
-            source_ns.enter();
+            //this makes the simulation finish by all process being blocked with no more events
+            //todo try with run instead of enter
+            if let Err(e) = source_ns.enter() {
+                println!("Error {:?} when entering the namespace {}", e, edge.source);
+            }
 
             //create new handle
             let (connection_source, handle_source, _) = new_connection().unwrap();
@@ -328,21 +336,36 @@ impl Simulation {
 
             // add the ip address to the interface
             //ipv4
-            let mut addr_req1 =
+            let addr_req1 =
                 handle_source
                     .address()
                     .add(link1.header.index, IpAddr::V4(ipv4_source), 24);
-            block_on(addr_req1.execute());
+            if let Err(e) = block_on(addr_req1.execute()) {
+                println!(
+                    "Error when add the ipv4 to the interface {:?} : {:?}",
+                    name1, e
+                );
+            }
 
             //ipv6
-            let mut addr_req1 =
+            let addr_req1 =
                 handle_source
                     .address()
-                    .add(link1.header.index,IpAddr::V6(ipv6_source),64);
-            block_on(addr_req1.execute());
+                    .add(link1.header.index, IpAddr::V6(ipv6_source), 64);
+            if let Err(e) = block_on(addr_req1.execute()) {
+                println!(
+                    "Error when add the ipv6 to the interface {:?} : {:?}",
+                    name1, e
+                );
+            }
 
             //go to the right namespace
-            target_ns.enter();
+            if let Err(e) = target_ns.enter() {
+                println!(
+                    "Error {:?} when entering the namespace {:?}",
+                    e, edge.target
+                );
+            }
 
             //create new handle
             let (connection_target, handle_target, _) = new_connection().unwrap();
@@ -350,18 +373,28 @@ impl Simulation {
 
             // add the ip address to the interface
             //ipv4
-            let mut addr_req2 =
+            let addr_req2 =
                 handle_target
                     .address()
                     .add(link2.header.index, IpAddr::V4(ipv4_target), 24);
-            block_on(addr_req2.execute());
+            if let Err(e) = block_on(addr_req2.execute()) {
+                println!(
+                    "Error when add the ipv4 to the interface {:?} : {:?}",
+                    name2, e
+                );
+            }
 
             //ipv6
-            let mut addr_req2 =
+            let addr_req2 =
                 handle_target
                     .address()
-                    .add(link2.header.index,IpAddr::V6(ipv6_target),64);
-            block_on(addr_req2.execute());
+                    .add(link2.header.index, IpAddr::V6(ipv6_target), 64);
+            if let Err(e) = block_on(addr_req2.execute()) {
+                println!(
+                    "Error when add the ipv6 to the interface {:?} : {:?}",
+                    name2, e
+                );
+            }
         }
         Ok(cfg)
     }
