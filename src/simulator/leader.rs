@@ -4,7 +4,7 @@ use fork::{fork, Fork};
 use futures::executor::block_on;
 use futures::TryStreamExt;
 use helper::{Config, TimestampActions};
-use netns_rs::NetNs;
+use netns_rs::{NetNs,get_from_current_thread};
 use network_time_simulator::SIZE_BUFFER;
 use network_time_simulator::{deserialize_rust, serialize_rust, Buffer, Message};
 use nix::unistd::execve;
@@ -121,7 +121,7 @@ impl Simulation {
             cfg,
             states: vec![State::Running; nb_f],
             events: btm,
-            qs: Vec::with_capacity(nb_f + 1),
+            qs: Vec::with_capacity(nb_f + 1), 
         }
     }
 
@@ -253,48 +253,6 @@ impl Simulation {
                 .try_into()
                 .unwrap();
 
-            //add the interface index to the topology
-            // cfg.topo.ip4_node.entry(ipv4addrc_source.clone()).and_modify(|e| {
-            //     *e = (edge.source.try_into().unwrap(), link1.header.index.try_into().unwrap());
-            // });
-
-            // cfg.topo.ip4_node.entry(ipv4addrc_target.clone()).and_modify(|e| {
-            //     *e = (edge.target.try_into().unwrap(), link2.header.index.try_into().unwrap());
-            // });
-
-            // println!("{:?}\n\n",cfg.topo.ip4_node);
-
-            // ipv6
-            let ipv6_source: Ipv6Addr = cfg
-                .topo
-                .ip6_node
-                .iter()
-                .find_map(|(key, &val)| {
-                    if val.0 == edge.source.try_into().unwrap() {
-                        Some(key.clone())
-                    } else {
-                        None
-                    }
-                })
-                .expect("Source IPv6 address not found")
-                .try_into()
-                .unwrap();
-
-            let ipv6_target: Ipv6Addr = cfg
-                .topo
-                .ip6_node
-                .iter()
-                .find_map(|(key, &val)| {
-                    if val.0 == edge.target.try_into().unwrap() {
-                        Some(key.clone())
-                    } else {
-                        None
-                    }
-                })
-                .expect("Target IPv6 address not found")
-                .try_into()
-                .unwrap();
-
             // Put the interface in the correspondig namespace and set it up
             let mut link_set_req1 = handle.link().set(link1.header.index);
             link_set_req1 = link_set_req1.setns_by_fd(source_ns_fd);
@@ -348,15 +306,34 @@ impl Simulation {
             }
 
             //ipv6
-            let addr_req1 =
-                handle_source
-                    .address()
-                    .add(link1.header.index, IpAddr::V6(ipv6_source), 64);
-            if let Err(e) = block_on(addr_req1.execute()) {
-                println!(
-                    "Error when add the ipv6 to the interface {:?} : {:?}",
-                    name1, e
-                );
+            let use_ipv6 = cfg.topo.ip6_node.len()!=0;
+
+            if use_ipv6{
+                let ipv6_source: Ipv6Addr = cfg
+                    .topo
+                    .ip6_node
+                    .iter()
+                    .find_map(|(key, &val)| {
+                        if val.0 == edge.source.try_into().unwrap() {
+                            Some(key.clone())
+                        } else {
+                            None
+                        }
+                    })
+                    .expect("Source IPv6 address not found")
+                    .try_into()
+                    .unwrap();
+
+                let addr_req1 =
+                    handle_source
+                        .address()
+                        .add(link1.header.index, IpAddr::V6(ipv6_source), 64);
+                if let Err(e) = block_on(addr_req1.execute()) {
+                    println!(
+                        "Error when add the ipv6 to the interface {:?} : {:?}",
+                        name1, e
+                    );
+                }
             }
 
             //go to the right namespace
@@ -385,15 +362,32 @@ impl Simulation {
             }
 
             //ipv6
-            let addr_req2 =
-                handle_target
-                    .address()
-                    .add(link2.header.index, IpAddr::V6(ipv6_target), 64);
-            if let Err(e) = block_on(addr_req2.execute()) {
-                println!(
-                    "Error when add the ipv6 to the interface {:?} : {:?}",
-                    name2, e
-                );
+            if use_ipv6{
+                let ipv6_target: Ipv6Addr = cfg
+                    .topo
+                    .ip6_node
+                    .iter()
+                    .find_map(|(key, &val)| {
+                        if val.0 == edge.target.try_into().unwrap() {
+                            Some(key.clone())
+                        } else {
+                            None
+                        }
+                    })
+                    .expect("Target IPv6 address not found")
+                    .try_into()
+                    .unwrap();
+
+                let addr_req2 =
+                    handle_target
+                        .address()
+                        .add(link2.header.index, IpAddr::V6(ipv6_target), 64);
+                if let Err(e) = block_on(addr_req2.execute()) {
+                    println!(
+                        "Error when add the ipv6 to the interface {:?} : {:?}",
+                        name2, e
+                    );
+                }
             }
         }
         Ok(cfg)
@@ -408,23 +402,27 @@ impl Simulation {
      * @arg env: the environment to start the follower
      * @return: the pid of the child on success
      **/
-    fn run_follower(&self, id: u8, env: &[&CStr]) -> Result<i32> {
-        match fork() {
-            Ok(Fork::Parent(child)) => Ok(child),
-            Ok(Fork::Child) => {
-                let _ = follower_init_queues(id, self.cfg.nb_follower, &self.cfg._qname);
-                execve(
-                    &self.cfg.exe[(id - 1) as usize].path,
-                    &self.cfg.exe[(id - 1) as usize].args,
-                    env,
-                )?;
-                Ok(0)
+    fn run_follower(&self, id: u8, env: &[&CStr]) -> Result<i32> { 
+        //get namespace 
+        let ns = NetNs::get(id.to_string()).unwrap();
+        ns.run(|_|{
+            match fork() {
+                Ok(Fork::Parent(child)) => Ok(child),
+                Ok(Fork::Child) => {
+                    let _ = follower_init_queues(id, self.cfg.nb_follower, &self.cfg._qname);
+                    execve(
+                        &self.cfg.exe[(id - 1) as usize].path,
+                        &self.cfg.exe[(id - 1) as usize].args,
+                        env,
+                    )?;
+                    Ok(0)
+                }
+                Err(_) => Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    String::from("Fork failed"),
+                )),
             }
-            Err(_) => Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                String::from("Fork failed"),
-            )),
-        }
+        }).unwrap()
     }
 
     /**
