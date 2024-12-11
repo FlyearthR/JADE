@@ -2,17 +2,18 @@ pub mod helper;
 
 use fork::{fork, Fork};
 use futures::executor::block_on;
-use futures::TryStreamExt;
+use futures::{StreamExt, TryStreamExt};
 use helper::{Config, TimestampActions};
-use netns_rs::{NetNs,get_from_current_thread};
+use netns_rs::NetNs;
 use network_time_simulator::SIZE_BUFFER;
 use network_time_simulator::{deserialize_rust, serialize_rust, Buffer, Message};
 use nix::unistd::execve;
 use posixmq::PosixMq;
-use rtnetlink::new_connection;
+use rtnetlink::{new_connection, Handle};
 use std::collections::BTreeMap;
 use std::env;
 use std::ffi::{CStr, CString};
+use std::fs::hard_link;
 use std::io::Result;
 use std::io::{Error, ErrorKind};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
@@ -90,23 +91,25 @@ pub struct Simulation {
     qs: Vec<PosixMq>,
 }
 
+// MARK: simulation : drop
 impl Drop for Simulation {
     fn drop(&mut self) {
         //delete the namespaces
-        for node in self.cfg.topo.grf.nodes.iter() {
-            if let Ok(ns) = NetNs::get(node.id.to_string()) {
-                if let Err(_err) = ns.remove() {
-                    eprintln!("Failed to remove namespace {}", node.id);
-                }
-            } else {
-                eprintln!("Namespace {} doesn't exist", node.id);
-            }
-        }
+        // for node in self.cfg.topo.grf.nodes.iter() {
+        //     if let Ok(ns) = NetNs::get(node.id.to_string()) {
+        //         if let Err(_err) = ns.remove() {
+        //             eprintln!("Failed to remove namespace {}", node.id);
+        //         }
+        //     } else {
+        //         eprintln!("Namespace {} doesn't exist", node.id);
+        //     }
+        // }
         let _ = self.cfg.unlink_queues();
     }
 }
 
 impl Simulation {
+    // MARK: simulation : new
     fn new(cfg: Config) -> Self {
         let nb_f = cfg.nb_follower;
         let _ = cfg.unlink_queues();
@@ -131,6 +134,7 @@ impl Simulation {
      * @arg cfg: the configuration of the current simulation
      * @return: the configuration of the current simulation
      **/
+    // MARK: simulation : create_namespaces
     async fn create_namespaces(cfg: Config) -> Result<Config> {
         // Create the namespaces
         for node in cfg.topo.grf.nodes.iter() {
@@ -143,86 +147,9 @@ impl Simulation {
             }
         }
 
-        let (connection, handle, _) = new_connection().unwrap();
-        tokio::spawn(connection);
-
         // Add the links between the namespaces
         for edge in cfg.topo.grf.edges.iter() {
-            // Interface names
-            // Interface veth_sourceNode_targetNode is the interface of sourceNode that is connected to targetNode
-            let name1 = format!("veth_{}_{}", edge.source, edge.target);
-            let name2 = format!("veth_{}_{}", edge.target, edge.source);
-
-            // Create veth pair
-            let request = handle.link().add().veth(name1.clone(), name2.clone());
-            if let Err(error) = request.execute().await.map_err(|e| format!("{}", e)) {
-                println!("Could not create veth pair: {}", error);
-            }
-
-            // Get interface index
-            let links1: Vec<_> = handle
-                .link()
-                .get()
-                .match_name(name1.clone())
-                .execute()
-                .try_collect()
-                .await
-                .map_err(|e| {
-                    Error::new(
-                        ErrorKind::Other,
-                        format!("Failed to get interface information: {}", e),
-                    )
-                })?;
-
-            let link1 = links1.into_iter().next().ok_or_else(|| {
-                Error::new(
-                    ErrorKind::NotFound,
-                    format!("Interface {} not found", name1),
-                )
-            })?;
-
-            let links2: Vec<_> = handle
-                .link()
-                .get()
-                .match_name(name2.clone())
-                .execute()
-                .try_collect()
-                .await
-                .map_err(|e| {
-                    Error::new(
-                        ErrorKind::Other,
-                        format!("Failed to get interface information: {}", e),
-                    )
-                })?;
-
-            let link2 = links2.into_iter().next().ok_or_else(|| {
-                Error::new(
-                    ErrorKind::NotFound,
-                    format!("Interface {} not found", name1),
-                )
-            })?;
-
-            // Get namespace
-            let source_ns = NetNs::get(edge.source.to_string()).map_err(|e| {
-                Error::new(
-                    ErrorKind::Other,
-                    format!("Failed to get source namespace: {}", e),
-                )
-            })?;
-
-            let target_ns = NetNs::get(edge.target.to_string()).map_err(|e| {
-                Error::new(
-                    ErrorKind::Other,
-                    format!("Failed to get target namespace: {}", e),
-                )
-            })?;
-
-            // Get the name space file descriptor
-            let source_ns_fd = source_ns.file().as_raw_fd();
-            let target_ns_fd = target_ns.file().as_raw_fd();
-
-            // Get ip addresses
-            // ipv4
+            
             let ipv4_source: std::net::Ipv4Addr = cfg
                 .topo
                 .ip4_node
@@ -253,62 +180,17 @@ impl Simulation {
                 .try_into()
                 .unwrap();
 
-            // Put the interface in the correspondig namespace and set it up
-            let mut link_set_req1 = handle.link().set(link1.header.index);
-            link_set_req1 = link_set_req1.setns_by_fd(source_ns_fd);
-            link_set_req1 = link_set_req1.up();
-            link_set_req1.execute().await.map_err(|e| {
-                Error::new(
-                    ErrorKind::Other,
-                    format!(
-                        "Failed to move {} to namespace {}: {}",
-                        name1, edge.source, e
-                    ),
-                )
-            })?;
-
-            let mut link_set_req2 = handle.link().set(link2.header.index);
-            link_set_req2 = link_set_req2.setns_by_fd(target_ns_fd);
-            link_set_req2 = link_set_req2.up();
-            link_set_req2.execute().await.map_err(|e| {
-                Error::new(
-                    ErrorKind::Other,
-                    format!(
-                        "Failed to move {} to namespace {}: {}",
-                        name2, edge.target, e
-                    ),
-                )
-            })?;
-            
-
-            //go to the right namespace
-            //this makes the simulation finish by all process being blocked with no more events
-            //todo try with run instead of enter
-            if let Err(e) = source_ns.enter() {
-                println!("Error {:?} when entering the namespace {}", e, edge.source);
-            }
-
-            //create new handle
-            let (connection_source, handle_source, _) = new_connection().unwrap();
-            tokio::spawn(connection_source);
-
-            // add the ip address to the interface
-            //ipv4
-            let addr_req1 =
-                handle_source
-                    .address()
-                    .add(link1.header.index, IpAddr::V4(ipv4_source), 24);
-            if let Err(e) = block_on(addr_req1.execute()) {
-                println!(
-                    "Error when add the ipv4 to the interface {:?} : {:?}",
-                    name1, e
-                );
-            }
-
-            //ipv6
-            let use_ipv6 = cfg.topo.ip6_node.len()!=0;
-
-            if use_ipv6{
+            if cfg.topo.ip6_node.len()==0{
+                if let Err(e) = block_on(Self::add_link(
+                    edge.source.try_into().unwrap(), 
+                    edge.target.try_into().unwrap(),
+                    ipv4_source,
+                    Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0),
+                    ipv4_target,
+                    Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0))){
+                        println!("Error {} : could not create link between {:?} and {:?}",e,edge.source,edge.target);
+                    }
+            }else{
                 let ipv6_source: Ipv6Addr = cfg
                     .topo
                     .ip6_node
@@ -324,46 +206,7 @@ impl Simulation {
                     .try_into()
                     .unwrap();
 
-                let addr_req1 =
-                    handle_source
-                        .address()
-                        .add(link1.header.index, IpAddr::V6(ipv6_source), 64);
-                if let Err(e) = block_on(addr_req1.execute()) {
-                    println!(
-                        "Error when add the ipv6 to the interface {:?} : {:?}",
-                        name1, e
-                    );
-                }
-            }
-
-            //go to the right namespace
-            if let Err(e) = target_ns.enter() {
-                println!(
-                    "Error {:?} when entering the namespace {:?}",
-                    e, edge.target
-                );
-            }
-
-            //create new handle
-            let (connection_target, handle_target, _) = new_connection().unwrap();
-            tokio::spawn(connection_target);
-
-            // add the ip address to the interface
-            //ipv4
-            let addr_req2 =
-                handle_target
-                    .address()
-                    .add(link2.header.index, IpAddr::V4(ipv4_target), 24);
-            if let Err(e) = block_on(addr_req2.execute()) {
-                println!(
-                    "Error when add the ipv4 to the interface {:?} : {:?}",
-                    name2, e
-                );
-            }
-
-            //ipv6
-            if use_ipv6{
-                let ipv6_target: Ipv6Addr = cfg
+                    let ipv6_target: Ipv6Addr = cfg
                     .topo
                     .ip6_node
                     .iter()
@@ -378,19 +221,351 @@ impl Simulation {
                     .try_into()
                     .unwrap();
 
-                let addr_req2 =
-                    handle_target
-                        .address()
-                        .add(link2.header.index, IpAddr::V6(ipv6_target), 64);
-                if let Err(e) = block_on(addr_req2.execute()) {
+                if let Err(e) = block_on(Self::add_link(
+                    edge.source.try_into().unwrap(), 
+                    edge.target.try_into().unwrap(),
+                    ipv4_source,
+                    ipv6_source,
+                    ipv4_target,
+                    ipv6_target)){
+                        println!("Error {} : could not create link between {:?} and {:?}",e,edge.source,edge.target);
+                    }
+            }
+        }
+        Ok(cfg)
+    }
+
+    // MARK: simulation : add_link
+    #[allow(dead_code)]
+    /*
+     * add a link between name space id_source_namespace and id_target_namespace, 
+     * sets the interfaces up and adds the ipv4 and ipv6 provided to the interfaces
+     * @arg id_source_namespace: id of the source namespace of the link
+     * @arg id_target_namespace: id of the target namespace of the link
+     * @arg ipv4_source: ipv4 that must be attached to the source interface. 0.0.0.0 if no ipv4 must be attached 
+     * @arg ipv6_source: ipv6 that must be attached to the source interface. 0:0:0:0:0:0:0:0 if no ipv6 must be attached  
+     * @arg ipv4_target: ipv4 that must be attached to the target interface. 0.0.0.0 if no ipv4 must be attached
+     * @arg ipv6_target: ipv6 that must be attached to the target interface. 0:0:0:0:0:0:0:0 if no ipv6 must be attached 
+     * @return: 0 on success
+     */
+    async fn add_link(id_source_namespace: u8, id_target_namespace: u8, ipv4_source:Ipv4Addr,ipv6_source:Ipv6Addr,ipv4_target:Ipv4Addr,ipv6_target:Ipv6Addr)->Result<i32>{
+
+        let (connection, handle, _) = new_connection().unwrap();
+        tokio::spawn(connection);
+        
+        // Interface names
+        // Interface veth_sourceNode_targetNode is the interface of sourceNode that is connected to targetNode
+        let name_interface1 = format!("veth_{}_{}", id_source_namespace, id_target_namespace);
+        let name_interface2= format!("veth_{}_{}", id_target_namespace, id_source_namespace);
+
+        // Create veth pair
+        let request = handle.link().add().veth(name_interface1.clone(), name_interface2.clone());
+        if let Err(error) = request.execute().await.map_err(|e| format!("{}", e)) {
+            println!("Could not create veth pair: {}", error);
+        }
+
+        // Get interface index
+        let links1: Vec<_> = handle
+            .link()
+            .get()
+            .match_name(name_interface1.clone())
+            .execute()
+            .try_collect()
+            .await
+            .map_err(|e| {
+                Error::new(
+                    ErrorKind::Other,
+                    format!("Failed to get interface information: {}", e),
+                )
+            })?;
+
+        let link1 = links1.into_iter().next().ok_or_else(|| {
+            Error::new(
+                ErrorKind::NotFound,
+                format!("Interface {} not found", name_interface1),
+            )
+        })?;
+
+        let links2: Vec<_> = handle
+            .link()
+            .get()
+            .match_name(name_interface2.clone())
+            .execute()
+            .try_collect()
+            .await
+            .map_err(|e| {
+                Error::new(
+                    ErrorKind::Other,
+                    format!("Failed to get interface information: {}", e),
+                )
+            })?;
+
+        let link2 = links2.into_iter().next().ok_or_else(|| {
+            Error::new(
+                ErrorKind::NotFound,
+                format!("Interface {} not found", name_interface2),
+            )
+        })?;
+
+        // Get namespace
+        let source_ns = NetNs::get(id_source_namespace.to_string()).map_err(|e| {
+            Error::new(
+                ErrorKind::Other,
+                format!("Failed to get source namespace: {}", e),
+            )
+        })?;
+
+        let target_ns = NetNs::get(id_target_namespace.to_string()).map_err(|e| {
+            Error::new(
+                ErrorKind::Other,
+                format!("Failed to get target namespace: {}", e),
+            )
+        })?;
+
+        // Get the name space file descriptor
+        let source_ns_fd = source_ns.file().as_raw_fd();
+        let target_ns_fd = target_ns.file().as_raw_fd();
+
+        // Put the interface in the right 
+        // Put the interface in the correspondig namespace and set it up
+        let mut link_set_req1 = handle.link().set(link1.header.index);
+        link_set_req1 = link_set_req1.setns_by_fd(source_ns_fd);
+        link_set_req1.execute().await.map_err(|e| {
+            Error::new(
+                ErrorKind::Other,
+                format!(
+                    "Failed to move {} to namespace {}: {}",
+                    name_interface1, id_source_namespace, e
+                ),
+            )
+        }).unwrap();
+
+        let mut link_set_req2 = handle.link().set(link2.header.index);
+        link_set_req2 = link_set_req2.setns_by_fd(target_ns_fd);
+        link_set_req2.execute().await.map_err(|e| {
+            Error::new(
+                ErrorKind::Other,
+                format!(
+                    "Failed to move {} to namespace {}: {}",
+                    name_interface2, id_target_namespace, e
+                ),
+            )
+        }).unwrap();
+
+        //set both interface up
+        Self::set_interface_up(id_source_namespace, id_target_namespace, ipv4_source, ipv6_source).await;
+        Self::set_interface_up(id_target_namespace, id_source_namespace, ipv4_target, ipv6_target).await;
+        Ok(0)
+    }
+
+    // MARK: simulation : remove_link
+    /*
+     * delete the link between namespace id_source_namespace and namespace id_target_namespace
+     * @arg id_source_namespace: id of the source namespace of the link
+     * @arg id_target_namespace: id of the target namespace of the link
+     */
+    #[allow(dead_code)]
+    async fn delete_link(id_source_namespace: u8, id_target_namespace: u8){
+        // Interface names
+        // Interface veth_sourceNode_targetNode is the interface of sourceNode that is connected to targetNode
+        let name_interface = format!("veth_{}_{}", id_source_namespace, id_target_namespace);
+
+        let source_ns = match NetNs::get(id_source_namespace.to_string()) {
+            Ok(ns) => ns,
+            Err(e) => {
+                eprintln!(
+                    "Failed to get source namespace for ID {}: {}",
+                    id_source_namespace, e
+                );
+                return;
+            }
+        };
+
+        // Go to the right namespace
+        if let Err(e) = source_ns.enter() {
+            println!("Error {:?} when entering the namespace {}", e, id_source_namespace);
+        }
+
+        // Create new handle
+        let (connection, handle, _) = new_connection().unwrap();
+        tokio::spawn(connection);
+        
+        let mut links = handle.link().get().match_name(name_interface.clone()).execute();
+
+        if let Some(link) = links.try_next().await.expect("Error while fetching links") {
+            let link_idx = link.header.index;
+            match handle.link().del(link_idx).execute().await {
+                Ok(_) => println!("Successfully deleted the link {}", name_interface),
+                Err(e) => eprintln!("Failed to delete the link {}: {}", name_interface, e),
+            }
+        } else {
+            eprintln!("No link found with name {}", name_interface);
+        }
+    }
+
+    // MARK: simulation : set_link_up
+    /*
+     * set the interface "veth_id_source_namespace_id_target_namespace" up 
+     * and attributes the ipv4 and ipv6 to the interface
+     * @arg id_source_namespace: id of the namespace to which the interface is attached
+     * @arg id_target_namespace: id of the namespace to which the link goes
+     * @arg ipv4 : ipv4 to attach to the interface 0.0.0.0 if no ipv6 must be attached
+     * @arg ipv6 : ipv6 to attach to the interface 0:0:0:0:0:0:0:0 if no ipv6 must be attached
+     */
+    #[allow(dead_code)]
+    async fn set_interface_up(id_source_namespace: u8, id_target_namespace: u8, ipv4:Ipv4Addr,ipv6:Ipv6Addr){
+
+        // Interface names
+        // Interface veth_sourceNode_targetNode is the interface of sourceNode that is connected to targetNode
+        let name_interface = format!("veth_{}_{}", id_source_namespace, id_target_namespace);
+
+        // Get namespace
+        let source_ns = NetNs::get(id_source_namespace.to_string()).map_err(|e| {
+            Error::new(
+                ErrorKind::Other,
+                format!("Failed to get source namespace: {}", e),
+            )
+        }).unwrap();
+
+        // Go to the right namespace
+        if let Err(e) = source_ns.enter() {
+            println!("Error {:?} when entering the namespace {}", e, id_source_namespace);
+        }
+
+        // Create new handle
+        let (connection, handle, _) = new_connection().unwrap();
+        tokio::spawn(connection);
+
+        // Get interface idx
+        let links1: Vec<_> = handle
+            .link()
+            .get()
+            .match_name(name_interface.clone())
+            .execute()
+            .try_collect()
+            .await
+            .map_err(|e| {
+                Error::new(
+                    ErrorKind::Other,
+                    format!("Failed to get interface information: {}", e),
+                )
+            }).unwrap();
+
+        let link1 = links1.into_iter().next().ok_or_else(|| {
+            Error::new(
+                ErrorKind::NotFound,
+                format!("Interface {} not found", name_interface),
+            )
+        }).unwrap();
+
+        let interface_idx = link1.header.index;
+
+        //set interface up
+        if let Err(e) = handle.link().set(interface_idx).up().execute().await{
+            println!("Error {:?} could not set the interface {} up",e,interface_idx);
+        }
+        
+        // Is there an ipv4 to add
+        if !ipv4.is_unspecified(){
+            let mut has_ipv4 = false;
+
+            // Retrieve the address associated with the interface
+            let mut addresses = handle.address().get().set_link_index_filter(interface_idx).execute();
+
+            let addr_msg = addresses.try_next().await.unwrap();
+            if addr_msg != None{
+                if addr_msg.unwrap().attributes.contains(&netlink_packet_route::address::AddressAttribute::Address(IpAddr::V4(ipv4))){
+                    has_ipv4 = true;
+                }
+                
+                
+            }
+            if !has_ipv4{
+                let addr_req =
+                    handle
+                    .address()
+                    .add(link1.header.index, IpAddr::V4(ipv4), 24);
+                if let Err(e) = addr_req.execute().await {
                     println!(
-                        "Error when add the ipv6 to the interface {:?} : {:?}",
-                        name2, e
+                        "Error when adding the ipv4 to the interface {:?} : {:?}",
+                        name_interface, e
                     );
                 }
             }
         }
-        Ok(cfg)
+
+        if !ipv6.is_unspecified(){
+            let addr_req =
+                handle
+                .address()
+                .add(interface_idx, IpAddr::V6(ipv6), 64);
+            if let Err(e) = addr_req.execute().await {
+                println!(
+                    "Error when add the ipv6 to the interface {:?} : {:?}",
+                    name_interface, e
+                );
+            }
+        }
+
+    }
+
+    // MARK: simulation : set_link_down
+    /*
+     * set the interface "veth_id_source_namespace_id_target_namespace" down
+     * @arg id_source_namespace: id of the namespace to which the interface is attached
+     * @arg id_target_namespace: id of the namespace to which the link goes
+     */
+    #[allow(dead_code)]
+    async fn set_interface_down(id_source_namespace:u8, id_target_namespace:u8){
+        // Interface names
+        // Interface veth_sourceNode_targetNode is the interface of sourceNode that is connected to targetNode
+        let name_interface = format!("veth_{}_{}", id_source_namespace, id_target_namespace);
+
+        // Get namespace
+        let source_ns = NetNs::get(id_source_namespace.to_string()).map_err(|e| {
+            Error::new(
+                ErrorKind::Other,
+                format!("Failed to get source namespace: {}", e),
+            )
+        }).unwrap();
+
+        // Go to the right namespace
+        if let Err(e) = source_ns.enter() {
+            println!("Error {:?} when entering the namespace {}", e, id_source_namespace);
+        }
+
+        // Create new handle
+        let (connection, handle, _) = new_connection().unwrap();
+        tokio::spawn(connection);
+
+        // Get interface idx
+        let links1: Vec<_> = handle
+            .link()
+            .get()
+            .match_name(name_interface.clone())
+            .execute()
+            .try_collect()
+            .await
+            .map_err(|e| {
+                Error::new(
+                    ErrorKind::Other,
+                    format!("Failed to get interface information: {}", e),
+                )
+            }).unwrap();
+
+        let link1 = links1.into_iter().next().ok_or_else(|| {
+            Error::new(
+                ErrorKind::NotFound,
+                format!("Interface {} not found", name_interface),
+            )
+        }).unwrap();
+
+        let interface_idx = link1.header.index;
+
+        //set interface down
+        if let Err(e) = handle.link().set(interface_idx).down().execute().await{
+            println!("Error {:?} could not set the interface {} up",e,interface_idx);
+        }
     }
 
     /**
@@ -476,6 +651,7 @@ impl Simulation {
             }
             Message::GetRand(id) => {
                 //println!("Getting random for node {}", id);
+                //TODO Alix: faire qqc de plus intelligent 
                 let msg = serialize_rust(Message::WakeUp(self.cfg.random_number));
                 self.qs[id as usize].send(2, &msg.buffer)?;
             }
