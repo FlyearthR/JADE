@@ -10,15 +10,17 @@ use network_time_simulator::{deserialize_rust, serialize_rust, Buffer, Message};
 use nix::unistd::execve;
 use posixmq::PosixMq;
 use rtnetlink::{new_connection, Handle};
-use std::collections::BTreeMap;
+use rand::rngs::SmallRng;
+use rand::{Rng, SeedableRng};
+use std::collections::{BTreeMap, HashMap};
 use std::env;
 use std::ffi::{CStr, CString};
-use std::fs::hard_link;
 use std::io::Result;
 use std::io::{Error, ErrorKind};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::os::fd::AsRawFd;
 use std::path::Path;
+
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 enum State {
@@ -89,21 +91,22 @@ pub struct Simulation {
     states: Vec<State>,
     events: BTreeMap<u64, TimestampActions>,
     qs: Vec<PosixMq>,
+    counters: HashMap<usize,(u64,u64)> //val = (counter,seed)
 }
 
 // MARK: simulation : drop
 impl Drop for Simulation {
     fn drop(&mut self) {
         //delete the namespaces
-        // for node in self.cfg.topo.grf.nodes.iter() {
-        //     if let Ok(ns) = NetNs::get(node.id.to_string()) {
-        //         if let Err(_err) = ns.remove() {
-        //             eprintln!("Failed to remove namespace {}", node.id);
-        //         }
-        //     } else {
-        //         eprintln!("Namespace {} doesn't exist", node.id);
-        //     }
-        // }
+        for node in self.cfg.topo.grf.nodes.iter() {
+            if let Ok(ns) = NetNs::get(node.id.to_string()) {
+                if let Err(_err) = ns.remove() {
+                    eprintln!("Failed to remove namespace {}", node.id);
+                }
+            } else {
+                eprintln!("Namespace {} doesn't exist", node.id);
+            }
+        }
         let _ = self.cfg.unlink_queues();
     }
 }
@@ -119,12 +122,15 @@ impl Simulation {
             .expect("Failed to create runtime")
             .block_on(Self::create_namespaces(cfg))
             .expect("Failed to create namespaces");
+        let mut c = HashMap::with_capacity(nb_f);
+        for i in 0..nb_f{c.insert(i+1, (1,0));}
 
         Self {
             cfg,
             states: vec![State::Running; nb_f],
             events: btm,
             qs: Vec::with_capacity(nb_f + 1), 
+            counters: c,
         }
     }
 
@@ -649,11 +655,29 @@ impl Simulation {
                 let msg = serialize_rust(Message::WakeUp(current_time));
                 self.qs[id as usize].send(2, &msg.buffer)?;
             }
-            Message::GetRand(id) => {
-                //println!("Getting random for node {}", id);
-                //TODO Alix: faire qqc de plus intelligent 
-                let msg = serialize_rust(Message::WakeUp(self.cfg.random_number));
+            Message::GetRand(id,seed) => {
+                println!("Getting random for node {} with seed {}", id, seed);
+                
+
+                // Random with seed.
+                if seed == self.counters.get(&usize::from(id)).unwrap().1{
+                    self.counters.entry(usize::from(id)).and_modify(|x|x.0+=1);
+                }else{
+                    self.counters.entry(usize::from(id)).and_modify(|x|{x.0=1;x.1=seed;});
+                }
+                let counter:u64 = self.counters.get(&usize::from(id)).unwrap().0;
+                let computed_seed = u64::from(id)*seed*counter;
+                let mut rng = SmallRng::seed_from_u64(computed_seed);
+
+                let random_num:u64 = rng.gen();
+
+                println!("random num : {} from computed seed {} and counter {}",random_num,computed_seed, counter);
+                let msg = serialize_rust(Message::WakeUp(random_num));
                 self.qs[id as usize].send(2, &msg.buffer)?;
+
+                // old
+                // let msg = serialize_rust(Message::WakeUp(self.cfg.random_number));
+                // self.qs[id as usize].send(2, &msg.buffer)?;
             }
             Message::Finished(id) => {
                 //println!("Node {} has finished", id);
@@ -864,6 +888,7 @@ fn main() {
 
 #[cfg(test)]
 mod unit_testing {
+    use libc::srand;
     use ntest::timeout;
     use posixmq::PosixMq;
     use serial_test::{parallel, serial};
@@ -1125,8 +1150,9 @@ mod unit_testing {
         assert_eq!(deserialize_rust(serialize_rust(GetTime(42))), GetTime(42));
         assert_ne!(deserialize_rust(serialize_rust(GetTime(42))), GetTime(43));
 
-        assert_eq!(deserialize_rust(serialize_rust(GetRand(42))), GetRand(42));
-        assert_ne!(deserialize_rust(serialize_rust(GetRand(42))), GetRand(43));
+        assert_eq!(deserialize_rust(serialize_rust(GetRand(42,0))), GetRand(42,0));
+        assert_ne!(deserialize_rust(serialize_rust(GetRand(42,0))), GetRand(43,0));
+        assert_ne!(deserialize_rust(serialize_rust(GetRand(42,0))), GetRand(42,1));
 
         assert_eq!(deserialize_rust(serialize_rust(WakeUp(42))), WakeUp(42));
         assert_ne!(deserialize_rust(serialize_rust(WakeUp(42))), WakeUp(43));
@@ -1153,7 +1179,7 @@ mod unit_testing {
             Sent(1, 42),
             DelStep(42, 42),
             GetTime(42),
-            GetRand(42),
+            GetRand(42,0),
             Finished(42),
         ];
 
@@ -1306,6 +1332,50 @@ mod unit_testing {
             assert!(false);
         }
     }
+
+    // MARK: test random
+    #[test]
+    fn test_random(){
+        let mut sim = Simulation::new(Config::default_config());
+
+        sim.leader_init_queues().expect("leader queues creating");
+        let qf1 =
+            follower_init_queues(1, 2, &"/nts_test".to_string()).expect("creating follower queues");
+
+        let qf2 =
+            follower_init_queues(2, 2, &"/nts_test".to_string()).expect("creating follower queues");
+
+        let t = thread::spawn(move || sim.main_loop());
+        let mut msg: Buffer = Buffer::new();
+
+        qf1.0.recv(&mut msg.buffer).unwrap();
+        qf2.0.recv(&mut msg.buffer).unwrap();
+
+        qf1.1.send(1, &serialize_rust(GetRand(1, 34)).buffer).expect("send get_rand failed");
+        let mut a = Buffer::new();
+        qf1.0.recv(&mut a.buffer).unwrap();
+        qf1.1.send(1, &serialize_rust(GetRand(1, 34)).buffer).expect("send get_rand failed");
+        let mut b = Buffer::new();
+        qf1.0.recv(&mut b.buffer).unwrap();
+        assert_ne!(deserialize_rust(a),deserialize_rust(b));
+        qf2.1.send(1, &serialize_rust(GetRand(2, 34)).buffer).expect("send get_rand failed");
+        let mut c = Buffer::new();
+        qf2.0.recv(&mut c.buffer).unwrap();
+        assert_ne!(deserialize_rust(a),deserialize_rust(c));
+        qf1.1.send(1, &serialize_rust(GetRand(1, 52)).buffer).expect("send get_rand failed");
+        let mut d = Buffer::new();
+        qf1.0.recv(&mut d.buffer).unwrap();
+        assert_ne!(deserialize_rust(a),deserialize_rust(d));
+        qf1.1.send(1, &serialize_rust(GetRand(1, 34)).buffer).expect("send get_rand failed");
+        let mut e = Buffer::new();
+        qf1.0.recv(&mut e.buffer).unwrap();
+        qf1.1.send(1, &serialize_rust(GetRand(1, 34)).buffer).expect("send get_rand failed");
+        let mut f = Buffer::new();
+        qf1.0.recv(&mut f.buffer).unwrap();
+        assert_eq!(deserialize_rust(a),deserialize_rust(e));
+        assert_eq!(deserialize_rust(b),deserialize_rust(f));
+    }
+
 }
 
 #[cfg(test)]

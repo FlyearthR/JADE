@@ -128,7 +128,7 @@ pub enum Message {
     Send(u64),                          // 6
     Sent(u8, u64),                      // 7
     GetTime(u8),                        // 8
-    GetRand(u8),                        // 9
+    GetRand(u8,u64),                        // 9
     WakeUp(u64),                        // 10
     Finished(u8),                       // 11
 }
@@ -220,9 +220,15 @@ impl From<Message> for Buffer {
                 tab[0] = 8;
                 tab[1] = id;
             },
-            Message::GetRand(id) => {
+            Message::GetRand(id,seed) => {
                 tab[0] = 9;
                 tab[1] = id;
+                let tt = seed.to_ne_bytes();
+                let mut i = 0;
+                while i < 8 {
+                    tab[i+2] = tt[i];
+                    i = i + 1;
+                }
             },
             Message::WakeUp(t) => {
                 tab[0] = 10;
@@ -281,7 +287,7 @@ impl Into<Message> for Buffer {
                 Message::GetTime(self.buffer[1])
             },
             9 => {
-                Message::GetRand(self.buffer[1])
+                Message::GetRand(self.buffer[1],u64::from_ne_bytes(self.buffer[2..10].try_into().unwrap()))
             },
             10 => {
                 Message::WakeUp(u64::from_ne_bytes(self.buffer[2..10].try_into().unwrap()))
