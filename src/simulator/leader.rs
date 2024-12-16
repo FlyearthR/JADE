@@ -2,14 +2,14 @@ pub mod helper;
 
 use fork::{fork, Fork};
 use futures::executor::block_on;
-use futures::{StreamExt, TryStreamExt};
+use futures::TryStreamExt;
 use helper::{Config, TimestampActions};
 use netns_rs::NetNs;
 use network_time_simulator::SIZE_BUFFER;
 use network_time_simulator::{deserialize_rust, serialize_rust, Buffer, Message};
 use nix::unistd::execve;
 use posixmq::PosixMq;
-use rtnetlink::{new_connection, Handle};
+use rtnetlink::new_connection;
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 use std::collections::{BTreeMap, HashMap};
@@ -656,7 +656,7 @@ impl Simulation {
                 self.qs[id as usize].send(2, &msg.buffer)?;
             }
             Message::GetRand(id,seed) => {
-                println!("Getting random for node {} with seed {}", id, seed);
+                // println!("Getting random for node {} with seed {}", id, seed);
                 
 
                 // Random with seed.
@@ -671,7 +671,7 @@ impl Simulation {
 
                 let random_num:u64 = rng.gen();
 
-                println!("random num : {} from computed seed {} and counter {}",random_num,computed_seed, counter);
+                // println!("random num : {} from computed seed {} and counter {}",random_num,computed_seed, counter);
                 let msg = serialize_rust(Message::WakeUp(random_num));
                 self.qs[id as usize].send(2, &msg.buffer)?;
 
@@ -689,7 +689,13 @@ impl Simulation {
             }
             Message::HasToSend4(id, if_id, ip, pkt_id) => {
                 //println!("Node {} has to send packet {} via {} to {:?}", id, pkt_id, if_id, ip);
-                let timestamp = current_time + self.cfg.topo.get_delay_v4(id, if_id, &ip).unwrap();
+                // self.cfg.topo.get_jitter(self.cfg.random_number,self.cfg.n_use_random_number);
+                
+
+                let timestamp = current_time + self.cfg.topo.get_delay_v4(id, if_id, &ip).unwrap() 
+                    + self.cfg.topo.get_jitter(self.cfg.random_number,self.cfg.n_use_random_number,&self.cfg.jitter_distribution).unwrap()*self.cfg.jitter_coef;
+                // println!("timestamp : {}",timestamp);
+                self.cfg.n_use_random_number += 1;
                 if let Some(x) = self.events.get_mut(&timestamp) {
                     x.add_packet(id, pkt_id);
                 } else {
@@ -698,7 +704,10 @@ impl Simulation {
                 }
             }
             Message::HasToSend6(id, if_id, ip, pkt_id) => {
-                let timestamp = current_time + self.cfg.topo.get_delay_v6(id, if_id, &ip).unwrap();
+                let timestamp = current_time + self.cfg.topo.get_delay_v6(id, if_id, &ip).unwrap() 
+                    + self.cfg.topo.get_jitter(self.cfg.random_number,self.cfg.n_use_random_number,&self.cfg.jitter_distribution).unwrap()*self.cfg.jitter_coef;
+                // println!("timestamp : {}",timestamp);
+                self.cfg.n_use_random_number += 1;
                 if let Some(x) = self.events.get_mut(&timestamp) {
                     x.add_packet(id, pkt_id);
                 } else {
@@ -1657,6 +1666,9 @@ mod determinism {
                 _qname: QNAME.to_string(),
                 exe: processes,
                 random_number: RANDOM_NUMBER,
+                n_use_random_number: 0,
+                jitter_distribution: "poisson".to_string(),
+                jitter_coef: 10,
                 topo: NetworkTopology::test_topo(nb),
             };
         }

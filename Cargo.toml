@@ -30,6 +30,7 @@ futures = "0.3.31"
 netlink-packet-route = "0.19.0"
 tokio = {version = "1", features = ["full"]}
 test-log = "0.2.16"
+rand_distr = "0.4.3"
 
 [profile.dev]
 panic = "abort"

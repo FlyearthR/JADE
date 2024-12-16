@@ -1,4 +1,7 @@
 use network_time_simulator::{Ipv4AddrC, Ipv6AddrC};
+use rand::rngs::SmallRng;
+use rand::SeedableRng;
+use rand_distr::{Poisson, Normal, Distribution};
 use std::fs;
 use std::collections::{BTreeMap, HashMap};
 use std::ffi::{CStr, CString};
@@ -8,6 +11,8 @@ use toml::de::Error as TomlError;
 use toml::Value;
 use gml_parser::{Edge, GMLObject, GMLValue, Graph, HasGMLAttributes, ReadableGMLAttributes};
 
+//TODO add in config file
+static JITTER_DISTRIBUTION: &str = "poisson";
 
 pub fn cstringify(arr: &[&CStr]) -> Vec<CString> {
     let mut ret: Vec<CString> = Vec::with_capacity(arr.len());
@@ -122,6 +127,27 @@ graph [
     }
 
     #[allow(dead_code)]
+    pub fn get_jitter(&self, random_number:u64, n_use_random_number:u64, distribution:&str) -> std::result::Result<u64, &str>{
+        let mut rng = SmallRng::seed_from_u64(random_number+n_use_random_number);
+        match distribution{ // todo init distribution somewhere else ?
+            "poisson" => {
+                let poisson_distr = Poisson::new(2.0).unwrap(); 
+                let jitter = poisson_distr.sample(&mut rng);
+                // println!("jitter : {}", jitter);
+                Ok(jitter as u64)
+            }
+            "normal" => {
+                let normal_distr = Normal::new(0.0, 3.0).map_err(|_| "Invalid parameters for Normal distribution")?;
+                let jitter = normal_distr.sample(&mut rng);
+                // println!("jitter : {}", jitter);
+                Ok(jitter as u64)
+            }
+            _ => Err("Choose one of the following distribution for jitter : poisson or normal"),
+        }
+        
+    }
+
+    #[allow(dead_code)]
     pub fn get_delay_v4(&self, id_src: u8, id_if_src: u8, addr_dst: &Ipv4AddrC) -> Option<u64> {
         if let Some(peer) = self.ip4_node.get(addr_dst) {
             self.get_delay(*peer, id_src, id_if_src)
@@ -196,6 +222,9 @@ pub struct Config { //TODO : here objet config
     pub _qname: String,
     pub exe: Vec<Process>,
     pub random_number: u64,
+    pub n_use_random_number: u64,
+    pub jitter_distribution: String, //"poisson" or "normal"
+    pub jitter_coef: u64,
     pub topo: NetworkTopology,
 }
 
@@ -215,6 +244,9 @@ impl Config {
             exe: vec![Process::new(CString::from(c"name"), CString::from(EXE_NAMES[0]),cstringify(&EXE1_ARGS)),
                         Process::new(CString::from(c"name"), CString::from(EXE_NAMES[1]), cstringify(&EXE2_ARGS))],
             random_number: RANDOM_NUMBER,
+            n_use_random_number: 0,
+            jitter_distribution: JITTER_DISTRIBUTION.to_string(),
+            jitter_coef: 10, //TODO change
             topo: NetworkTopology::new(),
         }
     }
@@ -243,6 +275,8 @@ impl Config {
         }
 
         let random_number = value.get("random_number").and_then(Value::as_integer).unwrap_or(0) as u64;
+        let n_use_random_number = 0 as u64;
+        let jitter_coef = 10; // TODO change
         if let Some(topo_path) = value.get("graph").and_then(Value::as_str) {
             let topo =  NetworkTopology::from_graph(Graph::from_gml(
                                         GMLObject::from_str(
@@ -254,6 +288,9 @@ impl Config {
                 _qname,
                 exe,
                 random_number,
+                n_use_random_number,
+                jitter_distribution: JITTER_DISTRIBUTION.to_string(),
+                jitter_coef: jitter_coef,
                 topo,
             });
             
@@ -263,6 +300,9 @@ impl Config {
             _qname,
             exe,
             random_number,
+            n_use_random_number,
+            jitter_distribution: JITTER_DISTRIBUTION.to_string(),
+            jitter_coef: jitter_coef,
             topo: NetworkTopology::new(),
         })
 
