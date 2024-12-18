@@ -217,12 +217,12 @@ impl Process {
 }
 
 #[derive(Debug)]
-pub struct Config { //TODO : here objet config
+pub struct Config {
     pub nb_follower: usize,
     pub _qname: String,
     pub exe: Vec<Process>,
     pub random_number: u64,
-    pub n_use_random_number: u64,
+    pub n_use_random_number: Vec<u64>,
     pub jitter_distribution: String, //"poisson" or "normal"
     pub jitter_coef: u64,
     pub topo: NetworkTopology,
@@ -236,7 +236,11 @@ impl Config {
         const EXE_NAMES: [&CStr; 2] = [c"./client", c"./server"];
         const EXE1_ARGS: [&CStr; 5] = [c"./client", c"-i", c"127.0.0.1", c"-p", c"4443"];
         const EXE2_ARGS: [&CStr; 5] = [c"./server", c"-i", c"127.0.0.1", c"-p", c"4443"];
-        const RANDOM_NUMBER: u64 = 84;
+        const RANDOM_NUMBER: u64 = 84; //TODO
+        let mut n_use_random_number = Vec::with_capacity(NB_FOLLOWER);
+        for i in 0..NB_FOLLOWER{
+            n_use_random_number.push(0);
+        }
     
         return Self {
             nb_follower: NB_FOLLOWER,
@@ -244,7 +248,7 @@ impl Config {
             exe: vec![Process::new(CString::from(c"name"), CString::from(EXE_NAMES[0]),cstringify(&EXE1_ARGS)),
                         Process::new(CString::from(c"name"), CString::from(EXE_NAMES[1]), cstringify(&EXE2_ARGS))],
             random_number: RANDOM_NUMBER,
-            n_use_random_number: 0,
+            n_use_random_number: n_use_random_number,
             jitter_distribution: JITTER_DISTRIBUTION.to_string(),
             jitter_coef: 10, //TODO change
             topo: NetworkTopology::new(),
@@ -275,7 +279,10 @@ impl Config {
         }
 
         let random_number = value.get("random_number").and_then(Value::as_integer).unwrap_or(0) as u64;
-        let n_use_random_number = 0 as u64;
+        let mut n_use_random_number = Vec::with_capacity(nb_follower);
+        for i in 0..nb_follower{
+            n_use_random_number.push(0);
+        }
         let jitter_coef = 10; // TODO change
         if let Some(topo_path) = value.get("graph").and_then(Value::as_str) {
             let topo =  NetworkTopology::from_graph(Graph::from_gml(

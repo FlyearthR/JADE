@@ -1,9 +1,11 @@
 pub mod helper;
+mod logger;
 
 use fork::{fork, Fork};
 use futures::executor::block_on;
 use futures::TryStreamExt;
 use helper::{Config, TimestampActions};
+use logger::Logger;
 use netns_rs::NetNs;
 use network_time_simulator::SIZE_BUFFER;
 use network_time_simulator::{deserialize_rust, serialize_rust, Buffer, Message};
@@ -690,12 +692,13 @@ impl Simulation {
             Message::HasToSend4(id, if_id, ip, pkt_id) => {
                 //println!("Node {} has to send packet {} via {} to {:?}", id, pkt_id, if_id, ip);
                 // self.cfg.topo.get_jitter(self.cfg.random_number,self.cfg.n_use_random_number);
-                
+                let n_use_random_number = self.cfg.n_use_random_number.get_mut(usize::from(id)).expect("Node ID not found");
 
                 let timestamp = current_time + self.cfg.topo.get_delay_v4(id, if_id, &ip).unwrap() 
-                    + self.cfg.topo.get_jitter(self.cfg.random_number,self.cfg.n_use_random_number,&self.cfg.jitter_distribution).unwrap()*self.cfg.jitter_coef;
+                // TODO Alix : rendre n_use_random_number indépendant pour chaque noeud
+                    + self.cfg.topo.get_jitter(self.cfg.random_number,*n_use_random_number,&self.cfg.jitter_distribution).unwrap()*self.cfg.jitter_coef;
                 // println!("timestamp : {}",timestamp);
-                self.cfg.n_use_random_number += 1;
+                *n_use_random_number += 1;
                 if let Some(x) = self.events.get_mut(&timestamp) {
                     x.add_packet(id, pkt_id);
                 } else {
@@ -704,10 +707,11 @@ impl Simulation {
                 }
             }
             Message::HasToSend6(id, if_id, ip, pkt_id) => {
+                let n_use_random_number = self.cfg.n_use_random_number.get_mut(usize::from(id)).expect("Node ID not found");
                 let timestamp = current_time + self.cfg.topo.get_delay_v6(id, if_id, &ip).unwrap() 
-                    + self.cfg.topo.get_jitter(self.cfg.random_number,self.cfg.n_use_random_number,&self.cfg.jitter_distribution).unwrap()*self.cfg.jitter_coef;
-                // println!("timestamp : {}",timestamp);
-                self.cfg.n_use_random_number += 1;
+                    + self.cfg.topo.get_jitter(self.cfg.random_number,*n_use_random_number,&self.cfg.jitter_distribution).unwrap()*self.cfg.jitter_coef;
+                *n_use_random_number += 1;
+                println!("timestamp : {}, n_use_random_number : {:?}",timestamp,self.cfg.n_use_random_number);
                 if let Some(x) = self.events.get_mut(&timestamp) {
                     x.add_packet(id, pkt_id);
                 } else {
@@ -801,6 +805,9 @@ impl Simulation {
      * Main loop
      */
     fn main_loop(&mut self) -> Result<u8> {
+        //inti logger
+        let logs = Logger::new("log.txt");
+        logs.log("info", "Reaching main loop");
         //println!("Reaching main loop");
         let msg = serialize_rust(Message::WakeUp(0));
         for (s, q) in self.states.iter_mut().zip(self.qs[1..].iter()) {
@@ -1660,13 +1667,17 @@ mod determinism {
                     cstringify(&EXE2_ARGS),
                 ),
             ];
+            let mut n_use_random_number = Vec::with_capacity(nb);
+            for i in 0..nb{
+                n_use_random_number.push(0);
+            }
 
             return Self {
                 nb_follower: nb,
                 _qname: QNAME.to_string(),
                 exe: processes,
                 random_number: RANDOM_NUMBER,
-                n_use_random_number: 0,
+                n_use_random_number: n_use_random_number,
                 jitter_distribution: "poisson".to_string(),
                 jitter_coef: 10,
                 topo: NetworkTopology::test_topo(nb),
