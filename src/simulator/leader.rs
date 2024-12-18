@@ -93,7 +93,8 @@ pub struct Simulation {
     states: Vec<State>,
     events: BTreeMap<u64, TimestampActions>,
     qs: Vec<PosixMq>,
-    counters: HashMap<usize,(u64,u64)> //val = (counter,seed)
+    counters: HashMap<usize,(u64,u64)>, //val = (counter,seed)
+    logs: Logger
 }
 
 // MARK: simulation : drop
@@ -126,6 +127,7 @@ impl Simulation {
             .expect("Failed to create namespaces");
         let mut c = HashMap::with_capacity(nb_f);
         for i in 0..nb_f{c.insert(i+1, (1,0));}
+        let logs = Logger::new("log.txt",true,true,true,true,true); //TODO Alix: change put the required types of logs in the configuration file
 
         Self {
             cfg,
@@ -133,6 +135,7 @@ impl Simulation {
             events: btm,
             qs: Vec::with_capacity(nb_f + 1), 
             counters: c,
+            logs: logs,
         }
     }
 
@@ -806,11 +809,14 @@ impl Simulation {
      */
     fn main_loop(&mut self) -> Result<u8> {
         //inti logger
-        let logs = Logger::new("log.txt");
-        logs.log("info", "Reaching main loop");
+        self.logs.log("info", "Reaching main loop");
+        self.logs.log("debug",&format!("entering main loop with args : {:?}",self));
         //println!("Reaching main loop");
+
         let msg = serialize_rust(Message::WakeUp(0));
         for (s, q) in self.states.iter_mut().zip(self.qs[1..].iter()) {
+            // println!("state {:?}, q {:?}",s,q);
+            // self.logs.log("trace", &format!("leader sends wake up message to node {} at time 0",));
             //println!("(s, q): {:?}", (&s, q));
             q.send(1, &msg.buffer)?;
             //println!("sent {:?}", msg.buffer);
