@@ -117,17 +117,19 @@ impl Drop for Simulation {
 impl Simulation {
     // MARK: simulation : new
     fn new(cfg: Config) -> Self {
+        let logs = Logger::new("log.txt",true,true,true,true,true,true); //TODO Alix: change put the required types of logs in the configuration file
         let nb_f = cfg.nb_follower;
         let _ = cfg.unlink_queues();
         let btm = BTreeMap::new();
 
         let cfg = tokio::runtime::Runtime::new()
             .expect("Failed to create runtime")
-            .block_on(Self::create_namespaces(cfg))
+            .block_on(Self::create_namespaces(cfg,&logs))
             .expect("Failed to create namespaces");
         let mut c = HashMap::with_capacity(nb_f);
         for i in 0..nb_f{c.insert(i+1, (1,0));}
-        let logs = Logger::new("log.txt",true,true,true,true,true); //TODO Alix: change put the required types of logs in the configuration file
+
+        logs.log("info", &format!("simulation initialized : cfg {:?}, events {:?}, counters {:?}, logs {:?}",cfg,btm,c, logs));
 
         Self {
             cfg,
@@ -146,10 +148,12 @@ impl Simulation {
      * @return: the configuration of the current simulation
      **/
     // MARK: simulation : create_namespaces
-    async fn create_namespaces(cfg: Config) -> Result<Config> {
+    async fn create_namespaces(cfg: Config,logs:&Logger) -> Result<Config> {
+        logs.log("trace", "entering simulation::create_namespaces");
         // Create the namespaces
         for node in cfg.topo.grf.nodes.iter() {
             if let Ok(_) = NetNs::get(node.id.to_string()) {
+                logs.log("error", &format!("Namespace {:?} already exists", node.id));
                 eprintln!("Namespace {:?} already exists", node.id);
             } else {
                 NetNs::new(node.id.to_string())
@@ -157,6 +161,7 @@ impl Simulation {
                 //use node id as name
             }
         }
+        logs.log("info", "namespaces were created");
 
         // Add the links between the namespaces
         for edge in cfg.topo.grf.edges.iter() {
@@ -198,7 +203,9 @@ impl Simulation {
                     ipv4_source,
                     Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0),
                     ipv4_target,
-                    Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0))){
+                    Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0),
+                    logs)){
+                        logs.log("error", &format!("Error {} : could not create link between {:?} and {:?}",e,edge.source,edge.target));
                         println!("Error {} : could not create link between {:?} and {:?}",e,edge.source,edge.target);
                     }
             }else{
@@ -238,11 +245,13 @@ impl Simulation {
                     ipv4_source,
                     ipv6_source,
                     ipv4_target,
-                    ipv6_target)){
+                    ipv6_target,
+                logs)){
                         println!("Error {} : could not create link between {:?} and {:?}",e,edge.source,edge.target);
                     }
             }
         }
+        logs.log("info", "links were created");
         Ok(cfg)
     }
 
@@ -259,7 +268,8 @@ impl Simulation {
      * @arg ipv6_target: ipv6 that must be attached to the target interface. 0:0:0:0:0:0:0:0 if no ipv6 must be attached 
      * @return: 0 on success
      */
-    async fn add_link(id_source_namespace: u8, id_target_namespace: u8, ipv4_source:Ipv4Addr,ipv6_source:Ipv6Addr,ipv4_target:Ipv4Addr,ipv6_target:Ipv6Addr)->Result<i32>{
+    async fn add_link(id_source_namespace: u8, id_target_namespace: u8, ipv4_source:Ipv4Addr,ipv6_source:Ipv6Addr,ipv4_target:Ipv4Addr,ipv6_target:Ipv6Addr,logs:&Logger)->Result<i32>{
+        logs.log("trace", "entering simulation::add_link");
 
         let (connection, handle, _) = new_connection().unwrap();
         tokio::spawn(connection);
@@ -272,7 +282,8 @@ impl Simulation {
         // Create veth pair
         let request = handle.link().add().veth(name_interface1.clone(), name_interface2.clone());
         if let Err(error) = request.execute().await.map_err(|e| format!("{}", e)) {
-            println!("Could not create veth pair: {}", error);
+            logs.log("error", &format!("Could not create veth pair: {}", error));
+            // println!("Could not create veth pair: {}", error);
         }
 
         // Get interface index
@@ -284,6 +295,7 @@ impl Simulation {
             .try_collect()
             .await
             .map_err(|e| {
+                logs.log("error", &format!("Failed to get interface information: {}",e));
                 Error::new(
                     ErrorKind::Other,
                     format!("Failed to get interface information: {}", e),
@@ -305,6 +317,7 @@ impl Simulation {
             .try_collect()
             .await
             .map_err(|e| {
+                logs.log("error", &format!("Failed to get interface information: {}",e));
                 Error::new(
                     ErrorKind::Other,
                     format!("Failed to get interface information: {}", e),
@@ -312,6 +325,7 @@ impl Simulation {
             })?;
 
         let link2 = links2.into_iter().next().ok_or_else(|| {
+            logs.log("error", &format!("Interface {} not found", name_interface2));
             Error::new(
                 ErrorKind::NotFound,
                 format!("Interface {} not found", name_interface2),
@@ -320,6 +334,7 @@ impl Simulation {
 
         // Get namespace
         let source_ns = NetNs::get(id_source_namespace.to_string()).map_err(|e| {
+            logs.log("error", &format!("Failed to get source namespace: {}", e));
             Error::new(
                 ErrorKind::Other,
                 format!("Failed to get source namespace: {}", e),
@@ -327,6 +342,8 @@ impl Simulation {
         })?;
 
         let target_ns = NetNs::get(id_target_namespace.to_string()).map_err(|e| {
+            logs.log("error", &format!("Failed to get target namespace: {}", e));
+
             Error::new(
                 ErrorKind::Other,
                 format!("Failed to get target namespace: {}", e),
@@ -342,6 +359,8 @@ impl Simulation {
         let mut link_set_req1 = handle.link().set(link1.header.index);
         link_set_req1 = link_set_req1.setns_by_fd(source_ns_fd);
         link_set_req1.execute().await.map_err(|e| {
+            logs.log("error", &format!("Failed to move {} to namespace {}: {}", name_interface1, id_source_namespace, e));
+
             Error::new(
                 ErrorKind::Other,
                 format!(
@@ -354,6 +373,7 @@ impl Simulation {
         let mut link_set_req2 = handle.link().set(link2.header.index);
         link_set_req2 = link_set_req2.setns_by_fd(target_ns_fd);
         link_set_req2.execute().await.map_err(|e| {
+            logs.log("error", &format!("Failed to move {} to namespace {}: {}", name_interface2, id_target_namespace, e));
             Error::new(
                 ErrorKind::Other,
                 format!(
@@ -364,8 +384,8 @@ impl Simulation {
         }).unwrap();
 
         //set both interface up
-        Self::set_interface_up(id_source_namespace, id_target_namespace, ipv4_source, ipv6_source).await;
-        Self::set_interface_up(id_target_namespace, id_source_namespace, ipv4_target, ipv6_target).await;
+        Self::set_interface_up(id_source_namespace, id_target_namespace, ipv4_source, ipv6_source,&logs).await;
+        Self::set_interface_up(id_target_namespace, id_source_namespace, ipv4_target, ipv6_target,&logs).await;
         Ok(0)
     }
 
@@ -376,7 +396,8 @@ impl Simulation {
      * @arg id_target_namespace: id of the target namespace of the link
      */
     #[allow(dead_code)]
-    async fn delete_link(id_source_namespace: u8, id_target_namespace: u8){
+    async fn delete_link(id_source_namespace: u8, id_target_namespace: u8,logs:&Logger){
+        logs.log("trace", "entering simulation::delete_link");
         // Interface names
         // Interface veth_sourceNode_targetNode is the interface of sourceNode that is connected to targetNode
         let name_interface = format!("veth_{}_{}", id_source_namespace, id_target_namespace);
@@ -384,6 +405,7 @@ impl Simulation {
         let source_ns = match NetNs::get(id_source_namespace.to_string()) {
             Ok(ns) => ns,
             Err(e) => {
+                logs.log("error", &format!("Failed to get source namespace for ID {}: {}", id_source_namespace,e));
                 eprintln!(
                     "Failed to get source namespace for ID {}: {}",
                     id_source_namespace, e
@@ -394,6 +416,7 @@ impl Simulation {
 
         // Go to the right namespace
         if let Err(e) = source_ns.enter() {
+            logs.log("error", &format!("Error {:?} when entering the namespace {}", e, id_source_namespace));
             println!("Error {:?} when entering the namespace {}", e, id_source_namespace);
         }
 
@@ -406,10 +429,15 @@ impl Simulation {
         if let Some(link) = links.try_next().await.expect("Error while fetching links") {
             let link_idx = link.header.index;
             match handle.link().del(link_idx).execute().await {
-                Ok(_) => println!("Successfully deleted the link {}", name_interface),
-                Err(e) => eprintln!("Failed to delete the link {}: {}", name_interface, e),
+                Ok(_) => {
+                    logs.log("info", &format!("Successfully deleted the link {}", name_interface));
+                    println!("Successfully deleted the link {}", name_interface)},
+                Err(e) => {
+                    logs.log("info", &format!("Failed to delete the link {}: {}", name_interface, e));
+                    eprintln!("Failed to delete the link {}: {}", name_interface, e)},
             }
         } else {
+            logs.log("error", &format!("No link found with name {}", name_interface));
             eprintln!("No link found with name {}", name_interface);
         }
     }
@@ -424,7 +452,8 @@ impl Simulation {
      * @arg ipv6 : ipv6 to attach to the interface 0:0:0:0:0:0:0:0 if no ipv6 must be attached
      */
     #[allow(dead_code)]
-    async fn set_interface_up(id_source_namespace: u8, id_target_namespace: u8, ipv4:Ipv4Addr,ipv6:Ipv6Addr){
+    async fn set_interface_up(id_source_namespace: u8, id_target_namespace: u8, ipv4:Ipv4Addr,ipv6:Ipv6Addr,logs:&Logger){
+        logs.log("trace", "entering simulation::set_interface_up");
 
         // Interface names
         // Interface veth_sourceNode_targetNode is the interface of sourceNode that is connected to targetNode
@@ -432,6 +461,7 @@ impl Simulation {
 
         // Get namespace
         let source_ns = NetNs::get(id_source_namespace.to_string()).map_err(|e| {
+            logs.log("error", &format!("Failed to get source namespace: {}", e));
             Error::new(
                 ErrorKind::Other,
                 format!("Failed to get source namespace: {}", e),
@@ -440,6 +470,7 @@ impl Simulation {
 
         // Go to the right namespace
         if let Err(e) = source_ns.enter() {
+            logs.log("error", &format!("Error {:?} when entering the namespace {}", e, id_source_namespace));
             println!("Error {:?} when entering the namespace {}", e, id_source_namespace);
         }
 
@@ -456,6 +487,7 @@ impl Simulation {
             .try_collect()
             .await
             .map_err(|e| {
+                logs.log("error", &format!("Failed to get interface information: {}", e));
                 Error::new(
                     ErrorKind::Other,
                     format!("Failed to get interface information: {}", e),
@@ -463,6 +495,7 @@ impl Simulation {
             }).unwrap();
 
         let link1 = links1.into_iter().next().ok_or_else(|| {
+            logs.log("error", &format!("Interface {} not found", name_interface));
             Error::new(
                 ErrorKind::NotFound,
                 format!("Interface {} not found", name_interface),
@@ -473,6 +506,7 @@ impl Simulation {
 
         //set interface up
         if let Err(e) = handle.link().set(interface_idx).up().execute().await{
+            logs.log("error", &format!("Error {:?} could not set the interface {} up",e,interface_idx));
             println!("Error {:?} could not set the interface {} up",e,interface_idx);
         }
         
@@ -497,6 +531,7 @@ impl Simulation {
                     .address()
                     .add(link1.header.index, IpAddr::V4(ipv4), 24);
                 if let Err(e) = addr_req.execute().await {
+                    logs.log("error", &format!( "Error when adding the ipv4 to the interface {:?} : {:?}",name_interface, e));
                     println!(
                         "Error when adding the ipv4 to the interface {:?} : {:?}",
                         name_interface, e
@@ -511,6 +546,7 @@ impl Simulation {
                 .address()
                 .add(interface_idx, IpAddr::V6(ipv6), 64);
             if let Err(e) = addr_req.execute().await {
+                logs.log("error", &format!( "Error when adding the ipv§ to the interface {:?} : {:?}",name_interface, e));
                 println!(
                     "Error when add the ipv6 to the interface {:?} : {:?}",
                     name_interface, e
@@ -527,13 +563,16 @@ impl Simulation {
      * @arg id_target_namespace: id of the namespace to which the link goes
      */
     #[allow(dead_code)]
-    async fn set_interface_down(id_source_namespace:u8, id_target_namespace:u8){
+    async fn set_interface_down(id_source_namespace:u8, id_target_namespace:u8,logs:Logger){
+        logs.log("trace", "entering simulation::set_interface_down");
+
         // Interface names
         // Interface veth_sourceNode_targetNode is the interface of sourceNode that is connected to targetNode
         let name_interface = format!("veth_{}_{}", id_source_namespace, id_target_namespace);
 
         // Get namespace
         let source_ns = NetNs::get(id_source_namespace.to_string()).map_err(|e| {
+            logs.log("error", &format!("Failed to get source namespace: {}", e));
             Error::new(
                 ErrorKind::Other,
                 format!("Failed to get source namespace: {}", e),
@@ -542,6 +581,7 @@ impl Simulation {
 
         // Go to the right namespace
         if let Err(e) = source_ns.enter() {
+            logs.log("error", &format!("Error {:?} when entering the namespace {}", e, id_source_namespace));
             println!("Error {:?} when entering the namespace {}", e, id_source_namespace);
         }
 
@@ -558,6 +598,7 @@ impl Simulation {
             .try_collect()
             .await
             .map_err(|e| {
+                logs.log("error", &format!("Failed to get interface information: {}", e));
                 Error::new(
                     ErrorKind::Other,
                     format!("Failed to get interface information: {}", e),
@@ -565,6 +606,7 @@ impl Simulation {
             }).unwrap();
 
         let link1 = links1.into_iter().next().ok_or_else(|| {
+            logs.log("error", &format!("Interface {} not found", name_interface));
             Error::new(
                 ErrorKind::NotFound,
                 format!("Interface {} not found", name_interface),
@@ -575,6 +617,7 @@ impl Simulation {
 
         //set interface down
         if let Err(e) = handle.link().set(interface_idx).down().execute().await{
+            logs.log("error", &format!("Error {:?} could not set the interface {} up",e,interface_idx));
             println!("Error {:?} could not set the interface {} up",e,interface_idx);
         }
     }
@@ -588,7 +631,8 @@ impl Simulation {
      * @arg env: the environment to start the follower
      * @return: the pid of the child on success
      **/
-    fn run_follower(&self, id: u8, env: &[&CStr]) -> Result<i32> { 
+    fn run_follower(&self, id: u8, env: &[&CStr]) -> Result<i32> {
+        self.logs.log("trace", "entering simulation::run_follower");
         //get namespace 
         let ns = NetNs::get(id.to_string()).unwrap();
         ns.run(|_|{
@@ -603,10 +647,12 @@ impl Simulation {
                     )?;
                     Ok(0)
                 }
-                Err(_) => Err(std::io::Error::new(
+                Err(_) => {
+                    self.logs.log("error", "fork failed");
+                    Err(std::io::Error::new(
                     std::io::ErrorKind::Other,
                     String::from("Fork failed"),
-                )),
+                ))}
             }
         }).unwrap()
     }
@@ -618,6 +664,7 @@ impl Simulation {
      * @return: returns a Result
      **/
     fn leader_init_queues(&mut self) -> Result<()> {
+        self.logs.log("trace", "entering simulation::leader_init_queues");
         self.qs.push(
             posixmq::OpenOptions::readonly() //the leader will receive messages on this queue
                 .max_msg_len(SIZE_BUFFER)
@@ -639,8 +686,10 @@ impl Simulation {
     }
 
     fn messages_handler(&mut self, message: &Buffer, current_time: u64) -> Result<()> {
+        self.logs.log("trace", "entering simulation::message_handler");
         match deserialize_rust(*message) {
             Message::AddStep(id, t) => {
+                self.logs.log("trace", &format!("Adding a step {} for node {}", t, id));
                 //println!("Adding a step {} for node {}", t, id);
                 if let Some(x) = self.events.get_mut(&t) {
                     x.add_process(id);
@@ -650,6 +699,7 @@ impl Simulation {
             }
             Message::DelStep(id, t) => {
                 //println!("Deleting a step {} for node {}", t, id);
+                self.logs.log("trace", &format!("Deleting a step {} for node {}", t, id));
                 if let Some(x) = self.events.get_mut(&t) {
                     x.del_process(id);
                 }
@@ -657,12 +707,13 @@ impl Simulation {
             Message::GetTime(id) => {
                 //return head key of the BTreeMap
                 //println!("Getting time for node {}", id);
+                self.logs.log("trace", &format!("Getting time for node {}", id));
                 let msg = serialize_rust(Message::WakeUp(current_time));
                 self.qs[id as usize].send(2, &msg.buffer)?;
             }
             Message::GetRand(id,seed) => {
                 // println!("Getting random for node {} with seed {}", id, seed);
-                
+                self.logs.log("trace", &format!("Getting random for node {} with seed {}", id, seed));
 
                 // Random with seed.
                 if seed == self.counters.get(&usize::from(id)).unwrap().1{
@@ -686,14 +737,17 @@ impl Simulation {
             }
             Message::Finished(id) => {
                 //println!("Node {} has finished", id);
+                self.logs.log("trace", &format!("Node {} has finished", id));
                 self.states[(id - 1) as usize] = State::Finished;
             }
             Message::Stuck(id) => {
                 //println!("Node {} is stuck", id);
+                self.logs.log("trace", &format!("Node {} is stuck", id));
                 self.states[(id - 1) as usize] = State::Blocked;
             }
             Message::HasToSend4(id, if_id, ip, pkt_id) => {
-                //println!("Node {} has to send packet {} via {} to {:?}", id, pkt_id, if_id, ip);
+                //println!("Node {} has to send ipv4 packet {} via {} to {:?}", id, pkt_id, if_id, ip)
+                self.logs.log("trace", &format!("Node {} has to send ipv4 packet {} via {} to {:?}", id, pkt_id, if_id, ip));
                 // self.cfg.topo.get_jitter(self.cfg.random_number,self.cfg.n_use_random_number);
                 let n_use_random_number = self.cfg.n_use_random_number.get_mut(usize::from(id)).expect("Node ID not found");
 
@@ -702,6 +756,7 @@ impl Simulation {
                     + self.cfg.topo.get_jitter(self.cfg.random_number,*n_use_random_number,&self.cfg.jitter_distribution).unwrap()*self.cfg.jitter_coef;
                 // println!("timestamp : {}",timestamp);
                 *n_use_random_number += 1;
+                self.logs.log("debug", &format!("timestamp : {}, n_use_random_number : {:?}",timestamp,self.cfg.n_use_random_number));
                 if let Some(x) = self.events.get_mut(&timestamp) {
                     x.add_packet(id, pkt_id);
                 } else {
@@ -710,11 +765,13 @@ impl Simulation {
                 }
             }
             Message::HasToSend6(id, if_id, ip, pkt_id) => {
+                self.logs.log("trace", &format!("Node {} has to send ipv6 packet {} via {} to {:?}", id, pkt_id, if_id, ip));
                 let n_use_random_number = self.cfg.n_use_random_number.get_mut(usize::from(id)).expect("Node ID not found");
                 let timestamp = current_time + self.cfg.topo.get_delay_v6(id, if_id, &ip).unwrap() 
                     + self.cfg.topo.get_jitter(self.cfg.random_number,*n_use_random_number,&self.cfg.jitter_distribution).unwrap()*self.cfg.jitter_coef;
                 *n_use_random_number += 1;
-                println!("timestamp : {}, n_use_random_number : {:?}",timestamp,self.cfg.n_use_random_number);
+                self.logs.log("debug", &format!("timestamp : {}, n_use_random_number : {:?}",timestamp,self.cfg.n_use_random_number));
+                // println!("timestamp : {}, n_use_random_number : {:?}",timestamp,self.cfg.n_use_random_number);
                 if let Some(x) = self.events.get_mut(&timestamp) {
                     x.add_packet(id, pkt_id);
                 } else {
@@ -733,34 +790,40 @@ impl Simulation {
      * Part of a timespot where the delayed send are actually sent
      */
     fn sending_time_loop(&self, ta: TimestampActions) -> Result<()> {
+        self.logs.log("trace", "entering simulation::sending_time_loop");
+        self.logs.log("debug", &format!("entering simulation::sending_time_loop with args {:?}",ta));
         for (process, pkt_id) in ta.flatten() {
             //println!("Process {:?} should send packet {:?}", process, pkt_id);
             let msg = serialize_rust(Message::Send(pkt_id));
             //println!("{} Send({})", process, pkt_id);
+            self.logs.log("message", &format!("process {} sends {}",process,pkt_id));
             self.qs[process as usize].send(1, &msg.buffer)?;
 
             let mut msg: Buffer = Buffer::new();
             if let Ok(_) = self.qs[0].recv(&mut msg.buffer) {
                 if let Message::Sent(p, p_id) = deserialize_rust(msg) {
                     if p != process || p_id != pkt_id {
-                        eprintln!(
-                            "bad Sent received:\n\texpected: Sent({},{})\n\treceived: Sent({},{})",
-                            process, pkt_id, p, p_id
-                        );
+                        self.logs.log("error", &format!( "bad Sent received:\n\texpected: Sent({},{})\n\treceived: Sent({},{})", process, pkt_id, p, p_id));
+                        // eprintln!(
+                        //     "bad Sent received:\n\texpected: Sent({},{})\n\treceived: Sent({},{})",
+                        //     process, pkt_id, p, p_id
+                        // );
                         panic!("error");
                     }
                     //println!("{} Sent({})", p, p_id);
                 } else {
-                    eprintln!(
-                        "bad message received:\n\texpected: Sent({},{})\n\treceived: {:?}",
-                        process,
-                        pkt_id,
-                        deserialize_rust(msg)
-                    );
+                    self.logs.log("error", &format!("bad message received:\n\texpected: Sent({},{})\n\treceived: {:?}", process, pkt_id, deserialize_rust(msg)));
+                    // eprintln!(
+                    //     "bad message received:\n\texpected: Sent({},{})\n\treceived: {:?}",
+                    //     process,
+                    //     pkt_id,
+                    //     deserialize_rust(msg)
+                    // );
                     panic!("error");
                 }
             } else {
-                eprintln!("could not receive Sent");
+                self.logs.log("error", "could not receive sent");
+                // eprintln!("could not receive Sent");
                 panic!("error");
             }
         }
@@ -771,12 +834,15 @@ impl Simulation {
      * Part of a timespot where the processes actually run
      */
     fn running_time_loop(&mut self, current_time: u64) -> Result<State> {
+        self.logs.log("trace", "entering simulation::running_time_loop");
+        self.logs.log("debug", &format!("entering simulation::running_time_loop with args current_time : {} ", current_time));
         let mut msg: Buffer = Buffer::new();
         loop {
             //println!("Running time loop");
             match self.qs[0].recv(&mut msg.buffer) {
                 Ok(_) => {
                     //println!("Leader received {:?}", Into::<Message>::into(msg));
+                    self.logs.log("message", &format!("Leader received {:?} at time {}",Into::<Message>::into(msg),current_time));
                     self.messages_handler(&msg, current_time)?;
                     let mut nb_blocked = 0;
                     let mut nb_finished = 0;
@@ -797,6 +863,7 @@ impl Simulation {
                     }
                 }
                 Err(e) => {
+                    self.logs.log("error", "recv on leader queue failed : {e}");
                     eprintln!("Message error: {e}");
                     panic!("recv on leader queue failed");
                 }
@@ -809,45 +876,48 @@ impl Simulation {
      */
     fn main_loop(&mut self) -> Result<u8> {
         //inti logger
-        self.logs.log("info", "Reaching main loop");
-        self.logs.log("debug",&format!("entering main loop with args : {:?}",self));
+        self.logs.log("trace", "entering simulation::main");
+        self.logs.log("debug",&format!("entering simulation::main loop with args : {:?}",self));
         //println!("Reaching main loop");
 
         let msg = serialize_rust(Message::WakeUp(0));
         for (s, q) in self.states.iter_mut().zip(self.qs[1..].iter()) {
-            // println!("state {:?}, q {:?}",s,q);
-            // self.logs.log("trace", &format!("leader sends wake up message to node {} at time 0",));
-            //println!("(s, q): {:?}", (&s, q));
+            self.logs.log("message", &format!("leader sends wake up message to node {} at time 0",q.as_raw_mqd()));
             q.send(1, &msg.buffer)?;
             //println!("sent {:?}", msg.buffer);
             *s = State::Running;
         }
-        //println!("Before if");
+    
         if let Ok(State::Finished) = self.running_time_loop(0) {
+            self.logs.log("info", "Simulation finished by all process finishing");
             eprintln!("Simulation finished by all process finishing");
             return Ok(0);
         }
-        //println!("After if");
+
         loop {
             //println!("Events: {:?}", self.events);
             if let Some((time, ta)) = self.events.pop_first() {
+                self.logs.log("debug", &format!("event at time {} TimestampActions : {:?}",time,ta));
                 /*************** First half, sending time ***************/
-                let _ = self.sending_time_loop(ta);
+                let _ = self.sending_time_loop(ta); //TODO : manage error (at least log it)
 
                 /************** Second half, running time ***************/
                 let msg = serialize_rust(Message::WakeUp(time));
                 for (s, q) in self.states.iter_mut().zip(self.qs[1..].iter()) {
                     if s != &State::Finished {
+                        self.logs.log("message", &format!("leader sends wake up message to node {} at time {}",q.as_raw_mqd(),time));
                         q.send(1, &msg.buffer)?;
                         *s = State::Running;
                     }
                 }
                 if let Ok(State::Finished) = self.running_time_loop(time) {
+            self.logs.log("info", "Simulation finished by all process finishing");
                     eprintln!("Simulation finished by all process finishing");
                     return Ok(0);
                 }
             } else {
                 // the simulation is finished
+            self.logs.log("info", "Simulation finished by all process beeing blocked with no more events");
                 eprintln!("Simulation finished by all process beeing blocked with no more events");
                 return Ok(1);
             }
@@ -855,6 +925,8 @@ impl Simulation {
     }
 
     fn run(mut self) {
+        self.logs.log("trace", "entering simulation::run");
+        self.logs.log("debug", &format!("entering simulation::run with args {:?}",self));
         /*unsafe {
             let c_str = CString::new(format!("{}_{}", &self.cfg._qname, 0)).unwrap();
             println!("c_str: {:?}", c_str);
@@ -889,6 +961,7 @@ impl Simulation {
 
 fn main() {
     let args: Vec<String> = env::args().collect();
+    // let logs = Logger::new("log.txt", true, true, true, true, true, true);
 
     match args.len() {
         // no arguments passed

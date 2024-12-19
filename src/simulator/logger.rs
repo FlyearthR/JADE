@@ -10,6 +10,7 @@ pub struct Logger{
     warn: bool, 
     error: bool, 
     info: bool, //other
+    message: bool,
 }
 
 // impl Drop for Logger{
@@ -19,7 +20,7 @@ pub struct Logger{
 // }
 
 impl Logger{
-    pub fn new(file_name:&str,trace:bool,debug:bool,warn:bool,error:bool,info:bool) -> Self{
+    pub fn new(file_name:&str,trace:bool,debug:bool,warn:bool,error:bool,info:bool, message:bool) -> Self{
         let n = "../logs/".to_owned()+file_name;
         let log_file = File::create(n).expect("creation failed");
         Self{
@@ -28,7 +29,8 @@ impl Logger{
             debug: debug,
             warn: warn,
             error: error,
-            info: info
+            info: info,
+            message: message,
         }
     }
 
@@ -56,6 +58,11 @@ impl Logger{
             }
             "info" =>{
                 if let Err(e)=writeln!(&mut &self.log_file, "[INFO] {}", message){
+                    println!("[ERROR] could not write to log file");
+                }
+            }
+            "message" =>{
+                if let Err(e)=writeln!(&mut &self.log_file, "[MESSAGE] {}", message){
                     println!("[ERROR] could not write to log file");
                 }
             }
