@@ -839,6 +839,7 @@ impl Simulation {
         let mut msg: Buffer = Buffer::new();
         loop {
             //println!("Running time loop");
+            self.logs.log("info", "running time loop");
             match self.qs[0].recv(&mut msg.buffer) {
                 Ok(_) => {
                     //println!("Leader received {:?}", Into::<Message>::into(msg));
@@ -853,6 +854,7 @@ impl Simulation {
                             _ => {}
                         }
                     }
+                    self.logs.log("debug", &format!("nb-finished: {}, nf_blocked: {}, nb_follower: {}", nb_finished, nb_blocked, self.cfg.nb_follower));
                     //println!("nb-finished: {}, nf_blocked: {}, nb_follower: {}", nb_finished, nb_blocked, self.cfg.nb_follower);
                     if nb_finished == self.cfg.nb_follower {
                         return Ok(State::Finished);
@@ -911,13 +913,13 @@ impl Simulation {
                     }
                 }
                 if let Ok(State::Finished) = self.running_time_loop(time) {
-            self.logs.log("info", "Simulation finished by all process finishing");
+                    self.logs.log("info", "Simulation finished by all process finishing");
                     eprintln!("Simulation finished by all process finishing");
                     return Ok(0);
                 }
             } else {
                 // the simulation is finished
-            self.logs.log("info", "Simulation finished by all process beeing blocked with no more events");
+                self.logs.log("info", "Simulation finished by all process beeing blocked with no more events");
                 eprintln!("Simulation finished by all process beeing blocked with no more events");
                 return Ok(1);
             }
