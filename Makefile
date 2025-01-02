@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -g
-INSTANCE = 9_clients_1_server
+INSTANCE = 9_clients_1_server_random
 
 .PHONY: syscalls.so all test API leader clean little_clean
 
@@ -19,9 +19,10 @@ usetest: all
 	cp -f target/debug/simulator testing/simulator
 	cp -f target/syscalls/syscalls.so testing/syscalls.so
 	$(CC) ${CFLAGS} examples/simple_client.c -o testing/simple_client
+	$(CC) ${CFLAGS} examples/random_client.c -o testing/random_client
 	${CC} ${CFLAGS} examples/simple_server.c -o testing/simple_server
 	cp -f tests/$(INSTANCE).* testing/
-	cd testing && RUST_BACKTRACE=1 ./simulator $(INSTANCE).toml
+	cd testing && sudo RUST_BACKTRACE=1 ./simulator $(INSTANCE).toml
 
 testffi: API
 	cd c_src && $(MAKE) test_ffi && cp test_ffi ../testing/test_ffi
@@ -39,6 +40,9 @@ target/examples/miniP_client:
 
 target/examples/miniP_server:
 	cd examples/miniP && ${CC} ${CFLAGS} miniP_server.c -o ../../target/examples/miniP_server
+
+target/examples/random_client:
+	cd examples/ && $(CC) ${CFLAGS} random_client.c -o ../../target/examples/random_client
 
 target/examples/simple_client:
 	cd examples/ && $(CC) ${CFLAGS} simple_client.c -o ../../target/examples/simple_client
