@@ -194,14 +194,16 @@ int usleep(useconds_t usec)
         return 0;
 }
 
-void srand(unsigned int seed)
+void srand(unsigned int local_seed)
 {
+        fflush(stdout);
+        seed=local_seed;
         random_number = get_random();
 }
 
 int rand(void)
 {
-        return random_number;
+        return get_random();
 }
 
 ssize_t send(int sockfd, const void* buf, size_t len, int flags)

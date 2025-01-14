@@ -60,6 +60,11 @@ typedef struct Sent_Body {
   uint64_t _1;
 } Sent_Body;
 
+typedef struct GetRand_Body {
+  uint8_t _0;
+  uint64_t _1;
+} GetRand_Body;
+
 typedef struct Message {
   Message_Tag tag;
   union {
@@ -77,9 +82,7 @@ typedef struct Message {
     struct {
       uint8_t get_time;
     };
-    struct {
-      uint8_t get_rand;
-    };
+    GetRand_Body get_rand;
     struct {
       uint64_t wake_up;
     };

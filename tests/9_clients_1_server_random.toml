@@ -1,0 +1,75 @@
+# Queue name
+qname = 'some_queue'
+
+# Random number
+random_number = 123
+
+# Number of followers
+nb_follower = 10
+
+# Graph
+graph = '9_clients_1_server_random.gml'
+
+# Executables
+[executables]
+[[executables.exe]]
+name = 'client'
+path = 'random_client'
+args = ["./random_client", "-i", "10.0.0.20", "-p", "8080", "-I", "1", "-s", "1000", "-n", "20"]
+node_ids = [1]
+
+[[executables.exe]]
+name = 'client'
+path = 'random_client'
+args = ["./random_client", "-i", "10.0.0.20", "-p", "8080", "-I", "2", "-s", "1000", "-n", "20"]
+node_ids = [2]
+
+[[executables.exe]]
+name = 'client'
+path = 'random_client'
+args = ["./random_client", "-i", "10.0.0.20", "-p", "8080", "-I", "3", "-s", "1000", "-n", "20"]
+node_ids = [3]
+
+[[executables.exe]]
+name = 'client'
+path = 'random_client'
+args = ["./random_client", "-i", "10.0.0.20", "-p", "8080", "-I", "4", "-s", "1000", "-n", "20"]
+node_ids = [4]
+
+[[executables.exe]]
+name = 'client'
+path = 'random_client'
+args = ["./random_client", "-i", "10.0.0.20", "-p", "8080", "-I", "5", "-s", "1000", "-n", "20"]
+node_ids = [5]
+
+[[executables.exe]]
+name = 'client'
+path = 'random_client'
+args = ["./random_client", "-i", "10.0.0.20", "-p", "8080", "-I", "6", "-s", "1000", "-n", "20"]
+node_ids = [6]
+
+[[executables.exe]]
+name = 'client'
+path = 'random_client'
+args = ["./random_client", "-i", "10.0.0.20", "-p", "8080", "-I", "7", "-s", "1000", "-n", "20"]
+node_ids = [7]
+
+[[executables.exe]]
+name = 'client'
+path = 'random_client'
+args = ["./random_client", "-i", "10.0.0.20", "-p", "8080", "-I", "8", "-s", "1000", "-n", "20"]
+node_ids = [8]
+
+[[executables.exe]]
+name = 'client'
+path = 'random_client'
+args = ["./random_client", "-i", "10.0.0.20", "-p", "8080", "-I", "9", "-s", "1000", "-n", "20"]
+node_ids = [9]
+
+
+[[executables.exe]]
+name = 'server'
+path = 'simple_server'
+args = ["./simple_server", "-p", "8080", "-m", "20", "-n", "9", "-l", "test.log"]
+node_ids = [10]
+

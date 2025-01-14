@@ -7,7 +7,7 @@ pub const SIZE_BUFFER: usize = 27;
 #[repr(C)]
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub struct Ipv4AddrC {
-    segments: [u8; 4],
+    pub segments: [u8; 4],
 }
 impl Ipv4AddrC {
     pub fn new(a: u8, b: u8, c: u8, d: u8) -> Self {
@@ -22,6 +22,12 @@ impl From<std::net::Ipv4Addr> for Ipv4AddrC {
     fn from(ip: std::net::Ipv4Addr) -> Self {
         let ip_array = ip.octets();
         Self::new(ip_array[0], ip_array[1], ip_array[2], ip_array[3])
+    }
+}
+impl Into<std::net::Ipv4Addr> for Ipv4AddrC {
+    fn into(self)->std::net::Ipv4Addr{
+        let ip_array = self.octets();
+        std::net::Ipv4Addr::new(ip_array[0], ip_array[1], ip_array[2], ip_array[3])
     }
 }
 impl From<&str> for Ipv4AddrC {
@@ -43,7 +49,7 @@ impl From<&String> for Ipv4AddrC {
 #[repr(C)]
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub struct Ipv6AddrC {
-    segments: [u16; 8],
+    pub segments: [u16; 8],
 }
 impl Ipv6AddrC {
     #[no_mangle]
@@ -60,6 +66,14 @@ impl From<std::net::Ipv6Addr> for Ipv6AddrC {
         let ip_array = ip.segments();
         Self::new(ip_array[0], ip_array[1], ip_array[2], ip_array[3],
             ip_array[4], ip_array[5], ip_array[6], ip_array[7])
+    }
+}
+
+impl Into<std::net::Ipv6Addr> for Ipv6AddrC {
+    fn into(self)->std::net::Ipv6Addr{
+        let ip_array = self.segments();
+        std::net::Ipv6Addr::new(ip_array[0], ip_array[1], ip_array[2], ip_array[3],
+            ip_array[4],ip_array[5],ip_array[6],ip_array[7])
     }
 }
 impl From<&str> for Ipv6AddrC {
@@ -114,7 +128,7 @@ pub enum Message {
     Send(u64),                          // 6
     Sent(u8, u64),                      // 7
     GetTime(u8),                        // 8
-    GetRand(u8),                        // 9
+    GetRand(u8,u64),                        // 9
     WakeUp(u64),                        // 10
     Finished(u8),                       // 11
 }
@@ -206,9 +220,15 @@ impl From<Message> for Buffer {
                 tab[0] = 8;
                 tab[1] = id;
             },
-            Message::GetRand(id) => {
+            Message::GetRand(id,seed) => {
                 tab[0] = 9;
                 tab[1] = id;
+                let tt = seed.to_ne_bytes();
+                let mut i = 0;
+                while i < 8 {
+                    tab[i+2] = tt[i];
+                    i = i + 1;
+                }
             },
             Message::WakeUp(t) => {
                 tab[0] = 10;
@@ -267,7 +287,7 @@ impl Into<Message> for Buffer {
                 Message::GetTime(self.buffer[1])
             },
             9 => {
-                Message::GetRand(self.buffer[1])
+                Message::GetRand(self.buffer[1],u64::from_ne_bytes(self.buffer[2..10].try_into().unwrap()))
             },
             10 => {
                 Message::WakeUp(u64::from_ne_bytes(self.buffer[2..10].try_into().unwrap()))
