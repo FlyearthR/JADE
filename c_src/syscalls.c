@@ -416,3 +416,15 @@ void send_has_to_send(const struct sockaddr *dest_addr, packet_elem* pe){
 //         TODO
 // }
 
+int connect(int sockfd, const struct sockaddr *addr,
+                   socklen_t addrlen)
+{
+        fd_ip_elem* f = (fd_ip_elem*) malloc(sizeof(fd_ip_elem));
+        f->fi.fd = sockfd;
+        memcpy(&f->fi.addr, addr, addrlen);
+        LL_PREPEND(fd_ip_list, f);
+        
+        LIBC_FUNCTION(int, connect, const struct sockaddr *addr,
+                   socklen_t addrlen);
+	return LIBC_FUNCTION_GET(connect)(sockfd, addr, addrlen);
+}
