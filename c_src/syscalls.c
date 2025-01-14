@@ -22,18 +22,18 @@ ssize_t recvfrom(int sockfd, void* buf, size_t len,
 {
         // TODO: configure socket as non blocking at opening time
         //printf("inside recvfrom\n");
-        fflush(stdout);
+        // fflush(stdout);
         int flags_s = fcntl(sockfd, F_GETFL, 0);
         if (flags_s == -1)
                 return -1;
         //printf("inside recvfrom 2\n");
-        fflush(stdout);
+        // fflush(stdout);
         fcntl(sockfd, F_SETFL, O_NONBLOCK);
         LIBC_FUNCTION(ssize_t, recvfrom, int sockfd, void* buf, size_t len,
                         int flags, struct sockaddr * src_addr,
                         socklen_t * addrlen);
         //printf("inside recvfrom 3\n");
-        fflush(stdout);
+        // fflush(stdout);
         int ret;
         do {
         printf("inside recvfrom loop\n");
@@ -42,6 +42,19 @@ ssize_t recvfrom(int sockfd, void* buf, size_t len,
                 perror("recvfrom: ");
                 fflush(stderr);
         } while (ret == -1 && empty_fun());
+        return ret;
+}
+
+ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags){
+        int flags_s = fcntl(sockfd, F_GETFL, 0);
+        if (flags_s == -1)
+                return -1;
+        fcntl(sockfd, F_SETFL, O_NONBLOCK);
+        LIBC_FUNCTION(ssize_t, recvmsg, int sockfd, struct msghdr *msg, int flags);
+        int ret;
+        while (ret == -1 && empty_fun()){
+                ret = LIBC_FUNCTION_GET(recvmsg)(sockfd, msg, flags);
+        }
         return ret;
 }
 
@@ -223,7 +236,10 @@ ssize_t send(int sockfd, const void* buf, size_t len, int flags)
 
         LL_PREPEND(pkt_list, pe);
 
-        // TODO: add to send the HasToSend
+        struct sockaddr* dest_addr = get_ip(sockfd);
+
+        send_has_to_send(dest_addr, pe);
+
         return len;
 }
 
@@ -231,7 +247,7 @@ ssize_t sendto(int sockfd, const void* buf, size_t len, int flags,
                       const struct sockaddr *dest_addr, socklen_t addrlen)
 {
         //printf("sendto intercepted\n");
-        fflush(stdout);
+        // fflush(stdout);
         packet_elem* pe;
         if ((pe = (packet_elem*)malloc(sizeof *pe)) == NULL) exit(-13);
         if ((pe->pkt.buf = malloc(len)) == NULL) exit(-13);
@@ -247,9 +263,102 @@ ssize_t sendto(int sockfd, const void* buf, size_t len, int flags,
         pe->pkt.addrlen = addrlen;
 
         LL_PREPEND(pkt_list, pe);
-        //printf("packet prepended\n");
-        fflush(stdout);
+        // printf("packet prepended\n");
+        // fflush(stdout);
 
+        send_has_to_send(dest_addr, pe);
+//         switch(dest_addr->sa_family) {
+//         case AF_INET:
+//             char* ip = (char*) (&((struct sockaddr_in*)dest_addr)->sin_addr.s_addr);
+//             Message m = {
+//                 .tag = HasToSend4,
+//                 .has_to_send4 = {
+//                         ._0 = ID,
+//                         ._1 = 0, // TODO: find interface id
+//                         ._2 = {.segments = {ip[0], ip[1], ip[2], ip[3]}},
+//                         ._3 = pe->pkt.id
+//                         }
+//                 };
+//             send_msg(m);
+//             break;
+
+//         case AF_INET6:
+//             Message m2 = {
+//                 .tag = HasToSend6,
+//                 .has_to_send6 = {
+//                         ._0 = ID,
+//                         ._1 = 0, // TODO: find interface id
+//                         ._2 = {
+//                                 .segments = {
+//                                         ((struct sockaddr_in6 *)dest_addr)->sin6_addr.__in6_u.__u6_addr16[0],
+//                                         ((struct sockaddr_in6 *)dest_addr)->sin6_addr.__in6_u.__u6_addr16[1],
+//                                         ((struct sockaddr_in6 *)dest_addr)->sin6_addr.__in6_u.__u6_addr16[2],
+//                                         ((struct sockaddr_in6 *)dest_addr)->sin6_addr.__in6_u.__u6_addr16[3],
+//                                         ((struct sockaddr_in6 *)dest_addr)->sin6_addr.__in6_u.__u6_addr16[4],
+//                                         ((struct sockaddr_in6 *)dest_addr)->sin6_addr.__in6_u.__u6_addr16[5],
+//                                         ((struct sockaddr_in6 *)dest_addr)->sin6_addr.__in6_u.__u6_addr16[6],
+//                                         ((struct sockaddr_in6 *)dest_addr)->sin6_addr.__in6_u.__u6_addr16[7]
+//                                         }
+//                                 },
+//                         ._3 = pe->pkt.id
+//                         }
+//                 };
+//             send_msg(m2);
+//             break;
+
+//         default:
+//             fprintf(stderr, "Unknown AF\n");
+//             return 0;
+//     }
+
+        //printf("sendto interception end\n");
+        //fflush(stdout);
+        return len;
+}
+
+ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags){
+        //TODO
+        packet_elem* pe;
+        if ((pe = (packet_elem*)malloc(sizeof *pe)) == NULL) exit(-13);
+        if ((pe->pkt.buf = malloc(sizeof(struct msghdr))) == NULL) exit(-13);
+        struct msghdr* buf = (struct msghdr*) pe->pkt.buf;
+        buf->msg_name = malloc(msg->msg_namelen);
+        memcpy(buf->msg_name,msg->msg_name,msg->msg_namelen);
+        buf->msg_namelen = buf->msg_namelen;
+        buf->msg_iov = (struct iovec*) malloc(sizeof(struct iovec)*msg->msg_iovlen);
+        int n_bytes_sent = 0;
+        for (int i = 0; i<msg->msg_iovlen; i++){
+                size_t len = (msg->msg_iov +i)->iov_len;
+                n_bytes_sent += len;
+                void* tmp_buf = malloc(len);
+                memcpy(tmp_buf,(msg->msg_iov+i)->iov_base, len);
+                struct iovec* iov = (struct iovec*) buf->msg_iov;
+                iov += i;
+                iov->iov_base = buf;
+                iov->iov_len = len;
+        }
+        buf->msg_control = malloc(msg->msg_controllen);
+        memcpy(buf->msg_control, msg->msg_control,msg->msg_controllen);
+        buf->msg_controllen = msg->msg_controllen;
+        buf->msg_flags=msg->msg_flags;
+        pe->pkt.id = next_pkt_id++;
+        pe->pkt.tos = sendmsg_t;
+        pe->pkt.sockfd = sockfd;
+        pe->pkt.len = sizeof(struct msghdr);
+        pe->pkt.flags = flags;
+        pe->pkt.dest_addr = NULL;
+        pe->pkt.addrlen=0;
+
+        LL_PREPEND(pkt_list,pe);
+
+        struct sockaddr* dest_addr = get_ip(sockfd);
+
+        send_has_to_send(dest_addr, pe);
+
+        return n_bytes_sent;
+}
+
+void send_has_to_send(const struct sockaddr *dest_addr, packet_elem* pe){
         switch(dest_addr->sa_family) {
         case AF_INET:
             char* ip = (char*) (&((struct sockaddr_in*)dest_addr)->sin_addr.s_addr);
@@ -293,8 +402,17 @@ ssize_t sendto(int sockfd, const void* buf, size_t len, int flags,
             fprintf(stderr, "Unknown AF\n");
             return 0;
     }
-
-        //printf("sendto interception end\n");
-        //fflush(stdout);
-        return len;
 }
+
+// ssize_t read(int fildes, void *buf, size_t nbyte){
+        //TODO
+// }
+
+// ssize_t write(int fildes, const void *buf, size_t nbyte){
+//         TODO
+// }
+
+// off_t lseek(int fildes, off_t offset, int whence){
+//         TODO
+// }
+
