@@ -36,6 +36,7 @@ void __attribute__((constructor)) init_fd() { // TODO: get the name of the queue
     //fflush(stdout);
 
     pkt_list = NULL;
+    fd_ip_list = NULL;
     next_pkt_id = 0;
 
     current_time = receive_msg();
