@@ -424,7 +424,7 @@ int connect(int sockfd, const struct sockaddr *addr,
         memcpy(&f->fi.addr, addr, addrlen);
         LL_PREPEND(fd_ip_list, f);
         
-        LIBC_FUNCTION(int, connect, const struct sockaddr *addr,
+        LIBC_FUNCTION(int, connect, int sockfd, const struct sockaddr *addr,
                    socklen_t addrlen);
 	return LIBC_FUNCTION_GET(connect)(sockfd, addr, addrlen);
 }

@@ -44,6 +44,8 @@ typedef struct fd_ip_elem {
 
 extern packet_elem* pkt_list;
 
+extern fd_ip_elem* fd_ip_list;
+
 extern uint64_t next_pkt_id;
 
 int before_timeval(struct timeval, struct timeval);
