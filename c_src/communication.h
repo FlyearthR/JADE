@@ -15,6 +15,7 @@
 #define FDO fdo
 
 extern int id;
+extern int seed;
 extern int fdi;
 extern int fdo;
 

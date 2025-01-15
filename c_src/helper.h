@@ -32,7 +32,19 @@ typedef struct packet_elem {
     struct packet_elem *next;
 } packet_elem;
 
+typedef struct fd_ip {
+    int fd;
+    const struct sockaddr addr;
+} fd_ip;
+
+typedef struct fd_ip_elem {
+    fd_ip fi;
+    struct fd_ip_elem *next;
+}  fd_ip_elem;
+
 extern packet_elem* pkt_list;
+
+extern fd_ip_elem* fd_ip_list;
 
 extern uint64_t next_pkt_id;
 

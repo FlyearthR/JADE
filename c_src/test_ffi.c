@@ -56,8 +56,9 @@ Message sent_1_20 = {.tag = Sent, .sent = {._0 = 1, ._1 = 20}};
 Message getTime_1 = {.tag = GetTime, .get_time = 1};
 Message getTime_42 = {.tag = GetTime, .get_time = 42};
 
-Message getRand_1 = {.tag = GetRand, .get_rand = 1};
-Message getRand_42 = {.tag = GetRand, .get_rand = 42};
+Message getRand_1 = {.tag = GetRand, .get_rand = {._0 = 1, ._1 = 10}};
+Message getRand_42 = {.tag = GetRand, .get_rand = {._0 = 2, ._1 = 10}};
+Message getRand_42 = {.tag = GetRand, .get_rand = {._0 = 1, ._1 = 20}};
 
 Message wakeUp_1 = {.tag = WakeUp, .wake_up = 1};
 Message wakeUp_42 = {.tag = WakeUp, .wake_up = 42};

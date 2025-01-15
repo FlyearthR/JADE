@@ -3,6 +3,7 @@
 // TODO: fix memory leaks due to (de)serialization
 
 int id = 0;
+int seed = 0;
 int fdi = 0;
 int fdo = 0;
 int current_time;
@@ -36,6 +37,7 @@ void __attribute__((constructor)) init_fd() { // TODO: get the name of the queue
     //fflush(stdout);
 
     pkt_list = NULL;
+    fd_ip_list = NULL;
     next_pkt_id = 0;
 
     current_time = receive_msg();
@@ -43,7 +45,7 @@ void __attribute__((constructor)) init_fd() { // TODO: get the name of the queue
 
 void print_msg(Message m)
 {
-    switch (m.tag) {
+    /*switch (m.tag) {
         case Stuck:
             printf("Stuck(%i)\n", m.stuck);
             break;
@@ -82,7 +84,7 @@ void print_msg(Message m)
         case Finished:
             printf("Finished(%i)\n", m.finished);
             break;
-    }
+    }*/
 }
 
 int send_msg(Message m) // TODO: extend this
@@ -108,7 +110,7 @@ uint64_t receive_msg()
     do {
         int ret = mq_receive(FDI, msg.buffer, SIZE_BUFFER, NULL);
         if (ret == -1) {
-            fprintf(stderr, "Error receiving message in receive_msg()\n");
+            //fprintf(stderr, "Error receiving message in receive_msg()\n");
             perror("Error: ");
             exit(-6);
         }
@@ -182,7 +184,8 @@ void suppress_event(struct timeval t)
 
 int get_random()
 {
-    Message m = {.tag = GetRand, .get_rand = ID};
+    fflush(stdout);
+    Message m = {.tag = GetRand, .get_rand = {._0= ID, ._1 = seed}};
     //printf("get_random called \n");
     unsigned int ret = send_msg(m);
     if (ret != 0)

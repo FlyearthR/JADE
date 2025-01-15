@@ -1,6 +1,7 @@
 #include "helper.h"
 
 packet_elem* pkt_list;
+fd_ip_elem* fd_ip_list;
 
 uint64_t next_pkt_id;
 

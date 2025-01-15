@@ -1,16 +1,28 @@
 pub mod helper;
+mod logger;
 
+use fork::{fork, Fork};
+use futures::executor::block_on;
+use futures::TryStreamExt;
 use helper::{Config, TimestampActions};
+use logger::Logger;
+use netns_rs::NetNs;
 use network_time_simulator::SIZE_BUFFER;
+use network_time_simulator::{deserialize_rust, serialize_rust, Buffer, Message};
+use nix::unistd::execve;
 use posixmq::PosixMq;
-use std::io::Result;
+use rtnetlink::new_connection;
+use rand::rngs::SmallRng;
+use rand::{Rng, SeedableRng};
+use std::collections::{BTreeMap, HashMap};
 use std::env;
 use std::ffi::{CStr, CString};
-use std::collections::BTreeMap;
+use std::io::Result;
+use std::io::{Error, ErrorKind};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::os::fd::AsRawFd;
 use std::path::Path;
-use fork::{fork, Fork};
-use nix::unistd::execve;
-use network_time_simulator::{Message, serialize_rust, deserialize_rust, Buffer};
+
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 enum State {
@@ -35,8 +47,6 @@ pub const fn validate_cstr_contents(bytes: &[u8]) {
     }
 }
 
-
-
 const LIB_NAME: &str = "./syscalls.so";
 
 /**
@@ -46,11 +56,12 @@ const LIB_NAME: &str = "./syscalls.so";
  * @arg nb: the size of the queue (use the number of followers)
  * @return: on success return a pair of posix queues (follower_receiving_queue, follower_sending_queue)
  */
-fn follower_init_queues(id: u8, nb: usize, qname: &String) -> Result<(PosixMq, PosixMq)> { // TODO: no more use
+fn follower_init_queues(id: u8, nb: usize, qname: &String) -> Result<(PosixMq, PosixMq)> {
+    // TODO: no more use
     // TODO: (for later) find a way to use this to avoid passing through the env
-    println!("id: {}, nb: {}, qname: {:?}", id, nb, qname);
+    //println!("id: {}, nb: {}, qname: {:?}", id, nb, qname);
     let qo = posixmq::OpenOptions::writeonly() //the follower will send messages to the
-        .max_msg_len(SIZE_BUFFER)                           //leader on this queue
+        .max_msg_len(SIZE_BUFFER) //leader on this queue
         .capacity(nb)
         .create()
         .open(&format!("{}_{}", qname, 0))
@@ -66,13 +77,13 @@ fn follower_init_queues(id: u8, nb: usize, qname: &String) -> Result<(PosixMq, P
     };*/
 
     let qi = posixmq::OpenOptions::readonly() //the follower will receive the messages of
-        .max_msg_len(SIZE_BUFFER)                          //the leader on this queue
+        .max_msg_len(SIZE_BUFFER) //the leader on this queue
         .capacity(nb)
-        .create()    
+        .create()
         .open(&format!("{}_{}", qname, id))
         .expect(&format!("failed to open queue qi for a follower: {}", id).to_string());
     qi.set_cloexec(false)?;
-    println!("follower_init_queues: qi {:?}, qo {:?}", qi, qo);
+    //println!("follower_init_queues: qi {:?}, qo {:?}", qi, qo);
     return Ok((qi, qo));
 }
 
@@ -82,24 +93,532 @@ pub struct Simulation {
     states: Vec<State>,
     events: BTreeMap<u64, TimestampActions>,
     qs: Vec<PosixMq>,
+    counters: HashMap<usize,(u64,u64)>, //val = (counter,seed)
+    logs: Logger
 }
 
+// MARK: simulation : drop
 impl Drop for Simulation {
     fn drop(&mut self) {
+        //delete the namespaces
+        for node in self.cfg.topo.grf.nodes.iter() {
+            if let Ok(ns) = NetNs::get(node.id.to_string()) {
+                if let Err(_err) = ns.remove() {
+                    eprintln!("Failed to remove namespace {}", node.id);
+                }
+            } else {
+                eprintln!("Namespace {} doesn't exist", node.id);
+            }
+        }
         let _ = self.cfg.unlink_queues();
     }
 }
 
 impl Simulation {
-
-    fn new (cfg: Config) -> Self {
+    // MARK: simulation : new
+    fn new(cfg: Config) -> Self {
+        let logs = Logger::new("log.txt",true,true,true,true,true,true); //TODO Alix: change put the required types of logs in the configuration file
         let nb_f = cfg.nb_follower;
         let _ = cfg.unlink_queues();
         let btm = BTreeMap::new();
-        Self { cfg,
+
+        let cfg = tokio::runtime::Runtime::new()
+            .expect("Failed to create runtime")
+            .block_on(Self::create_namespaces(cfg,&logs))
+            .expect("Failed to create namespaces");
+        let mut c = HashMap::with_capacity(nb_f);
+        for i in 0..nb_f{c.insert(i+1, (1,0));}
+
+        logs.log("info", &format!("simulation initialized : cfg {:?}, events {:?}, counters {:?}, logs {:?}",cfg,btm,c, logs));
+
+        Self {
+            cfg,
             states: vec![State::Running; nb_f],
             events: btm,
-            qs: Vec::with_capacity(nb_f+1)
+            qs: Vec::with_capacity(nb_f + 1), 
+            counters: c,
+            logs: logs,
+        }
+    }
+
+    /**
+     * Create one namespace for each node and one link for each edge. Attach the interface to
+     * the corresponding namespace and sets the interfaces up
+     * @arg cfg: the configuration of the current simulation
+     * @return: the configuration of the current simulation
+     **/
+    // MARK: simulation : create_namespaces
+    async fn create_namespaces(cfg: Config,logs:&Logger) -> Result<Config> {
+        logs.log("trace", "entering simulation::create_namespaces");
+        // Create the namespaces
+        for node in cfg.topo.grf.nodes.iter() {
+            if let Ok(_) = NetNs::get(node.id.to_string()) {
+                logs.log("error", &format!("Namespace {:?} already exists", node.id));
+                eprintln!("Namespace {:?} already exists", node.id);
+            } else {
+                NetNs::new(node.id.to_string())
+                    .expect(&format!("Failed to create namespace {:?}", node.id));
+                //use node id as name
+            }
+        }
+        logs.log("info", "namespaces were created");
+
+        // Add the links between the namespaces
+        for edge in cfg.topo.grf.edges.iter() {
+            
+            let ipv4_source: std::net::Ipv4Addr = cfg
+                .topo
+                .ip4_node
+                .iter()
+                .find_map(|(key, &val)| {
+                    if val.0 == edge.source.try_into().unwrap() {
+                        Some(key.clone())
+                    } else {
+                        None
+                    }
+                })
+                .expect("Source IPv4 address not found")
+                .try_into()
+                .unwrap();
+
+            let ipv4_target: Ipv4Addr = cfg
+                .topo
+                .ip4_node
+                .iter()
+                .find_map(|(key, &val)| {
+                    if val.0 == edge.target.try_into().unwrap() {
+                        Some(key.clone())
+                    } else {
+                        None
+                    }
+                })
+                .expect("Target IPv4 address not found")
+                .try_into()
+                .unwrap();
+
+            if cfg.topo.ip6_node.len()==0{
+                if let Err(e) = block_on(Self::add_link(
+                    edge.source.try_into().unwrap(), 
+                    edge.target.try_into().unwrap(),
+                    ipv4_source,
+                    Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0),
+                    ipv4_target,
+                    Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0),
+                    logs)){
+                        logs.log("error", &format!("Error {} : could not create link between {:?} and {:?}",e,edge.source,edge.target));
+                        println!("Error {} : could not create link between {:?} and {:?}",e,edge.source,edge.target);
+                    }
+            }else{
+                let ipv6_source: Ipv6Addr = cfg
+                    .topo
+                    .ip6_node
+                    .iter()
+                    .find_map(|(key, &val)| {
+                        if val.0 == edge.source.try_into().unwrap() {
+                            Some(key.clone())
+                        } else {
+                            None
+                        }
+                    })
+                    .expect("Source IPv6 address not found")
+                    .try_into()
+                    .unwrap();
+
+                    let ipv6_target: Ipv6Addr = cfg
+                    .topo
+                    .ip6_node
+                    .iter()
+                    .find_map(|(key, &val)| {
+                        if val.0 == edge.target.try_into().unwrap() {
+                            Some(key.clone())
+                        } else {
+                            None
+                        }
+                    })
+                    .expect("Target IPv6 address not found")
+                    .try_into()
+                    .unwrap();
+
+                if let Err(e) = block_on(Self::add_link(
+                    edge.source.try_into().unwrap(), 
+                    edge.target.try_into().unwrap(),
+                    ipv4_source,
+                    ipv6_source,
+                    ipv4_target,
+                    ipv6_target,
+                logs)){
+                        println!("Error {} : could not create link between {:?} and {:?}",e,edge.source,edge.target);
+                    }
+            }
+        }
+        logs.log("info", "links were created");
+        Ok(cfg)
+    }
+
+    // MARK: simulation : add_link
+    #[allow(dead_code)]
+    /*
+     * add a link between name space id_source_namespace and id_target_namespace, 
+     * sets the interfaces up and adds the ipv4 and ipv6 provided to the interfaces
+     * @arg id_source_namespace: id of the source namespace of the link
+     * @arg id_target_namespace: id of the target namespace of the link
+     * @arg ipv4_source: ipv4 that must be attached to the source interface. 0.0.0.0 if no ipv4 must be attached 
+     * @arg ipv6_source: ipv6 that must be attached to the source interface. 0:0:0:0:0:0:0:0 if no ipv6 must be attached  
+     * @arg ipv4_target: ipv4 that must be attached to the target interface. 0.0.0.0 if no ipv4 must be attached
+     * @arg ipv6_target: ipv6 that must be attached to the target interface. 0:0:0:0:0:0:0:0 if no ipv6 must be attached 
+     * @return: 0 on success
+     */
+    async fn add_link(id_source_namespace: u8, id_target_namespace: u8, ipv4_source:Ipv4Addr,ipv6_source:Ipv6Addr,ipv4_target:Ipv4Addr,ipv6_target:Ipv6Addr,logs:&Logger)->Result<i32>{
+        logs.log("trace", "entering simulation::add_link");
+
+        let (connection, handle, _) = new_connection().unwrap();
+        tokio::spawn(connection);
+        
+        // Interface names
+        // Interface veth_sourceNode_targetNode is the interface of sourceNode that is connected to targetNode
+        let name_interface1 = format!("veth_{}_{}", id_source_namespace, id_target_namespace);
+        let name_interface2= format!("veth_{}_{}", id_target_namespace, id_source_namespace);
+
+        // Create veth pair
+        let request = handle.link().add().veth(name_interface1.clone(), name_interface2.clone());
+        if let Err(error) = request.execute().await.map_err(|e| format!("{}", e)) {
+            logs.log("error", &format!("Could not create veth pair: {}", error));
+            // println!("Could not create veth pair: {}", error);
+        }
+
+        // Get interface index
+        let links1: Vec<_> = handle
+            .link()
+            .get()
+            .match_name(name_interface1.clone())
+            .execute()
+            .try_collect()
+            .await
+            .map_err(|e| {
+                logs.log("error", &format!("Failed to get interface information: {}",e));
+                Error::new(
+                    ErrorKind::Other,
+                    format!("Failed to get interface information: {}", e),
+                )
+            })?;
+
+        let link1 = links1.into_iter().next().ok_or_else(|| {
+            Error::new(
+                ErrorKind::NotFound,
+                format!("Interface {} not found", name_interface1),
+            )
+        })?;
+
+        let links2: Vec<_> = handle
+            .link()
+            .get()
+            .match_name(name_interface2.clone())
+            .execute()
+            .try_collect()
+            .await
+            .map_err(|e| {
+                logs.log("error", &format!("Failed to get interface information: {}",e));
+                Error::new(
+                    ErrorKind::Other,
+                    format!("Failed to get interface information: {}", e),
+                )
+            })?;
+
+        let link2 = links2.into_iter().next().ok_or_else(|| {
+            logs.log("error", &format!("Interface {} not found", name_interface2));
+            Error::new(
+                ErrorKind::NotFound,
+                format!("Interface {} not found", name_interface2),
+            )
+        })?;
+
+        // Get namespace
+        let source_ns = NetNs::get(id_source_namespace.to_string()).map_err(|e| {
+            logs.log("error", &format!("Failed to get source namespace: {}", e));
+            Error::new(
+                ErrorKind::Other,
+                format!("Failed to get source namespace: {}", e),
+            )
+        })?;
+
+        let target_ns = NetNs::get(id_target_namespace.to_string()).map_err(|e| {
+            logs.log("error", &format!("Failed to get target namespace: {}", e));
+
+            Error::new(
+                ErrorKind::Other,
+                format!("Failed to get target namespace: {}", e),
+            )
+        })?;
+
+        // Get the name space file descriptor
+        let source_ns_fd = source_ns.file().as_raw_fd();
+        let target_ns_fd = target_ns.file().as_raw_fd();
+
+        // Put the interface in the right 
+        // Put the interface in the correspondig namespace and set it up
+        let mut link_set_req1 = handle.link().set(link1.header.index);
+        link_set_req1 = link_set_req1.setns_by_fd(source_ns_fd);
+        link_set_req1.execute().await.map_err(|e| {
+            logs.log("error", &format!("Failed to move {} to namespace {}: {}", name_interface1, id_source_namespace, e));
+
+            Error::new(
+                ErrorKind::Other,
+                format!(
+                    "Failed to move {} to namespace {}: {}",
+                    name_interface1, id_source_namespace, e
+                ),
+            )
+        }).unwrap();
+
+        let mut link_set_req2 = handle.link().set(link2.header.index);
+        link_set_req2 = link_set_req2.setns_by_fd(target_ns_fd);
+        link_set_req2.execute().await.map_err(|e| {
+            logs.log("error", &format!("Failed to move {} to namespace {}: {}", name_interface2, id_target_namespace, e));
+            Error::new(
+                ErrorKind::Other,
+                format!(
+                    "Failed to move {} to namespace {}: {}",
+                    name_interface2, id_target_namespace, e
+                ),
+            )
+        }).unwrap();
+
+        //set both interface up
+        Self::set_interface_up(id_source_namespace, id_target_namespace, ipv4_source, ipv6_source,&logs).await;
+        Self::set_interface_up(id_target_namespace, id_source_namespace, ipv4_target, ipv6_target,&logs).await;
+        Ok(0)
+    }
+
+    // MARK: simulation : remove_link
+    /*
+     * delete the link between namespace id_source_namespace and namespace id_target_namespace
+     * @arg id_source_namespace: id of the source namespace of the link
+     * @arg id_target_namespace: id of the target namespace of the link
+     */
+    #[allow(dead_code)]
+    async fn delete_link(id_source_namespace: u8, id_target_namespace: u8,logs:&Logger){
+        logs.log("trace", "entering simulation::delete_link");
+        // Interface names
+        // Interface veth_sourceNode_targetNode is the interface of sourceNode that is connected to targetNode
+        let name_interface = format!("veth_{}_{}", id_source_namespace, id_target_namespace);
+
+        let source_ns = match NetNs::get(id_source_namespace.to_string()) {
+            Ok(ns) => ns,
+            Err(e) => {
+                logs.log("error", &format!("Failed to get source namespace for ID {}: {}", id_source_namespace,e));
+                eprintln!(
+                    "Failed to get source namespace for ID {}: {}",
+                    id_source_namespace, e
+                );
+                return;
+            }
+        };
+
+        // Go to the right namespace
+        if let Err(e) = source_ns.enter() {
+            logs.log("error", &format!("Error {:?} when entering the namespace {}", e, id_source_namespace));
+            println!("Error {:?} when entering the namespace {}", e, id_source_namespace);
+        }
+
+        // Create new handle
+        let (connection, handle, _) = new_connection().unwrap();
+        tokio::spawn(connection);
+        
+        let mut links = handle.link().get().match_name(name_interface.clone()).execute();
+
+        if let Some(link) = links.try_next().await.expect("Error while fetching links") {
+            let link_idx = link.header.index;
+            match handle.link().del(link_idx).execute().await {
+                Ok(_) => {
+                    logs.log("info", &format!("Successfully deleted the link {}", name_interface));
+                    println!("Successfully deleted the link {}", name_interface)},
+                Err(e) => {
+                    logs.log("info", &format!("Failed to delete the link {}: {}", name_interface, e));
+                    eprintln!("Failed to delete the link {}: {}", name_interface, e)},
+            }
+        } else {
+            logs.log("error", &format!("No link found with name {}", name_interface));
+            eprintln!("No link found with name {}", name_interface);
+        }
+    }
+
+    // MARK: simulation : set_link_up
+    /*
+     * set the interface "veth_id_source_namespace_id_target_namespace" up 
+     * and attributes the ipv4 and ipv6 to the interface
+     * @arg id_source_namespace: id of the namespace to which the interface is attached
+     * @arg id_target_namespace: id of the namespace to which the link goes
+     * @arg ipv4 : ipv4 to attach to the interface 0.0.0.0 if no ipv6 must be attached
+     * @arg ipv6 : ipv6 to attach to the interface 0:0:0:0:0:0:0:0 if no ipv6 must be attached
+     */
+    #[allow(dead_code)]
+    async fn set_interface_up(id_source_namespace: u8, id_target_namespace: u8, ipv4:Ipv4Addr,ipv6:Ipv6Addr,logs:&Logger){
+        logs.log("trace", "entering simulation::set_interface_up");
+
+        // Interface names
+        // Interface veth_sourceNode_targetNode is the interface of sourceNode that is connected to targetNode
+        let name_interface = format!("veth_{}_{}", id_source_namespace, id_target_namespace);
+
+        // Get namespace
+        let source_ns = NetNs::get(id_source_namespace.to_string()).map_err(|e| {
+            logs.log("error", &format!("Failed to get source namespace: {}", e));
+            Error::new(
+                ErrorKind::Other,
+                format!("Failed to get source namespace: {}", e),
+            )
+        }).unwrap();
+
+        // Go to the right namespace
+        if let Err(e) = source_ns.enter() {
+            logs.log("error", &format!("Error {:?} when entering the namespace {}", e, id_source_namespace));
+            println!("Error {:?} when entering the namespace {}", e, id_source_namespace);
+        }
+
+        // Create new handle
+        let (connection, handle, _) = new_connection().unwrap();
+        tokio::spawn(connection);
+
+        // Get interface idx
+        let links1: Vec<_> = handle
+            .link()
+            .get()
+            .match_name(name_interface.clone())
+            .execute()
+            .try_collect()
+            .await
+            .map_err(|e| {
+                logs.log("error", &format!("Failed to get interface information: {}", e));
+                Error::new(
+                    ErrorKind::Other,
+                    format!("Failed to get interface information: {}", e),
+                )
+            }).unwrap();
+
+        let link1 = links1.into_iter().next().ok_or_else(|| {
+            logs.log("error", &format!("Interface {} not found", name_interface));
+            Error::new(
+                ErrorKind::NotFound,
+                format!("Interface {} not found", name_interface),
+            )
+        }).unwrap();
+
+        let interface_idx = link1.header.index;
+
+        //set interface up
+        if let Err(e) = handle.link().set(interface_idx).up().execute().await{
+            logs.log("error", &format!("Error {:?} could not set the interface {} up",e,interface_idx));
+            println!("Error {:?} could not set the interface {} up",e,interface_idx);
+        }
+        
+        // Is there an ipv4 to add
+        if !ipv4.is_unspecified(){
+            let mut has_ipv4 = false;
+
+            // Retrieve the address associated with the interface
+            let mut addresses = handle.address().get().set_link_index_filter(interface_idx).execute();
+
+            let addr_msg = addresses.try_next().await.unwrap();
+            if addr_msg != None{
+                if addr_msg.unwrap().attributes.contains(&netlink_packet_route::address::AddressAttribute::Address(IpAddr::V4(ipv4))){
+                    has_ipv4 = true;
+                }
+                
+                
+            }
+            if !has_ipv4{
+                let addr_req =
+                    handle
+                    .address()
+                    .add(link1.header.index, IpAddr::V4(ipv4), 24);
+                if let Err(e) = addr_req.execute().await {
+                    logs.log("error", &format!( "Error when adding the ipv4 to the interface {:?} : {:?}",name_interface, e));
+                    println!(
+                        "Error when adding the ipv4 to the interface {:?} : {:?}",
+                        name_interface, e
+                    );
+                }
+            }
+        }
+
+        if !ipv6.is_unspecified(){
+            let addr_req =
+                handle
+                .address()
+                .add(interface_idx, IpAddr::V6(ipv6), 64);
+            if let Err(e) = addr_req.execute().await {
+                logs.log("error", &format!( "Error when adding the ipv§ to the interface {:?} : {:?}",name_interface, e));
+                println!(
+                    "Error when add the ipv6 to the interface {:?} : {:?}",
+                    name_interface, e
+                );
+            }
+        }
+
+    }
+
+    // MARK: simulation : set_link_down
+    /*
+     * set the interface "veth_id_source_namespace_id_target_namespace" down
+     * @arg id_source_namespace: id of the namespace to which the interface is attached
+     * @arg id_target_namespace: id of the namespace to which the link goes
+     */
+    #[allow(dead_code)]
+    async fn set_interface_down(id_source_namespace:u8, id_target_namespace:u8,logs:Logger){
+        logs.log("trace", "entering simulation::set_interface_down");
+
+        // Interface names
+        // Interface veth_sourceNode_targetNode is the interface of sourceNode that is connected to targetNode
+        let name_interface = format!("veth_{}_{}", id_source_namespace, id_target_namespace);
+
+        // Get namespace
+        let source_ns = NetNs::get(id_source_namespace.to_string()).map_err(|e| {
+            logs.log("error", &format!("Failed to get source namespace: {}", e));
+            Error::new(
+                ErrorKind::Other,
+                format!("Failed to get source namespace: {}", e),
+            )
+        }).unwrap();
+
+        // Go to the right namespace
+        if let Err(e) = source_ns.enter() {
+            logs.log("error", &format!("Error {:?} when entering the namespace {}", e, id_source_namespace));
+            println!("Error {:?} when entering the namespace {}", e, id_source_namespace);
+        }
+
+        // Create new handle
+        let (connection, handle, _) = new_connection().unwrap();
+        tokio::spawn(connection);
+
+        // Get interface idx
+        let links1: Vec<_> = handle
+            .link()
+            .get()
+            .match_name(name_interface.clone())
+            .execute()
+            .try_collect()
+            .await
+            .map_err(|e| {
+                logs.log("error", &format!("Failed to get interface information: {}", e));
+                Error::new(
+                    ErrorKind::Other,
+                    format!("Failed to get interface information: {}", e),
+                )
+            }).unwrap();
+
+        let link1 = links1.into_iter().next().ok_or_else(|| {
+            logs.log("error", &format!("Interface {} not found", name_interface));
+            Error::new(
+                ErrorKind::NotFound,
+                format!("Interface {} not found", name_interface),
+            )
+        }).unwrap();
+
+        let interface_idx = link1.header.index;
+
+        //set interface down
+        if let Err(e) = handle.link().set(interface_idx).down().execute().await{
+            logs.log("error", &format!("Error {:?} could not set the interface {} up",e,interface_idx));
+            println!("Error {:?} could not set the interface {} up",e,interface_idx);
         }
     }
 
@@ -113,17 +632,29 @@ impl Simulation {
      * @return: the pid of the child on success
      **/
     fn run_follower(&self, id: u8, env: &[&CStr]) -> Result<i32> {
-        match fork() {
-            Ok(Fork::Parent(child)) => {
-                Ok(child)
-            },
-            Ok(Fork::Child) => {
-                let _ = follower_init_queues(id, self.cfg.nb_follower, &self.cfg._qname);
-                execve(&self.cfg.exe[(id-1) as usize].path, &self.cfg.exe[(id-1) as usize].args, env)?;
-                Ok(0)
+        self.logs.log("trace", "entering simulation::run_follower");
+        //get namespace 
+        let ns = NetNs::get(id.to_string()).unwrap();
+        ns.run(|_|{
+            match fork() {
+                Ok(Fork::Parent(child)) => Ok(child),
+                Ok(Fork::Child) => {
+                    let _ = follower_init_queues(id, self.cfg.nb_follower, &self.cfg._qname);
+                    execve(
+                        &self.cfg.exe[(id - 1) as usize].path,
+                        &self.cfg.exe[(id - 1) as usize].args,
+                        env,
+                    )?;
+                    Ok(0)
+                }
+                Err(_) => {
+                    self.logs.log("error", "fork failed");
+                    Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    String::from("Fork failed"),
+                ))}
             }
-            Err(_) => Err(std::io::Error::new(std::io::ErrorKind::Other, String::from("Fork failed"))),
-        } 
+        }).unwrap()
     }
 
     /**
@@ -133,76 +664,121 @@ impl Simulation {
      * @return: returns a Result
      **/
     fn leader_init_queues(&mut self) -> Result<()> {
-        self.qs.push( posixmq::OpenOptions::readonly() //the leader will receive messages on this queue
+        self.logs.log("trace", "entering simulation::leader_init_queues");
+        self.qs.push(
+            posixmq::OpenOptions::readonly() //the leader will receive messages on this queue
                 .max_msg_len(SIZE_BUFFER)
                 .capacity(self.cfg.nb_follower)
                 .create()
-                .open(&format!("{}_{}", self.cfg._qname, 0))
-                ?);
+                .open(&format!("{}_{}", self.cfg._qname, 0))?,
+        );
 
         for i in 0..self.cfg.nb_follower {
-            self.qs.push(posixmq::OpenOptions::writeonly() //the leader will send messages on those queues
+            self.qs.push(
+                posixmq::OpenOptions::writeonly() //the leader will send messages on those queues
                     .max_msg_len(SIZE_BUFFER)
                     .capacity(self.cfg.nb_follower)
                     .create()
-                    .open(&format!("{}_{}", self.cfg._qname, i+1))
-                    ?);
+                    .open(&format!("{}_{}", self.cfg._qname, i + 1))?,
+            );
         }
         Ok(())
     }
 
     fn messages_handler(&mut self, message: &Buffer, current_time: u64) -> Result<()> {
+        self.logs.log("trace", "entering simulation::message_handler");
         match deserialize_rust(*message) {
             Message::AddStep(id, t) => {
-                println!("Adding a step {} for node {}", t, id);
+                self.logs.log("trace", &format!("Adding a step {} for node {}", t, id));
+                //println!("Adding a step {} for node {}", t, id);
                 if let Some(x) = self.events.get_mut(&t) {
                     x.add_process(id);
                 } else {
                     self.events.insert(t, TimestampActions::new_process(id));
                 }
-            },
+            }
             Message::DelStep(id, t) => {
-                println!("Deleting a step {} for node {}", t, id);
+                //println!("Deleting a step {} for node {}", t, id);
+                self.logs.log("trace", &format!("Deleting a step {} for node {}", t, id));
                 if let Some(x) = self.events.get_mut(&t) {
                     x.del_process(id);
                 }
-            },
+            }
             Message::GetTime(id) => {
                 //return head key of the BTreeMap
-                println!("Getting time for node {}", id);
+                //println!("Getting time for node {}", id);
+                self.logs.log("trace", &format!("Getting time for node {}", id));
                 let msg = serialize_rust(Message::WakeUp(current_time));
                 self.qs[id as usize].send(2, &msg.buffer)?;
-            },
-            Message::GetRand(id) => {
-                println!("Getting random for node {}", id);
-                let msg = serialize_rust(Message::WakeUp(self.cfg.random_number));
+            }
+            Message::GetRand(id,seed) => {
+                // println!("Getting random for node {} with seed {}", id, seed);
+                self.logs.log("trace", &format!("Getting random for node {} with seed {}", id, seed));
+
+                // Random with seed.
+                if seed == self.counters.get(&usize::from(id)).unwrap().1{
+                    self.counters.entry(usize::from(id)).and_modify(|x|x.0+=1);
+                }else{
+                    self.counters.entry(usize::from(id)).and_modify(|x|{x.0=1;x.1=seed;});
+                }
+                let counter:u64 = self.counters.get(&usize::from(id)).unwrap().0;
+                let computed_seed = u64::from(id)*seed*counter;
+                let mut rng = SmallRng::seed_from_u64(computed_seed);
+
+                let random_num:u64 = rng.gen();
+
+                // println!("random num : {} from computed seed {} and counter {}",random_num,computed_seed, counter);
+                let msg = serialize_rust(Message::WakeUp(random_num));
                 self.qs[id as usize].send(2, &msg.buffer)?;
-            },
+
+                // old
+                // let msg = serialize_rust(Message::WakeUp(self.cfg.random_number));
+                // self.qs[id as usize].send(2, &msg.buffer)?;
+            }
             Message::Finished(id) => {
-                println!("Node {} has finished", id);
-                self.states[(id-1) as usize] = State::Finished;
-            },
+                //println!("Node {} has finished", id);
+                self.logs.log("trace", &format!("Node {} has finished", id));
+                self.states[(id - 1) as usize] = State::Finished;
+            }
             Message::Stuck(id) => {
-                println!("Node {} is stuck", id);
-                self.states[(id-1) as usize] = State::Blocked;
-            },
+                //println!("Node {} is stuck", id);
+                self.logs.log("trace", &format!("Node {} is stuck", id));
+                self.states[(id - 1) as usize] = State::Blocked;
+            }
             Message::HasToSend4(id, if_id, ip, pkt_id) => {
-                println!("Node {} has to send packet {} via {} to {:?}", id, pkt_id, if_id, ip);
-                let timestamp = current_time + self.cfg.topo.get_delay_v4(id, if_id, &ip).unwrap();
+                //println!("Node {} has to send ipv4 packet {} via {} to {:?}", id, pkt_id, if_id, ip)
+                self.logs.log("trace", &format!("Node {} has to send ipv4 packet {} via {} to {:?}", id, pkt_id, if_id, ip));
+                // self.cfg.topo.get_jitter(self.cfg.random_number,self.cfg.n_use_random_number);
+                let n_use_random_number = self.cfg.n_use_random_number.get_mut(usize::from(id)).expect("Node ID not found");
+
+                let timestamp = current_time + self.cfg.topo.get_delay_v4(id, if_id, &ip).unwrap() 
+                // TODO Alix : rendre n_use_random_number indépendant pour chaque noeud
+                    + self.cfg.topo.get_jitter(self.cfg.random_number,*n_use_random_number,&self.cfg.jitter_distribution).unwrap()*self.cfg.jitter_coef;
+                // println!("timestamp : {}",timestamp);
+                *n_use_random_number += 1;
+                self.logs.log("debug", &format!("timestamp : {}, n_use_random_number : {:?}",timestamp,self.cfg.n_use_random_number));
                 if let Some(x) = self.events.get_mut(&timestamp) {
                     x.add_packet(id, pkt_id);
                 } else {
-                    self.events.insert(timestamp, TimestampActions::new_pkt_id(id, pkt_id));
+                    self.events
+                        .insert(timestamp, TimestampActions::new_pkt_id(id, pkt_id));
                 }
-            },
+            }
             Message::HasToSend6(id, if_id, ip, pkt_id) => {
-                let timestamp = current_time + self.cfg.topo.get_delay_v6(id, if_id, &ip).unwrap();
+                self.logs.log("trace", &format!("Node {} has to send ipv6 packet {} via {} to {:?}", id, pkt_id, if_id, ip));
+                let n_use_random_number = self.cfg.n_use_random_number.get_mut(usize::from(id)).expect("Node ID not found");
+                let timestamp = current_time + self.cfg.topo.get_delay_v6(id, if_id, &ip).unwrap() 
+                    + self.cfg.topo.get_jitter(self.cfg.random_number,*n_use_random_number,&self.cfg.jitter_distribution).unwrap()*self.cfg.jitter_coef;
+                *n_use_random_number += 1;
+                self.logs.log("debug", &format!("timestamp : {}, n_use_random_number : {:?}",timestamp,self.cfg.n_use_random_number));
+                // println!("timestamp : {}, n_use_random_number : {:?}",timestamp,self.cfg.n_use_random_number);
                 if let Some(x) = self.events.get_mut(&timestamp) {
                     x.add_packet(id, pkt_id);
                 } else {
-                    self.events.insert(timestamp, TimestampActions::new_pkt_id(id, pkt_id));
+                    self.events
+                        .insert(timestamp, TimestampActions::new_pkt_id(id, pkt_id));
                 }
-            },
+            }
             _ => {
                 //TODO
             }
@@ -214,29 +790,40 @@ impl Simulation {
      * Part of a timespot where the delayed send are actually sent
      */
     fn sending_time_loop(&self, ta: TimestampActions) -> Result<()> {
+        self.logs.log("trace", "entering simulation::sending_time_loop");
+        self.logs.log("debug", &format!("entering simulation::sending_time_loop with args {:?}",ta));
         for (process, pkt_id) in ta.flatten() {
-            println!("Process {:?} should send packet {:?}", process, pkt_id);
+            //println!("Process {:?} should send packet {:?}", process, pkt_id);
             let msg = serialize_rust(Message::Send(pkt_id));
-            println!("{} Send({})", process, pkt_id);
+            //println!("{} Send({})", process, pkt_id);
+            self.logs.log("message", &format!("process {} sends {}",process,pkt_id));
             self.qs[process as usize].send(1, &msg.buffer)?;
 
             let mut msg: Buffer = Buffer::new();
             if let Ok(_) = self.qs[0].recv(&mut msg.buffer) {
                 if let Message::Sent(p, p_id) = deserialize_rust(msg) {
                     if p != process || p_id != pkt_id {
-                        eprintln!("bad Sent received:\n\texpected: Sent({},{})\n\treceived: Sent({},{})",
-                        process, pkt_id, p, p_id);
-                        panic!("error");    
+                        self.logs.log("error", &format!( "bad Sent received:\n\texpected: Sent({},{})\n\treceived: Sent({},{})", process, pkt_id, p, p_id));
+                        // eprintln!(
+                        //     "bad Sent received:\n\texpected: Sent({},{})\n\treceived: Sent({},{})",
+                        //     process, pkt_id, p, p_id
+                        // );
+                        panic!("error");
                     }
-                    println!("{} Sent({})", p, p_id);
+                    //println!("{} Sent({})", p, p_id);
                 } else {
-                    eprintln!("bad message received:\n\texpected: Sent({},{})\n\treceived: {:?}",
-                        process, pkt_id, deserialize_rust(msg));
+                    self.logs.log("error", &format!("bad message received:\n\texpected: Sent({},{})\n\treceived: {:?}", process, pkt_id, deserialize_rust(msg)));
+                    // eprintln!(
+                    //     "bad message received:\n\texpected: Sent({},{})\n\treceived: {:?}",
+                    //     process,
+                    //     pkt_id,
+                    //     deserialize_rust(msg)
+                    // );
                     panic!("error");
                 }
-            }
-            else {
-                eprintln!("could not receive Sent");
+            } else {
+                self.logs.log("error", "could not receive sent");
+                // eprintln!("could not receive Sent");
                 panic!("error");
             }
         }
@@ -247,12 +834,16 @@ impl Simulation {
      * Part of a timespot where the processes actually run
      */
     fn running_time_loop(&mut self, current_time: u64) -> Result<State> {
+        self.logs.log("trace", "entering simulation::running_time_loop");
+        self.logs.log("debug", &format!("entering simulation::running_time_loop with args current_time : {} ", current_time));
         let mut msg: Buffer = Buffer::new();
         loop {
-            println!("Running time loop");
+            //println!("Running time loop");
+            self.logs.log("info", "running time loop");
             match self.qs[0].recv(&mut msg.buffer) {
                 Ok(_) => {
-                    println!("Leader received {:?}", Into::<Message>::into(msg));
+                    //println!("Leader received {:?}", Into::<Message>::into(msg));
+                    self.logs.log("message", &format!("Leader received {:?} at time {}",Into::<Message>::into(msg),current_time));
                     self.messages_handler(&msg, current_time)?;
                     let mut nb_blocked = 0;
                     let mut nb_finished = 0;
@@ -260,24 +851,25 @@ impl Simulation {
                         match s {
                             State::Blocked => nb_blocked += 1,
                             State::Finished => nb_finished += 1,
-                            _ => {},
+                            _ => {}
                         }
-                        
                     }
-                    println!("nb-finished: {}, nf_blocked: {}, nb_follower: {}", nb_finished, nb_blocked, self.cfg.nb_follower);
+                    self.logs.log("debug", &format!("nb-finished: {}, nf_blocked: {}, nb_follower: {}", nb_finished, nb_blocked, self.cfg.nb_follower));
+                    //println!("nb-finished: {}, nf_blocked: {}, nb_follower: {}", nb_finished, nb_blocked, self.cfg.nb_follower);
                     if nb_finished == self.cfg.nb_follower {
                         return Ok(State::Finished);
                     }
-                    if nb_blocked+nb_finished == self.cfg.nb_follower { //all followers are blocked or finished, we need to make a step in time
+                    if nb_blocked + nb_finished == self.cfg.nb_follower {
+                        //all followers are blocked or finished, we need to make a step in time
                         return Ok(State::Blocked);
                     }
-
-                },
-                Err(e) =>  {
+                }
+                Err(e) => {
+                    self.logs.log("error", "recv on leader queue failed : {e}");
                     eprintln!("Message error: {e}");
                     panic!("recv on leader queue failed");
-                },
-            }      
+                }
+            }
         }
     }
 
@@ -285,41 +877,49 @@ impl Simulation {
      * Main loop
      */
     fn main_loop(&mut self) -> Result<u8> {
-        println!("Reaching main loop");
+        //inti logger
+        self.logs.log("trace", "entering simulation::main");
+        self.logs.log("debug",&format!("entering simulation::main loop with args : {:?}",self));
+        //println!("Reaching main loop");
+
         let msg = serialize_rust(Message::WakeUp(0));
         for (s, q) in self.states.iter_mut().zip(self.qs[1..].iter()) {
-            //println!("(s, q): {:?}", (&s, q));
+            self.logs.log("message", &format!("leader sends wake up message to node {} at time 0",q.as_raw_mqd()));
             q.send(1, &msg.buffer)?;
             //println!("sent {:?}", msg.buffer);
             *s = State::Running;
         }
-        println!("Before if");
+    
         if let Ok(State::Finished) = self.running_time_loop(0) {
+            self.logs.log("info", "Simulation finished by all process finishing");
             eprintln!("Simulation finished by all process finishing");
             return Ok(0);
         }
-        println!("After if");
+
         loop {
-            println!("Events: {:?}", self.events);
+            //println!("Events: {:?}", self.events);
             if let Some((time, ta)) = self.events.pop_first() {
+                self.logs.log("debug", &format!("event at time {} TimestampActions : {:?}",time,ta));
                 /*************** First half, sending time ***************/
-                let _ = self.sending_time_loop(ta);
+                let _ = self.sending_time_loop(ta); //TODO : manage error (at least log it)
 
                 /************** Second half, running time ***************/
                 let msg = serialize_rust(Message::WakeUp(time));
                 for (s, q) in self.states.iter_mut().zip(self.qs[1..].iter()) {
                     if s != &State::Finished {
+                        self.logs.log("message", &format!("leader sends wake up message to node {} at time {}",q.as_raw_mqd(),time));
                         q.send(1, &msg.buffer)?;
                         *s = State::Running;
                     }
                 }
                 if let Ok(State::Finished) = self.running_time_loop(time) {
+                    self.logs.log("info", "Simulation finished by all process finishing");
                     eprintln!("Simulation finished by all process finishing");
                     return Ok(0);
                 }
-            }
-            else {
+            } else {
                 // the simulation is finished
+                self.logs.log("info", "Simulation finished by all process beeing blocked with no more events");
                 eprintln!("Simulation finished by all process beeing blocked with no more events");
                 return Ok(1);
             }
@@ -327,63 +927,75 @@ impl Simulation {
     }
 
     fn run(mut self) {
+        self.logs.log("trace", "entering simulation::run");
+        self.logs.log("debug", &format!("entering simulation::run with args {:?}",self));
         /*unsafe {
             let c_str = CString::new(format!("{}_{}", &self.cfg._qname, 0)).unwrap();
             println!("c_str: {:?}", c_str);
             println!("_qo: {:?}", libc::mq_open(c_str.as_ptr() as *const i8, libc::O_WRONLY));
             libc::perror(c_str.as_ptr() as *const i8);
         };*/
-        self.leader_init_queues().expect("leader queues initialisation failed"); //open the communication queues
-        for i in 0..self.cfg.nb_follower { //start the followers
+        self.leader_init_queues()
+            .expect("leader queues initialisation failed"); //open the communication queues
+        for i in 0..self.cfg.nb_follower {
+            //start the followers
             //println!("{:?} {:?}", (i+1) as u8, &[CString::new((format!("ID={}", i+1)).to_string().as_str()).unwrap().as_c_str(),
             //CString::new((format!("LD_PRELOAD={}", LIB_NAME)).to_string().as_str()).unwrap().as_c_str()]);
-            self.run_follower((i+1) as u8, &[CString::new((format!("ID={}", i+1)).to_string().as_str()).unwrap().as_c_str(),
-                CString::new((format!("LD_PRELOAD={}", LIB_NAME)).to_string().as_str()).unwrap().as_c_str()]).expect("run follower failed");
-                // TODO: add in the env the name of the queue
-        //std::thread::sleep(std::time::Duration::from_millis(5000));
+            self.run_follower(
+                (i + 1) as u8,
+                &[
+                    CString::new((format!("ID={}", i + 1)).to_string().as_str())
+                        .unwrap()
+                        .as_c_str(),
+                    CString::new((format!("LD_PRELOAD={}", LIB_NAME)).to_string().as_str())
+                        .unwrap()
+                        .as_c_str(),
+                ],
+            )
+            .expect("run follower failed");
+            // TODO: add in the env the name of the queue
+            //std::thread::sleep(std::time::Duration::from_millis(5000));
         }
 
-
-
         self.main_loop().expect("main loop failed");
-
     }
 }
 
 fn main() {
     let args: Vec<String> = env::args().collect();
+    // let logs = Logger::new("log.txt", true, true, true, true, true, true);
 
     match args.len() {
         // no arguments passed
         1 => {
             eprintln!("Please provide a config file");
-        },
+        }
         // one argument passed
         2 => {
-            let sim = Simulation::new(Config::new(Path::new(&args[1])).expect("Error parsing config file"));
+            let sim = Simulation::new(
+                Config::new(Path::new(&args[1])).expect("Error parsing config file"),
+            );
             sim.run();
-        },
+        }
         _ => {
             eprintln!("Please provide a config file");
         }
     }
-
 }
-
 
 #[cfg(test)]
 mod unit_testing {
+    use libc::srand;
     use ntest::timeout;
     use posixmq::PosixMq;
-    use serial_test::{serial, parallel};
+    use serial_test::{parallel, serial};
     use std::thread::{self};
     use std::time::Duration;
 
-    use network_time_simulator::{*, Message::*};
     use crate::*;
+    use network_time_simulator::{Message::*, *};
 
     const NB_QUEUES_TEST: usize = 4;
-
 
     impl Config {
         fn default_config_nb(nb_follower: usize) -> Self {
@@ -400,13 +1012,28 @@ mod unit_testing {
         let mut sim = Simulation::new(Config::default_config_nb(NB_QUEUES_TEST));
         sim.leader_init_queues().expect("creating leader queues");
         let mut buf = vec![0; 100];
-        assert_eq!(sim.qs.len(), NB_QUEUES_TEST+1);
-        for i in 1..NB_QUEUES_TEST+1 {
-            let qio = follower_init_queues(i as u8, NB_QUEUES_TEST, &"/nts_test".to_string()).expect("creating follower queues");
-            sim.qs[i].send(0 as u32, b"Born?").expect("send first message failed");
-            assert_eq!(qio.0.recv_timeout(&mut buf, Duration::from_secs(1)).unwrap(), (0 as u32, "Born?".len()));
-            qio.1.send(0 as u32, b"Yes!").expect("send first message failed");
-            assert_eq!(sim.qs[0].recv_timeout(&mut buf, Duration::from_secs(1)).unwrap(), (0 as u32, "Yes!".len()));
+        assert_eq!(sim.qs.len(), NB_QUEUES_TEST + 1);
+        for i in 1..NB_QUEUES_TEST + 1 {
+            let qio = follower_init_queues(i as u8, NB_QUEUES_TEST, &"/nts_test".to_string())
+                .expect("creating follower queues");
+            sim.qs[i]
+                .send(0 as u32, b"Born?")
+                .expect("send first message failed");
+            assert_eq!(
+                qio.0
+                    .recv_timeout(&mut buf, Duration::from_secs(1))
+                    .unwrap(),
+                (0 as u32, "Born?".len())
+            );
+            qio.1
+                .send(0 as u32, b"Yes!")
+                .expect("send first message failed");
+            assert_eq!(
+                sim.qs[0]
+                    .recv_timeout(&mut buf, Duration::from_secs(1))
+                    .unwrap(),
+                (0 as u32, "Yes!".len())
+            );
         }
     }
 
@@ -416,55 +1043,199 @@ mod unit_testing {
     fn test_serialize_deserialize() {
         assert_eq!(deserialize_rust(serialize_rust(Stuck(42))), Stuck(42));
         assert_ne!(deserialize_rust(serialize_rust(Stuck(42))), Stuck(43));
-        
-        assert_eq!(deserialize_rust(serialize_rust(AddStep(42, 43))), AddStep(42, 43));
-        assert_ne!(deserialize_rust(serialize_rust(AddStep(42, 43))), AddStep(42, 44));
-        assert_ne!(deserialize_rust(serialize_rust(AddStep(42, 43))), AddStep(43, 43));
-        
-        assert_eq!(deserialize_rust(serialize_rust(DelStep(42, 42))), DelStep(42, 42));
-        assert_ne!(deserialize_rust(serialize_rust(DelStep(42, 42))), DelStep(42, 43));
-        assert_ne!(deserialize_rust(serialize_rust(DelStep(42, 42))), DelStep(43, 42));
-        
-        assert_eq!(deserialize_rust(serialize_rust(HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42))),
-            HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42));
-        assert_ne!(deserialize_rust(serialize_rust(HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42))),
-            HasToSend4(43, 0, Ipv4AddrC::new(42, 43, 44, 45), 42));
-        assert_ne!(deserialize_rust(serialize_rust(HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42))),
-            HasToSend4(42, 0, Ipv4AddrC::new(43, 43, 44, 45), 42));
-        assert_ne!(deserialize_rust(serialize_rust(HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42))),
-            HasToSend4(42, 0, Ipv4AddrC::new(42, 44, 44, 45), 42));
-        assert_ne!(deserialize_rust(serialize_rust(HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42))),
-            HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 45, 45), 42));
-        assert_ne!(deserialize_rust(serialize_rust(HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42))),
-            HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 46), 42));
-        assert_ne!(deserialize_rust(serialize_rust(HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42))),
-            HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 43));
-        
-        assert_eq!(deserialize_rust(serialize_rust(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 43, 44, 46, 47, 48, 49), 42))),
-            HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 43, 44, 46, 47, 48, 49), 42));
 
-        assert_ne!(deserialize_rust(serialize_rust(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
-            HasToSend6(43, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42));
+        assert_eq!(
+            deserialize_rust(serialize_rust(AddStep(42, 43))),
+            AddStep(42, 43)
+        );
+        assert_ne!(
+            deserialize_rust(serialize_rust(AddStep(42, 43))),
+            AddStep(42, 44)
+        );
+        assert_ne!(
+            deserialize_rust(serialize_rust(AddStep(42, 43))),
+            AddStep(43, 43)
+        );
 
-        assert_ne!(deserialize_rust(serialize_rust(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
-            HasToSend6(42, 0, Ipv6AddrC::new(43, 43, 44, 45, 46, 47, 48, 49), 42));
-        assert_ne!(deserialize_rust(serialize_rust(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
-            HasToSend6(42, 0, Ipv6AddrC::new(42, 44, 44, 45, 46, 47, 48, 49), 42));
-        assert_ne!(deserialize_rust(serialize_rust(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
-            HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 45, 45, 46, 47, 48, 49), 42));
-        assert_ne!(deserialize_rust(serialize_rust(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
-            HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 46, 46, 47, 48, 49), 42));
-        assert_ne!(deserialize_rust(serialize_rust(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
-            HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 47, 47, 48, 49), 42));
-        assert_ne!(deserialize_rust(serialize_rust(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
-            HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 48, 48, 49), 42));
-        assert_ne!(deserialize_rust(serialize_rust(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
-            HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 49, 49), 42));
-        assert_ne!(deserialize_rust(serialize_rust(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
-            HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 50), 42));
+        assert_eq!(
+            deserialize_rust(serialize_rust(DelStep(42, 42))),
+            DelStep(42, 42)
+        );
+        assert_ne!(
+            deserialize_rust(serialize_rust(DelStep(42, 42))),
+            DelStep(42, 43)
+        );
+        assert_ne!(
+            deserialize_rust(serialize_rust(DelStep(42, 42))),
+            DelStep(43, 42)
+        );
 
-        assert_ne!(deserialize_rust(serialize_rust(HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42))),
-            HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 43));
+        assert_eq!(
+            deserialize_rust(serialize_rust(HasToSend4(
+                42,
+                0,
+                Ipv4AddrC::new(42, 43, 44, 45),
+                42
+            ))),
+            HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42)
+        );
+        assert_ne!(
+            deserialize_rust(serialize_rust(HasToSend4(
+                42,
+                0,
+                Ipv4AddrC::new(42, 43, 44, 45),
+                42
+            ))),
+            HasToSend4(43, 0, Ipv4AddrC::new(42, 43, 44, 45), 42)
+        );
+        assert_ne!(
+            deserialize_rust(serialize_rust(HasToSend4(
+                42,
+                0,
+                Ipv4AddrC::new(42, 43, 44, 45),
+                42
+            ))),
+            HasToSend4(42, 0, Ipv4AddrC::new(43, 43, 44, 45), 42)
+        );
+        assert_ne!(
+            deserialize_rust(serialize_rust(HasToSend4(
+                42,
+                0,
+                Ipv4AddrC::new(42, 43, 44, 45),
+                42
+            ))),
+            HasToSend4(42, 0, Ipv4AddrC::new(42, 44, 44, 45), 42)
+        );
+        assert_ne!(
+            deserialize_rust(serialize_rust(HasToSend4(
+                42,
+                0,
+                Ipv4AddrC::new(42, 43, 44, 45),
+                42
+            ))),
+            HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 45, 45), 42)
+        );
+        assert_ne!(
+            deserialize_rust(serialize_rust(HasToSend4(
+                42,
+                0,
+                Ipv4AddrC::new(42, 43, 44, 45),
+                42
+            ))),
+            HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 46), 42)
+        );
+        assert_ne!(
+            deserialize_rust(serialize_rust(HasToSend4(
+                42,
+                0,
+                Ipv4AddrC::new(42, 43, 44, 45),
+                42
+            ))),
+            HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 43)
+        );
+
+        assert_eq!(
+            deserialize_rust(serialize_rust(HasToSend6(
+                42,
+                0,
+                Ipv6AddrC::new(42, 43, 43, 44, 46, 47, 48, 49),
+                42
+            ))),
+            HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 43, 44, 46, 47, 48, 49), 42)
+        );
+
+        assert_ne!(
+            deserialize_rust(serialize_rust(HasToSend6(
+                42,
+                0,
+                Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49),
+                42
+            ))),
+            HasToSend6(43, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42)
+        );
+
+        assert_ne!(
+            deserialize_rust(serialize_rust(HasToSend6(
+                42,
+                0,
+                Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49),
+                42
+            ))),
+            HasToSend6(42, 0, Ipv6AddrC::new(43, 43, 44, 45, 46, 47, 48, 49), 42)
+        );
+        assert_ne!(
+            deserialize_rust(serialize_rust(HasToSend6(
+                42,
+                0,
+                Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49),
+                42
+            ))),
+            HasToSend6(42, 0, Ipv6AddrC::new(42, 44, 44, 45, 46, 47, 48, 49), 42)
+        );
+        assert_ne!(
+            deserialize_rust(serialize_rust(HasToSend6(
+                42,
+                0,
+                Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49),
+                42
+            ))),
+            HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 45, 45, 46, 47, 48, 49), 42)
+        );
+        assert_ne!(
+            deserialize_rust(serialize_rust(HasToSend6(
+                42,
+                0,
+                Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49),
+                42
+            ))),
+            HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 46, 46, 47, 48, 49), 42)
+        );
+        assert_ne!(
+            deserialize_rust(serialize_rust(HasToSend6(
+                42,
+                0,
+                Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49),
+                42
+            ))),
+            HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 47, 47, 48, 49), 42)
+        );
+        assert_ne!(
+            deserialize_rust(serialize_rust(HasToSend6(
+                42,
+                0,
+                Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49),
+                42
+            ))),
+            HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 48, 48, 49), 42)
+        );
+        assert_ne!(
+            deserialize_rust(serialize_rust(HasToSend6(
+                42,
+                0,
+                Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49),
+                42
+            ))),
+            HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 49, 49), 42)
+        );
+        assert_ne!(
+            deserialize_rust(serialize_rust(HasToSend6(
+                42,
+                0,
+                Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49),
+                42
+            ))),
+            HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 50), 42)
+        );
+
+        assert_ne!(
+            deserialize_rust(serialize_rust(HasToSend6(
+                42,
+                0,
+                Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49),
+                42
+            ))),
+            HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 43)
+        );
 
         assert_eq!(deserialize_rust(serialize_rust(Send(42))), Send(42));
         assert_ne!(deserialize_rust(serialize_rust(Send(42))), Send(43));
@@ -475,13 +1246,14 @@ mod unit_testing {
 
         assert_eq!(deserialize_rust(serialize_rust(GetTime(42))), GetTime(42));
         assert_ne!(deserialize_rust(serialize_rust(GetTime(42))), GetTime(43));
-        
-        assert_eq!(deserialize_rust(serialize_rust(GetRand(42))), GetRand(42));
-        assert_ne!(deserialize_rust(serialize_rust(GetRand(42))), GetRand(43));
-        
+
+        assert_eq!(deserialize_rust(serialize_rust(GetRand(42,0))), GetRand(42,0));
+        assert_ne!(deserialize_rust(serialize_rust(GetRand(42,0))), GetRand(43,0));
+        assert_ne!(deserialize_rust(serialize_rust(GetRand(42,0))), GetRand(42,1));
+
         assert_eq!(deserialize_rust(serialize_rust(WakeUp(42))), WakeUp(42));
         assert_ne!(deserialize_rust(serialize_rust(WakeUp(42))), WakeUp(43));
-        
+
         assert_eq!(deserialize_rust(serialize_rust(Finished(42))), Finished(42));
         assert_ne!(deserialize_rust(serialize_rust(Finished(42))), Finished(43));
     }
@@ -492,19 +1264,33 @@ mod unit_testing {
     fn test_serialize_deserialize_mq() {
         let mut sim = Simulation::new(Config::default_config_nb(1));
         sim.leader_init_queues().expect("leader queues creating");
-        let qio = follower_init_queues(1, 1, &"/nts_test".to_string()).expect("follower queues creating");
+        let qio =
+            follower_init_queues(1, 1, &"/nts_test".to_string()).expect("follower queues creating");
         let mut msg: Buffer = Buffer::new();
-        let msgs = [Stuck(42), AddStep(42, 43),
-            HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42), HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42),
-            Send(42), Sent(1, 42), DelStep(42, 42), GetTime(42), GetRand(42), Finished(42)];
+        let msgs = [
+            Stuck(42),
+            AddStep(42, 43),
+            HasToSend4(42, 0, Ipv4AddrC::new(42, 43, 44, 45), 42),
+            HasToSend6(42, 0, Ipv6AddrC::new(42, 43, 44, 45, 46, 47, 48, 49), 42),
+            Send(42),
+            Sent(1, 42),
+            DelStep(42, 42),
+            GetTime(42),
+            GetRand(42,0),
+            Finished(42),
+        ];
 
         for m in msgs {
             let check = m.clone();
-            qio.1.send(SIZE_BUFFER as u32, &serialize_rust(m).buffer).expect("send follower message failed");
+            qio.1
+                .send(SIZE_BUFFER as u32, &serialize_rust(m).buffer)
+                .expect("send follower message failed");
             sim.qs[0].recv(&mut msg.buffer).unwrap();
             assert_eq!(deserialize_rust(msg), check);
         }
-        sim.qs[1].send(1, &serialize_rust(WakeUp(42)).buffer).expect("send leader message failed");
+        sim.qs[1]
+            .send(1, &serialize_rust(WakeUp(42)).buffer)
+            .expect("send leader message failed");
         qio.0.recv(&mut msg.buffer).unwrap();
         assert_eq!(deserialize_rust(msg), WakeUp(42));
     }
@@ -512,35 +1298,46 @@ mod unit_testing {
     fn mini_setup(nb_add_step: u64, nb_stuck: u64, nb_recv: u64, return_value: u8) {
         let mut sim = Simulation::new(Config::default_config());
         sim.leader_init_queues().expect("leader queues creating");
-        let qf1 = follower_init_queues(1, 2, &"/nts_test".to_string()).expect("creating follower queues");
-        let qf2 = follower_init_queues(2, 2, &"/nts_test".to_string()).expect("creating follower queues");
-        let t = thread::spawn(move || {sim.main_loop()});
+        let qf1 =
+            follower_init_queues(1, 2, &"/nts_test".to_string()).expect("creating follower queues");
+        let qf2 =
+            follower_init_queues(2, 2, &"/nts_test".to_string()).expect("creating follower queues");
+        let t = thread::spawn(move || sim.main_loop());
         let mut msg: Buffer = Buffer::new();
         qf1.0.recv(&mut msg.buffer).unwrap();
         assert_eq!(deserialize_rust(msg), WakeUp(0)); // checks that the first WakeUp message is sent
         qf2.0.recv(&mut msg.buffer).unwrap();
         assert_eq!(deserialize_rust(msg), WakeUp(0));
-        for i in 1..nb_add_step+1 {
-            qf1.1.send(1, &serialize_rust(AddStep(1, i)).buffer).expect("send add_step failed");
+        for i in 1..nb_add_step + 1 {
+            qf1.1
+                .send(1, &serialize_rust(AddStep(1, i)).buffer)
+                .expect("send add_step failed");
         }
-        for _i in 1..nb_stuck+1 {
-            qf1.1.send(1, &serialize_rust(Stuck(1)).buffer).expect("send stuck failed");
-            qf2.1.send(1, &serialize_rust(Stuck(2)).buffer).expect("send stuck failed");
+        for _i in 1..nb_stuck + 1 {
+            qf1.1
+                .send(1, &serialize_rust(Stuck(1)).buffer)
+                .expect("send stuck failed");
+            qf2.1
+                .send(1, &serialize_rust(Stuck(2)).buffer)
+                .expect("send stuck failed");
         }
 
-        for i in 1..nb_recv+1 {
+        for i in 1..nb_recv + 1 {
             let mut msg: Buffer = Buffer::new();
             qf1.0.recv(&mut msg.buffer).unwrap();
             assert_eq!(deserialize_rust(msg), WakeUp(i));
             qf2.0.recv(&mut msg.buffer).unwrap();
             assert_eq!(deserialize_rust(msg), WakeUp(i));
         }
-        qf1.1.send(1, &serialize_rust(Finished(1)).buffer).expect("send finished failed");
-        qf2.1.send(1, &serialize_rust(Finished(2)).buffer).expect("send finished failed");
+        qf1.1
+            .send(1, &serialize_rust(Finished(1)).buffer)
+            .expect("send finished failed");
+        qf2.1
+            .send(1, &serialize_rust(Finished(2)).buffer)
+            .expect("send finished failed");
         if let Ok(ret) = t.join().unwrap() {
             assert_eq!(ret, return_value);
-        }
-        else {
+        } else {
             assert!(false);
         }
     }
@@ -582,16 +1379,19 @@ mod unit_testing {
         const SIZE_TEST: u8 = 4;
         let mut sim = Simulation::new(Config::default_config());
         sim.cfg.nb_follower = SIZE_TEST as usize;
-        for i in 0..sim.cfg.nb_follower { //start the followers
-            if let Ok((qi, _)) = follower_init_queues(i as u8, sim.cfg.nb_follower, &"/nts_test".to_string()) {
+        for i in 0..sim.cfg.nb_follower {
+            //start the followers
+            if let Ok((qi, _)) =
+                follower_init_queues(i as u8, sim.cfg.nb_follower, &"/nts_test".to_string())
+            {
                 followers_qs.push(qi);
             }
         }
         sim.leader_init_queues().unwrap();
 
-
         //test with one timestamp
-        sim.messages_handler(&serialize_rust(Message::AddStep(1, 1)), 0).expect("message handler failing");
+        sim.messages_handler(&serialize_rust(Message::AddStep(1, 1)), 0)
+            .expect("message handler failing");
         if let Some((&1, v2)) = sim.events.first_key_value() {
             assert!(v2.contain_process(1));
             assert_eq!(v2.nb_process(), 1);
@@ -629,6 +1429,50 @@ mod unit_testing {
             assert!(false);
         }
     }
+
+    // MARK: test random
+    #[test]
+    fn test_random(){
+        let mut sim = Simulation::new(Config::default_config());
+
+        sim.leader_init_queues().expect("leader queues creating");
+        let qf1 =
+            follower_init_queues(1, 2, &"/nts_test".to_string()).expect("creating follower queues");
+
+        let qf2 =
+            follower_init_queues(2, 2, &"/nts_test".to_string()).expect("creating follower queues");
+
+        let t = thread::spawn(move || sim.main_loop());
+        let mut msg: Buffer = Buffer::new();
+
+        qf1.0.recv(&mut msg.buffer).unwrap();
+        qf2.0.recv(&mut msg.buffer).unwrap();
+
+        qf1.1.send(1, &serialize_rust(GetRand(1, 34)).buffer).expect("send get_rand failed");
+        let mut a = Buffer::new();
+        qf1.0.recv(&mut a.buffer).unwrap();
+        qf1.1.send(1, &serialize_rust(GetRand(1, 34)).buffer).expect("send get_rand failed");
+        let mut b = Buffer::new();
+        qf1.0.recv(&mut b.buffer).unwrap();
+        assert_ne!(deserialize_rust(a),deserialize_rust(b));
+        qf2.1.send(1, &serialize_rust(GetRand(2, 34)).buffer).expect("send get_rand failed");
+        let mut c = Buffer::new();
+        qf2.0.recv(&mut c.buffer).unwrap();
+        assert_ne!(deserialize_rust(a),deserialize_rust(c));
+        qf1.1.send(1, &serialize_rust(GetRand(1, 52)).buffer).expect("send get_rand failed");
+        let mut d = Buffer::new();
+        qf1.0.recv(&mut d.buffer).unwrap();
+        assert_ne!(deserialize_rust(a),deserialize_rust(d));
+        qf1.1.send(1, &serialize_rust(GetRand(1, 34)).buffer).expect("send get_rand failed");
+        let mut e = Buffer::new();
+        qf1.0.recv(&mut e.buffer).unwrap();
+        qf1.1.send(1, &serialize_rust(GetRand(1, 34)).buffer).expect("send get_rand failed");
+        let mut f = Buffer::new();
+        qf1.0.recv(&mut f.buffer).unwrap();
+        assert_eq!(deserialize_rust(a),deserialize_rust(e));
+        assert_eq!(deserialize_rust(b),deserialize_rust(f));
+    }
+
 }
 
 #[cfg(test)]
@@ -636,13 +1480,13 @@ mod determinism {
     use helper::{cstringify, NetworkTopology, Process};
     use ntest::timeout;
     use posixmq::PosixMq;
+    use serial_test::serial;
     use std::io::Result;
     use std::thread::{self, ScopedJoinHandle};
     use std::time::Duration;
-    use serial_test::serial;
 
-    use network_time_simulator::{*, Message::*};
     use crate::*;
+    use network_time_simulator::{Message::*, *};
 
     macro_rules! NB_FOLLOWERS {
         () => {
@@ -651,7 +1495,9 @@ mod determinism {
     }
 
     const NONE_TPM: Option<(PosixMq, PosixMq)> = None;
-    fn custom_arr_tpm(clo: impl Fn(u8) -> (PosixMq, PosixMq)) -> [Option<(PosixMq, PosixMq)>; NB_FOLLOWERS!()] {
+    fn custom_arr_tpm(
+        clo: impl Fn(u8) -> (PosixMq, PosixMq),
+    ) -> [Option<(PosixMq, PosixMq)>; NB_FOLLOWERS!()] {
         let mut tab: [Option<(PosixMq, PosixMq)>; NB_FOLLOWERS!()] = [NONE_TPM; NB_FOLLOWERS!()];
         for i in 0..NB_FOLLOWERS!() {
             tab[i] = Some(clo(i as u8));
@@ -663,7 +1509,7 @@ mod determinism {
 
     /**
      * Run one thread by follower, checks if they've got a message,
-     * asserts that non-prioritized follower haven't received any message 
+     * asserts that non-prioritized follower haven't received any message
      **/
     macro_rules! m_receive {
         ($s:ident, $qfs:ident, $msgs:ident, $prioritized:ident, $tab:ident, $pkt_id:ident) => {
@@ -688,7 +1534,7 @@ mod determinism {
                                             Ok((0,0))
                                         },
                                     }
-                                    
+
                                 },
                                 Err(_) => {
                                     if i as usize > $prioritized {
@@ -742,24 +1588,42 @@ mod determinism {
     macro_rules! m_send_1arg {
         ($msg:expr, $qfs:ident, $nb:expr) => {
             for i in 0..NB_FOLLOWERS!() {
-                $qfs[i].as_ref().unwrap().1.send(1, &serialize_rust($msg((i+1) as u8)).buffer).expect("send message failed");
+                $qfs[i]
+                    .as_ref()
+                    .unwrap()
+                    .1
+                    .send(1, &serialize_rust($msg((i + 1) as u8)).buffer)
+                    .expect("send message failed");
             }
-        }
+        };
     }
     #[allow(unused_macros)]
     macro_rules! m_send_2arg {
         ($msg:expr, $arg:expr, $qfs:ident, $nb:expr) => {
             for i in 0..$nb {
-                $qfs[i].as_ref().unwrap().1.send(1, &serialize_rust($msg((i+1) as u8, $arg)).buffer).expect("send message failed");
+                $qfs[i]
+                    .as_ref()
+                    .unwrap()
+                    .1
+                    .send(1, &serialize_rust($msg((i + 1) as u8, $arg)).buffer)
+                    .expect("send message failed");
             }
-        }
+        };
     }
     macro_rules! m_send_4arg {
         ($msg:expr, $dest:expr, $pkt_id:expr, $qfs:ident, $nb:expr) => {
             for i in 0..$nb {
-                $qfs[i].as_ref().unwrap().1.send(1, &serialize_rust($msg((i+1) as u8, 0, $dest, $pkt_id)).buffer).expect("send message failed");
+                $qfs[i]
+                    .as_ref()
+                    .unwrap()
+                    .1
+                    .send(
+                        1,
+                        &serialize_rust($msg((i + 1) as u8, 0, $dest, $pkt_id)).buffer,
+                    )
+                    .expect("send message failed");
             }
-        }
+        };
     }
 
     /**
@@ -773,7 +1637,12 @@ mod determinism {
             m_send_1arg!(Finished, $qfs, $nb)
         };
         (DelStep($id:expr, $step:expr), $qfs:ident) => {
-            $qfs[$id-1].as_ref().unwrap().1.send(1, &serialize_rust(DelStep(($id) as u8, $step)).buffer).expect("send DelStep failed");
+            $qfs[$id - 1]
+                .as_ref()
+                .unwrap()
+                .1
+                .send(1, &serialize_rust(DelStep(($id) as u8, $step)).buffer)
+                .expect("send DelStep failed");
         };
         (DelStep(_, $step:expr), $qfs:ident, $nb:expr) => {
             m_send_2arg!(DelStep, $step, $qfs, $nb)
@@ -788,7 +1657,12 @@ mod determinism {
             m_send_4arg!(HasToSend6, $dest, $pkt_id, $qfs, $nb)
         };
         (Sent($id:expr, $pkt_id:expr), $qfs:ident) => {
-            $qfs[$id-1].as_ref().unwrap().1.send(1, &serialize_rust(Sent(($id) as u8, $pkt_id)).buffer).expect("send DelStep failed");
+            $qfs[$id - 1]
+                .as_ref()
+                .unwrap()
+                .1
+                .send(1, &serialize_rust(Sent(($id) as u8, $pkt_id)).buffer)
+                .expect("send DelStep failed");
         };
     }
 
@@ -798,7 +1672,7 @@ mod determinism {
          */
         fn test_topo(nb: usize) -> Self {
             let mut nodes: String = String::from(
-"  node [
+                "  node [
     id 100
     label \"Node 100\"
     interface [
@@ -810,11 +1684,12 @@ mod determinism {
       ]
     ]
   ]
-");   
+",
+            );
             let mut edges: String = String::new();
-            for i in 1..nb+1 {
+            for i in 1..nb + 1 {
                 nodes.push_str(&format!(
-"  node [
+                    "  node [
     id {}
     label \"Node {}\"
     interface [
@@ -826,9 +1701,11 @@ mod determinism {
       ]
     ]
   ]
-", i, i, i));
-                    edges.push_str(&format!(
-"  edge [
+",
+                    i, i, i
+                ));
+                edges.push_str(&format!(
+                    "  edge [
     source {}
     source_if 0
     target 100
@@ -837,34 +1714,55 @@ mod determinism {
     metric 20
     type \"symmetric\"
   ]
-", i));
+",
+                    i
+                ));
             }
             let final_graph = format!(
-"graph [
+                "graph [
   label \"test\"
   id 4
-{}{}]", nodes, edges);
+{}{}]",
+                nodes, edges
+            );
             return Self::load(&final_graph);
         }
     }
 
-    impl Config {    
+    impl Config {
         fn test_config(nb: usize) -> Self {
             const QNAME: &str = "/nts_test";
             const EXE_NAMES: [&CStr; 2] = [c"./client", c"./server"];
             const EXE1_ARGS: [&CStr; 5] = [c"./client", c"-i", c"127.0.0.1", c"-p", c"4443"];
             const EXE2_ARGS: [&CStr; 5] = [c"./server", c"-i", c"127.0.0.1", c"-p", c"4443"];
             const RANDOM_NUMBER: u64 = 84;
-            let processes = vec![Process::new(CString::from(EXE_NAMES[0]), CString::from(EXE_NAMES[0]), cstringify(&EXE1_ARGS)),
-                                            Process::new(CString::from(EXE_NAMES[1]), CString::from(EXE_NAMES[1]), cstringify(&EXE2_ARGS))];
-        
+            let processes = vec![
+                Process::new(
+                    CString::from(EXE_NAMES[0]),
+                    CString::from(EXE_NAMES[0]),
+                    cstringify(&EXE1_ARGS),
+                ),
+                Process::new(
+                    CString::from(EXE_NAMES[1]),
+                    CString::from(EXE_NAMES[1]),
+                    cstringify(&EXE2_ARGS),
+                ),
+            ];
+            let mut n_use_random_number = Vec::with_capacity(nb);
+            for i in 0..nb{
+                n_use_random_number.push(0);
+            }
+
             return Self {
                 nb_follower: nb,
                 _qname: QNAME.to_string(),
                 exe: processes,
                 random_number: RANDOM_NUMBER,
+                n_use_random_number: n_use_random_number,
+                jitter_distribution: "poisson".to_string(),
+                jitter_coef: 10,
                 topo: NetworkTopology::test_topo(nb),
-            }
+            };
         }
     }
 
@@ -872,69 +1770,97 @@ mod determinism {
      * In a topology of NB_FOLLOWERS processes, nb_sender of them send messages that should be received at the same time.
      * This test checks that senders are woken up one at a time, following a deterministic order.
      */
-    fn test_determinism_setup(nb_sender:usize) {
-        
+    fn test_determinism_setup(nb_sender: usize) {
         //let mut already_received = false;
-        
+
         for _iter in 0..2 {
             //Setting up the environment
             let mut sim = Simulation::new(Config::test_config(NB_FOLLOWERS!()));
-            let mut msgs: [Buffer; NB_FOLLOWERS!() as usize] = [Buffer::new() ; NB_FOLLOWERS!()];
+            let mut msgs: [Buffer; NB_FOLLOWERS!() as usize] = [Buffer::new(); NB_FOLLOWERS!()];
             let nb_f = NB_FOLLOWERS!();
-            let clo = |mut i| -> (PosixMq, PosixMq) {i += 1; follower_init_queues(i as u8, NB_FOLLOWERS!(), &"/nts_test".to_string()).expect("follower queues creating")};
-            let qfs: [Option<(PosixMq, PosixMq)> ; NB_FOLLOWERS!()] = custom_arr_tpm(clo);
+            let clo = |mut i| -> (PosixMq, PosixMq) {
+                i += 1;
+                follower_init_queues(i as u8, NB_FOLLOWERS!(), &"/nts_test".to_string())
+                    .expect("follower queues creating")
+            };
+            let qfs: [Option<(PosixMq, PosixMq)>; NB_FOLLOWERS!()] = custom_arr_tpm(clo);
             let pkt_id = 1;
             thread::scope(|sc| {
                 sim.leader_init_queues().expect("leader queues creating");
-                let t = sc.spawn(|| {sim.main_loop()});
-                let mut receiving_order: [usize ; NB_FOLLOWERS!()] = [0 ; NB_FOLLOWERS!()];
-                
-                m_send!(HasToSend4(_,Ipv4AddrC::new(10, 0, 0, 100), pkt_id), qfs, nb_sender);
+                let t = sc.spawn(|| sim.main_loop());
+                let mut receiving_order: [usize; NB_FOLLOWERS!()] = [0; NB_FOLLOWERS!()];
+
+                m_send!(
+                    HasToSend4(_, Ipv4AddrC::new(10, 0, 0, 100), pkt_id),
+                    qfs,
+                    nb_sender
+                );
                 m_send!(Stuck(_), qfs, nb_f);
-                
+
                 for i in 0..NB_FOLLOWERS!() {
-                    let Ok(_) = qfs[i as usize].as_ref().unwrap().0.recv(&mut msgs[i as usize].buffer) else {
-                            panic!("First received message should be WakeUp(0). Bad recv");
-                        };
+                    let Ok(_) = qfs[i as usize]
+                        .as_ref()
+                        .unwrap()
+                        .0
+                        .recv(&mut msgs[i as usize].buffer)
+                    else {
+                        panic!("First received message should be WakeUp(0). Bad recv");
+                    };
                     match msgs[i as usize].into() {
-                        WakeUp(0) => {
-                        } //Ok
+                        WakeUp(0) => {} //Ok
                         WakeUp(t) => {
-                            panic!("First received message should be WakeUp(0). Bad time: {:?}", t);
+                            panic!(
+                                "First received message should be WakeUp(0). Bad time: {:?}",
+                                t
+                            );
                         }
-                        m => {    
-                            panic!("First received message should be WakeUp(0). Bad msg: {:?}", m);
+                        m => {
+                            panic!(
+                                "First received message should be WakeUp(0). Bad msg: {:?}",
+                                m
+                            );
                         }
                     }
                 }
 
                 for i in 0..nb_sender {
                     thread::scope(|s| {
-                        let mut ts: [Option<ScopedJoinHandle<Result<(u32, usize)>>> ; NB_FOLLOWERS!()] = [NONE_THREAD; NB_FOLLOWERS!()];
+                        let mut ts: [Option<ScopedJoinHandle<Result<(u32, usize)>>>;
+                            NB_FOLLOWERS!()] = [NONE_THREAD; NB_FOLLOWERS!()];
                         m_receive!(s, qfs, msgs, nb_sender, ts, pkt_id);
                         m_check!(ts, receiving_order[i], Sent(_, pkt_id), qfs);
                     });
                 }
 
                 for i in 0..NB_FOLLOWERS!() {
-                    let Ok(_) = qfs[i as usize].as_ref().unwrap().0.recv(&mut msgs[i as usize].buffer) else {
-                            panic!("First received message should be WakeUp(0). Bad recv");
-                        };
+                    let Ok(_) = qfs[i as usize]
+                        .as_ref()
+                        .unwrap()
+                        .0
+                        .recv(&mut msgs[i as usize].buffer)
+                    else {
+                        panic!("First received message should be WakeUp(0). Bad recv");
+                    };
                     match msgs[i as usize].into() {
-                        WakeUp(20) => {
-                        } //Ok
+                        WakeUp(20) => {} //Ok
                         WakeUp(t) => {
-                            panic!("Third received message should be WakeUp(20). Bad time: {:?}", t);
+                            panic!(
+                                "Third received message should be WakeUp(20). Bad time: {:?}",
+                                t
+                            );
                         }
-                        m => {    
-                            panic!("Third received message should be WakeUp(20). Bad msg: {:?}", m);
+                        m => {
+                            panic!(
+                                "Third received message should be WakeUp(20). Bad msg: {:?}",
+                                m
+                            );
                         }
                     }
                 }
 
-
                 thread::scope(|s| {
-                    let mut ts: [Option<ScopedJoinHandle<Result<(u32, usize)>>> ; NB_FOLLOWERS!()] = [NONE_THREAD; NB_FOLLOWERS!()];
+                    let mut ts: [Option<ScopedJoinHandle<Result<(u32, usize)>>>; NB_FOLLOWERS!()] =
+                        [NONE_THREAD; NB_FOLLOWERS!()];
                     m_receive!(s, qfs, msgs, nb_f, ts, pkt_id);
                     for i in 0..nb_f {
                         let _ = ts[i].take().expect("uninit thread handle").join().unwrap();
