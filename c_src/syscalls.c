@@ -296,3 +296,40 @@ ssize_t sendto(int sockfd, const void* buf, size_t len, int flags,
         //fflush(stdout);
         return len;
 }
+
+int clock_getres(clockid_t clockid, struct timespec *_Nullable res) //all clocks are based on the leader's one which is microsecond-precise
+{
+        res->tv_sec = 0;
+        res->tv_nsec = 1000;
+        return 0;
+}
+
+int clock_gettime(clockid_t clockid, struct timespec *tp)
+{
+        LIBC_FUNCTION(int, clock_gettime, clockid_t clockid, struct timespec *tp);
+        switch (clockid) {
+                case CLOCK_REALTIME: //TODO: should we support processes that set this clock?
+                case CLOCK_REALTIME_ALARM:
+                case CLOCK_REALTIME_COARSE:
+                case CLOCK_TAI:
+                case CLOCK_MONOTONIC:
+                case CLOCK_MONOTONIC_COARSE:
+                case CLOCK_MONOTONIC_RAW:
+                case CLOCK_BOOTTIME:
+                case CLOCK_BOOTTIME_ALARM:
+                        uint64_t t = get_u64_time();
+                        tp->tv_sec = t/1000000;
+                        tp->tv_nsec = (t%1000000)*1000;
+                        return 0;
+                case CLOCK_PROCESS_CPUTIME_ID:
+                        return LIBC_FUNCTION_GET(clock_gettime)(clockid, tp);
+                case CLOCK_THREAD_CPUTIME_ID:
+                        return LIBC_FUNCTION_GET(clock_gettime)(clockid, tp);
+
+        }
+}
+
+int clock_settime(clockid_t clockid, const struct timespec *tp)
+{
+        return -1; //TODO: set errno
+}

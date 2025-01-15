@@ -143,6 +143,11 @@ struct timeval get_time()
     return u64_to_timeval_us(current_time);
 }
 
+uint64_t get_u64_time()
+{
+    return current_time;
+}
+
 struct timeval blocking()
 {
     //printf("inside blocking\n");
