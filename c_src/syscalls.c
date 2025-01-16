@@ -5,6 +5,7 @@
 #include <dlfcn.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <sys/socket.h>
 #include "communication.h"
 
 int random_number = 42;
@@ -219,7 +220,7 @@ int rand(void)
         return get_random();
 }
 
-ssize_t send(int sockfd, const void* buf, size_t len, int flags)
+/*ssize_t send(int sockfd, const void* buf, size_t len, int flags)
 {
         packet_elem* pe;
         if ((pe = (packet_elem*)malloc(sizeof *pe)) == NULL) exit(-13);
@@ -236,12 +237,17 @@ ssize_t send(int sockfd, const void* buf, size_t len, int flags)
 
         LL_PREPEND(pkt_list, pe);
 
-        struct sockaddr* dest_addr = get_ip(sockfd);
+        // struct sockaddr* dest_addr = get_ip(sockfd);
 
-        send_has_to_send(dest_addr, pe);
+        struct sockaddr_in dest_addr;
+        bzero(&dest_addr, sizeof(dest_addr));
+        socklen_t addrlen = sizeof(dest_addr);
+        if (getsockname(sockfd, &dest_addr, &addrlen) == -1) exit(-13);
+
+        send_has_to_send(&dest_addr, pe);
 
         return len;
-}
+}*/
 
 ssize_t sendto(int sockfd, const void* buf, size_t len, int flags,
                       const struct sockaddr *dest_addr, socklen_t addrlen)
@@ -316,7 +322,7 @@ ssize_t sendto(int sockfd, const void* buf, size_t len, int flags,
         return len;
 }
 
-ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags){
+/*ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags){
         //TODO
         packet_elem* pe;
         if ((pe = (packet_elem*)malloc(sizeof *pe)) == NULL) exit(-13);
@@ -351,12 +357,34 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags){
 
         LL_PREPEND(pkt_list,pe);
 
-        struct sockaddr* dest_addr = get_ip(sockfd);
+        // struct sockaddr* dest_addr = get_ip(sockfd);
 
-        send_has_to_send(dest_addr, pe);
+        
+        // struct sockaddr* dest_addr = get_ip(sockfd);
+        // struct sockaddr *dest_addr = (struct sockaddr*) malloc(sizeof(struct sockaddr));
+        // socklen_t addrlen = sizeof(struct sockaddr)+10;
+        // printf("addrlen 1 %d\n", addrlen);
+        // Get my ip address and port
+        struct sockaddr_in dest_addr;
+        bzero(&dest_addr, sizeof(dest_addr));
+        socklen_t addrlen = sizeof(dest_addr);
+        if (getsockname(sockfd, &dest_addr, &addrlen) == -1) exit(-13);
+
+        pe->pkt.dest_addr = &dest_addr;
+        pe->pkt.addrlen=addrlen;
+        printf("addrlen 2 %d", addrlen);
+
+        // printf("dest addr : 0x%02X", dest_addr->sa_data);
+        printf("sockaddr :\n");
+        char *toprint = (char *)&dest_addr;
+        for (int i =0; i<addrlen;i++){
+                printf("%02X", toprint[i]);
+        }
+         
+        send_has_to_send(&dest_addr, pe);
 
         return n_bytes_sent;
-}
+}*/
 
 void send_has_to_send(const struct sockaddr *dest_addr, packet_elem* pe){
         switch(dest_addr->sa_family) {
