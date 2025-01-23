@@ -43,9 +43,11 @@ ssize_t recvfrom(int sockfd, void *buf, size_t len,
                 printf("inside recvfrom loop\n");
                 fflush(stdout);
                 ret = LIBC_FUNCTION_GET(recvfrom)(sockfd, buf, len, flags, src_addr, addrlen);
-                perror("recvfrom: ");
-                fflush(stderr);
-        } while (ret == -1 && empty_fun());
+                if (ret == -1 && errno != EWOULDBLOCK) {
+                        perror("recvfrom: ");
+                        fflush(stderr);
+                }
+        } while (ret == -1 && errno == EWOULDBLOCK && empty_fun());
         return ret;
 }
 

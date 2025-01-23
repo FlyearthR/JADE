@@ -45,7 +45,7 @@ void __attribute__((constructor)) init_fd() { // TODO: get the name of the queue
 
 void print_msg(Message m)
 {
-    /*switch (m.tag) {
+    switch (m.tag) {
         case Stuck:
             printf("Stuck(%i)\n", m.stuck);
             break;
@@ -84,12 +84,12 @@ void print_msg(Message m)
         case Finished:
             printf("Finished(%i)\n", m.finished);
             break;
-    }*/
+    }
 }
 
 int send_msg(Message m) // TODO: extend this
 {
-    //printf("inside send_msg\n");
+    printf("inside send_msg\n");
     print_msg(m);
     fflush(stdout);
     Buffer* b = serialize(m);
@@ -114,12 +114,12 @@ uint64_t receive_msg()
             perror("Error: ");
             exit(-6);
         }
-        /*printf("received a message\n");
+        printf("received a message\n");
         for (int i = 0 ; i < SIZE_BUFFER ; i++)
         {
             printf("%3i ", msg.buffer[i]);
         }
-        printf("\n");*/
+        printf("\n");
         Message* m = deserialize(msg);
         print_msg(*m);
         if (m->tag == Send)
@@ -256,26 +256,35 @@ void __attribute__((destructor)) send_finished() {
     packet_elem* p;
     Buffer msg;
     LL_COUNT(pkt_list, p, count);
-    while(count) {
+    if (count != 0) // if there are still messages to send
+    {
         Message m_stuck = {.tag = Stuck, .stuck = ID};
         send_msg(m_stuck);
-        int ret = mq_receive(FDI, msg.buffer, SIZE_BUFFER, NULL);
-        if (ret == -1) {
-            fprintf(stderr, "Error receiving message in send_finished\n");
-            perror("Error: ");
-            exit(-6);
-        }
-        Message* m = deserialize(msg);
-        if (m->tag == Send)
-        {
-            sender(m->send);
-        }
-        else
-        {
-            // ignore
+        while(count) {
+            int ret = mq_receive(FDI, msg.buffer, SIZE_BUFFER, NULL);
+            if (ret == -1) {
+                fprintf(stderr, "Error receiving message in send_finished\n");
+                perror("Error: ");
+                exit(-6);
+            }
+            Message* m = deserialize(msg);
+            print_msg(*m);
+            if (m->tag == Send)
+            {
+                sender(m->send);
+                //count--;
+                // TODO understand impact of count--
+            }
+            else if (m->tag == WakeUp)
+            {
+                send_msg(m_stuck);
+            }
+            else
+            {
+                // ignore
+            }
         }
     }
     Message m = {.tag = Finished, .finished = ID};
-    //printf("destructor called \n");
     send_msg(m);
 }
