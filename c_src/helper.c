@@ -44,3 +44,7 @@ int cmp_pkt(packet_elem* pe1, packet_elem* pe2)
 {
     return pe2->pkt.id - pe1->pkt.id;
 }
+
+int cmp_fd_ip(fd_ip_elem* fd_ip1,fd_ip_elem* fd_ip2){
+    return fd_ip1->fi.fd-fd_ip2->fi.fd;
+}

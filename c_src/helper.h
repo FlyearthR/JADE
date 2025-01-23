@@ -62,6 +62,8 @@ struct timeval add_timeval(struct timeval, struct timeval);
 
 int cmp_pkt(packet_elem* pe1, packet_elem* pe2);
 
+int cmp_fd_ip(fd_ip_elem* fd_ip1,fd_ip_elem* fd_ip2);
+
 #define LIBC_FUNCTION(ftype, fname, ...) ftype (* libc_##fname ) ( __VA_ARGS__ ); \
     libc_##fname = dlsym(RTLD_NEXT, #fname )
 #define LIBC_FUNCTION_GET(fname) libc_##fname
