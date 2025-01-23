@@ -1,0 +1,37 @@
+graph [
+  label "test"
+  id 4
+  node [
+    id 1
+    label "Node 1"
+    interface [
+      id 0
+      label "eth-0"
+      ip [
+        type "v4"
+        ip "10.0.0.10"
+      ]
+    ]
+  ]
+  node [
+    id 2
+    label "Node 2"
+    interface [
+      id 0
+      label "eth-0"
+      ip [
+        type "v4"
+        ip "10.0.0.20"
+      ]
+    ]
+  ]
+  edge [
+    source 1
+    source_if 0
+    target 2
+    target_if 0
+    label "Link"
+    metric 20
+    type "symmetric"
+  ]
+]

@@ -1,0 +1,27 @@
+# Queue name
+qname = '/some_queue'
+
+# Random number
+random_number = 123
+
+# Number of followers
+nb_follower = 2
+
+# Graph
+graph = '2_followers.gml'
+
+# Executables
+[executables]
+[[executables.exe]]
+name = 'node 1'
+path = '%%EXE1%%'
+args = ["%%EXE1%%"%%ARGS1%%]
+node_ids = [1]
+
+
+[[executables.exe]]
+name = 'node 2'
+path = '%%EXE2%%'
+args = ["%%EXE2%%"%%ARGS2%%]
+node_ids = [2]
+
