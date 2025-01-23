@@ -30,8 +30,11 @@ testQuic: all
 	$(CC) ${CFLAGS} examples/simple_client.c -o testing/simple_client
 	$(CC) ${CFLAGS} examples/random_client.c -o testing/random_client
 	${CC} ${CFLAGS} examples/simple_server.c -o testing/simple_server
-	cp -f tests/9_clients_1_server_quic.* testing/
-	cd testing && sudo RUST_BACKTRACE=1 ./simulator 9_clients_1_server_quic.toml
+	rm examples/picoquic/simulator examples/picoquic/syscalls.so examples/picoquic/9_clients_1_server_quic.*
+	cp -f tests/9_clients_1_server_quic.* examples/picoquic/
+	cp c_src/syscalls.so examples/picoquic/
+	cp testing/simulator examples/picoquic/
+	cd examples/picoquic/ && sudo RUST_BACKTRACE=1 ./simulator 9_clients_1_server_quic.toml
 
 testffi: API
 	cd c_src && $(MAKE) test_ffi && cp test_ffi ../testing/test_ffi
