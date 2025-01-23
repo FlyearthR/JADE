@@ -722,7 +722,7 @@ impl Simulation {
                     self.counters.entry(usize::from(id)).and_modify(|x|{x.0=1;x.1=seed;});
                 }
                 let counter:u64 = self.counters.get(&usize::from(id)).unwrap().0;
-                let computed_seed = u64::from(id)*seed*counter;
+                let computed_seed = seed*counter;
                 let mut rng = SmallRng::seed_from_u64(computed_seed);
 
                 let random_num:u64 = rng.gen();

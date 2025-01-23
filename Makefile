@@ -24,6 +24,15 @@ usetest: all
 	cp -f tests/$(INSTANCE).* testing/
 	cd testing && sudo RUST_BACKTRACE=1 ./simulator $(INSTANCE).toml
 
+testQuic: all
+	cp -f target/debug/simulator testing/simulator
+	cp -f target/syscalls/syscalls.so testing/syscalls.so
+	$(CC) ${CFLAGS} examples/simple_client.c -o testing/simple_client
+	$(CC) ${CFLAGS} examples/random_client.c -o testing/random_client
+	${CC} ${CFLAGS} examples/simple_server.c -o testing/simple_server
+	cp -f tests/9_clients_1_server_quic.* testing/
+	cd testing && sudo RUST_BACKTRACE=1 ./simulator 9_clients_1_server_quic.toml
+
 testffi: API
 	cd c_src && $(MAKE) test_ffi && cp test_ffi ../testing/test_ffi
 	./testing/test_ffi

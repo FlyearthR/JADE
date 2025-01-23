@@ -1,0 +1,27 @@
+# Queue name
+qname = 'some_queue'
+
+# Random number
+random_number = 123
+
+# Number of followers
+nb_follower = 2
+
+# Graph
+graph = '9_clients_1_server_quic.gml'
+
+# Executables
+[executables]
+[[executables.exe]]
+name = 'client'
+path = '../examples/quic_client.sh'
+args = ["./../examples/quic_client.sh"]
+
+node_ids = [1]
+
+[[executables.exe]]
+name = 'server'
+path = '../examples/quic_server.sh'
+args = ["./../examples/quic_server.sh"]
+node_ids = [2]
+

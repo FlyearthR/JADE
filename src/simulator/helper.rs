@@ -316,7 +316,7 @@ impl Config {
     }
 
     pub fn new(path: &Path) -> std::result::Result<Config, TomlError> {
-        let content = fs::read_to_string(path).expect("Failed to read the config file");
+        let content = fs::read_to_string(path).expect(&format!("Failed to read the config file at {:?}",path));
 
         Self::from(content)
         
