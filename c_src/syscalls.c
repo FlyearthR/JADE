@@ -267,6 +267,7 @@ void send_has_to_send(const struct sockaddr *dest_addr, packet_elem *pe)
 {
         //todo put in communication.c
         printf("send_has_to_send called\n");
+        fflush(stdout);
         printf ("sa family %d\n", dest_addr->sa_family);
         fflush(stdout);
         switch (dest_addr->sa_family)
@@ -376,12 +377,16 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
                 exit(-13);
         if ((pe->pkt.buf = malloc(sizeof(struct msghdr))) == NULL)
                 exit(-13);
+        printf("malloc ok\n");
+        fflush(stdout);
         struct msghdr *buf = (struct msghdr *)pe->pkt.buf;
         buf->msg_name = malloc(msg->msg_namelen);
         memcpy(buf->msg_name, msg->msg_name, msg->msg_namelen);
-        buf->msg_namelen = buf->msg_namelen;
+        buf->msg_namelen = msg->msg_namelen;
         buf->msg_iov = (struct iovec *)malloc(sizeof(struct iovec) * msg->msg_iovlen);
         int n_bytes_sent = 0;
+        printf("first part ok\n");
+        fflush(stdout);
         for (int i = 0; i < msg->msg_iovlen; i++)
         {
                 size_t len = (msg->msg_iov + i)->iov_len;
@@ -390,9 +395,12 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
                 memcpy(tmp_buf, (msg->msg_iov + i)->iov_base, len);
                 struct iovec *iov = (struct iovec *)buf->msg_iov;
                 iov += i;
-                iov->iov_base = buf;
+                iov->iov_base = tmp_buf;
                 iov->iov_len = len;
         }
+        printf("copy buffer ok\n");
+        fflush(stdout);
+        buf->msg_iovlen=msg->msg_iovlen;
         buf->msg_control = malloc(msg->msg_controllen);
         memcpy(buf->msg_control, msg->msg_control, msg->msg_controllen);
         buf->msg_controllen = msg->msg_controllen;
@@ -400,15 +408,17 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
         pe->pkt.id = next_pkt_id++;
         pe->pkt.tos = sendmsg_t;
         pe->pkt.sockfd = sockfd;
-        pe->pkt.len = sizeof(struct msghdr);
+        //pe->pkt.len = sizeof(struct msghdr);
         pe->pkt.flags = flags;
         // pe->pkt.dest_addr = (struct sockaddr*)(buf->msg_name);
-        if ((pe->pkt.dest_addr = (struct sockaddr *)malloc(sizeof(((struct sockaddr_in*)(msg->msg_name))->sin_addr))) == NULL){
+        /*if ((pe->pkt.dest_addr = (struct sockaddr *)malloc(sizeof(((struct sockaddr_in*)(msg->msg_name))->sin_addr))) == NULL){
                 exit(-13);
         }
         memcpy(pe->pkt.dest_addr,(struct sockaddr *)(msg->msg_name),sizeof(struct sockaddr));
         
-        pe->pkt.addrlen = msg->msg_namelen;
+        pe->pkt.addrlen = msg->msg_namelen;*/
+        printf("copy finished\n");
+        fflush(stdout);
 
         LL_PREPEND(pkt_list, pe);
 
@@ -423,6 +433,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
         printf("sockaddr :\n");
         printf ("%s\n", inet_ntoa (((struct sockaddr_in*)(buf->msg_name))->sin_addr));
         printf ("%d\n", ((struct sockaddr_in*)(buf->msg_name))->sin_family);
+        fflush(stdout);
 
         send_has_to_send(pe->pkt.dest_addr, pe);
 

@@ -212,17 +212,25 @@ void custom_sendto(packet pkt)
 
 void custom_sendmsg(packet pkt)
 {
-    // TODO: implem
+    printf("custom_sendmsg\n");
+    LIBC_FUNCTION(ssize_t, sendmsg, int sockfd, const struct msghdr *msg, int flags);
+    int ret = LIBC_FUNCTION_GET(sendmsg)(pkt.sockfd,(struct msghdr *)pkt.buf,pkt.flags);
+    if (ret)
+        perror("sendmsg: ");
+    printf("return value custom_sendmsg : %d\n", ret);
+    //TODO : free better
     free((void*) pkt.buf);
 }
 
 void sender(uint64_t pkt_id)
 {
+    printf("sender called\n");
     packet_elem goal = {.pkt = {.id = pkt_id}};
     packet_elem* found = NULL;
     LL_SEARCH(pkt_list, found, &goal, cmp_pkt);
     if (!found)
         exit (-12);
+    printf("pkt tos : %d\n",found->pkt.tos);
     switch(found->pkt.tos) {
         case send_t:
             custom_send(found->pkt);
