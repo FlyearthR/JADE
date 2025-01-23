@@ -476,9 +476,27 @@ int clock_getres(clockid_t clockid, struct timespec *res) // all clocks are base
 {
         printf("clock_getres called\n");
         fflush(stdout);
-        res->tv_sec = 0;
-        res->tv_nsec = 1000;
-        return 0;
+        LIBC_FUNCTION(int, clock_getres, clockid_t clockid, struct timespec *res);
+        switch (clockid)
+        {
+                case CLOCK_REALTIME: // TODO: should we support processes that set this clock?
+                case CLOCK_REALTIME_ALARM:
+                case CLOCK_REALTIME_COARSE:
+                case CLOCK_TAI:
+                case CLOCK_MONOTONIC:
+                case CLOCK_MONOTONIC_COARSE:
+                case CLOCK_MONOTONIC_RAW:
+                case CLOCK_BOOTTIME:
+                case CLOCK_BOOTTIME_ALARM:
+                        res->tv_sec = 0;
+                        res->tv_nsec = 1000;
+                        return 0;
+                case CLOCK_PROCESS_CPUTIME_ID:
+                        return LIBC_FUNCTION_GET(clock_getres)(clockid, res);
+                case CLOCK_THREAD_CPUTIME_ID:
+                        return LIBC_FUNCTION_GET(clock_getres)(clockid, res);
+        }
+        
 }
 
 int clock_gettime(clockid_t clockid, struct timespec *tp)

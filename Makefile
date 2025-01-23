@@ -37,6 +37,9 @@ testffi: API
 	cd c_src && $(MAKE) test_ffi && cp test_ffi ../testing/test_ffi
 	./testing/test_ffi
 
+testsyscalls: all
+	cd c_src/tests && ./tester.sh sendto
+
 all: syscalls.so simulator API 
 
 syscalls.so: API

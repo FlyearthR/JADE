@@ -259,7 +259,7 @@ void __attribute__((destructor)) send_finished() {
     while(count) {
         Message m_stuck = {.tag = Stuck, .stuck = ID};
         send_msg(m_stuck);
-        int ret = mq_receive(FDI, msg.buffer, 10, NULL);
+        int ret = mq_receive(FDI, msg.buffer, SIZE_BUFFER, NULL);
         if (ret == -1) {
             fprintf(stderr, "Error receiving message in send_finished\n");
             perror("Error: ");
