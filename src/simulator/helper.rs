@@ -11,9 +11,6 @@ use toml::de::Error as TomlError;
 use toml::Value;
 use gml_parser::{Edge, GMLObject, GMLValue, Graph, HasGMLAttributes, ReadableGMLAttributes};
 
-//TODO add in config file
-static JITTER_DISTRIBUTION: &str = "poisson";
-
 pub fn cstringify(arr: &[&CStr]) -> Vec<CString> {
     let mut ret: Vec<CString> = Vec::with_capacity(arr.len());
     for e in arr.iter() {
@@ -142,6 +139,7 @@ graph [
                 // println!("jitter : {}", jitter);
                 Ok(jitter as u64)
             }
+            "no_jitter" => Ok(0),
             _ => Err("Choose one of the following distribution for jitter : poisson or normal"),
         }
         
@@ -223,7 +221,7 @@ pub struct Config {
     pub exe: Vec<Process>,
     pub random_number: u64,
     pub n_use_random_number: Vec<u64>,
-    pub jitter_distribution: String, //"poisson" or "normal"
+    pub jitter_distribution: String, //"poisson" or "normal" or "no_jitter"
     pub jitter_coef: u64,
     pub topo: NetworkTopology,
 }
@@ -249,7 +247,7 @@ impl Config {
                         Process::new(CString::from(c"name"), CString::from(EXE_NAMES[1]), cstringify(&EXE2_ARGS))],
             random_number: RANDOM_NUMBER,
             n_use_random_number: n_use_random_number,
-            jitter_distribution: JITTER_DISTRIBUTION.to_string(),
+            jitter_distribution: "no_jitter".to_string(),
             jitter_coef: 10, //TODO change
             topo: NetworkTopology::new(),
         }
@@ -277,7 +275,10 @@ impl Config {
                 }
             }
         }
-
+        let jitter_distribution = value.get("jitter_distribution")
+            .and_then(Value::as_str)
+            .unwrap_or("no_jitter")
+            .to_string();
         let random_number = value.get("random_number").and_then(Value::as_integer).unwrap_or(0) as u64;
         let mut n_use_random_number = Vec::with_capacity(nb_follower);
         for i in 0..nb_follower{
@@ -296,7 +297,7 @@ impl Config {
                 exe,
                 random_number,
                 n_use_random_number,
-                jitter_distribution: JITTER_DISTRIBUTION.to_string(),
+                jitter_distribution: jitter_distribution,
                 jitter_coef: jitter_coef,
                 topo,
             });
@@ -308,7 +309,7 @@ impl Config {
             exe,
             random_number,
             n_use_random_number,
-            jitter_distribution: JITTER_DISTRIBUTION.to_string(),
+            jitter_distribution: jitter_distribution,
             jitter_coef: jitter_coef,
             topo: NetworkTopology::new(),
         })
