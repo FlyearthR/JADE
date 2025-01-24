@@ -748,8 +748,9 @@ impl Simulation {
             Message::HasToSend4(id, if_id, ip, pkt_id) => {
                 //println!("Node {} has to send ipv4 packet {} via {} to {:?}", id, pkt_id, if_id, ip)
                 self.logs.log("trace", &format!("Node {} has to send ipv4 packet {} via {} to {:?}", id, pkt_id, if_id, ip));
+                self.logs.log("info",&format!("nodes : {:?}",self.cfg));
                 // self.cfg.topo.get_jitter(self.cfg.random_number,self.cfg.n_use_random_number);
-                let n_use_random_number = self.cfg.n_use_random_number.get_mut(usize::from(id)).expect("Node ID not found");
+                let n_use_random_number = self.cfg.n_use_random_number.get_mut(usize::from(id)-1).expect("Node ID not found");
 
                 let timestamp = current_time + self.cfg.topo.get_delay_v4(id, if_id, &ip).unwrap() 
                 // TODO Alix : rendre n_use_random_number indépendant pour chaque noeud

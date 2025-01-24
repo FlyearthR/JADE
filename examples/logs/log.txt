@@ -1,0 +1,1521 @@
+[TRACE] entering simulation::create_namespaces
+[INFO] namespaces were created
+[TRACE] entering simulation::add_link
+[TRACE] entering simulation::set_interface_up
+[TRACE] entering simulation::set_interface_up
+[INFO] links were created
+[INFO] simulation initialized : cfg Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [0, 0], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }, events {}, counters {2: (1, 0), 1: (1, 0)}, logs Logger { log_file: File { fd: 3, path: "/home/temmermanalix/Documents/network_time_simulator/examples/logs/log.txt", read: false, write: true }, trace: true, debug: true, warn: true, error: true, info: true, message: true }
+[TRACE] entering simulation::run
+[DEBUG] entering simulation::run with args Simulation { cfg: Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [0, 0], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }, states: [Running, Running], events: {}, qs: [], counters: {2: (1, 0), 1: (1, 0)}, logs: Logger { log_file: File { fd: 3, path: "/home/temmermanalix/Documents/network_time_simulator/examples/logs/log.txt", read: false, write: true }, trace: true, debug: true, warn: true, error: true, info: true, message: true } }
+[TRACE] entering simulation::leader_init_queues
+[TRACE] entering simulation::run_follower
+[TRACE] entering simulation::run_follower
+[TRACE] entering simulation::main
+[DEBUG] entering simulation::main loop with args : Simulation { cfg: Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [0, 0], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }, states: [Running, Running], events: {}, qs: [PosixMq { fd: 4 }, PosixMq { fd: 5 }, PosixMq { fd: 6 }], counters: {2: (1, 0), 1: (1, 0)}, logs: Logger { log_file: File { fd: 3, path: "/home/temmermanalix/Documents/network_time_simulator/examples/logs/log.txt", read: false, write: true }, trace: true, debug: true, warn: true, error: true, info: true, message: true } }
+[MESSAGE] leader sends wake up message to node 5 at time 0
+[MESSAGE] leader sends wake up message to node 6 at time 0
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 0 
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(2, 10000000) at time 0
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 10000000 for node 2
+[DEBUG] nb-finished: 0, nf_blocked: 0, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 0
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(1, 0) at time 0
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 0 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 0
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 0 TimestampActions : TimestampActions { to_wake_up: [1], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [1], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 0
+[MESSAGE] leader sends wake up message to node 6 at time 0
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 0 
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(1, 0) at time 0
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 0 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 0, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 0
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received HasToSend4(1, 0, Ipv4AddrC { segments: [10, 0, 0, 20] }, 0) at time 0
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 has to send ipv4 packet 0 via 0 to Ipv4AddrC { segments: [10, 0, 0, 20] }
+[INFO] nodes : Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [0, 0], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }
+[DEBUG] timestamp : 20, n_use_random_number : [1, 0]
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(1, 250000) at time 0
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 250000 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 0
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 20 TimestampActions : TimestampActions { to_wake_up: [], has_to_send: {1: [0]} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [], has_to_send: {1: [0]} }
+[MESSAGE] process 1 sends 0
+[MESSAGE] leader sends wake up message to node 5 at time 20
+[MESSAGE] leader sends wake up message to node 6 at time 20
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 20 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 20
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 20
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 250000 TimestampActions : TimestampActions { to_wake_up: [1], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [1], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 250000
+[MESSAGE] leader sends wake up message to node 6 at time 250000
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 250000 
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(1, 250000) at time 250000
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 250000 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 0, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received HasToSend4(1, 0, Ipv4AddrC { segments: [10, 0, 0, 20] }, 1) at time 250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 has to send ipv4 packet 1 via 0 to Ipv4AddrC { segments: [10, 0, 0, 20] }
+[INFO] nodes : Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [1, 0], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }
+[DEBUG] timestamp : 250020, n_use_random_number : [2, 0]
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(1, 750000) at time 250000
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 750000 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 250020 TimestampActions : TimestampActions { to_wake_up: [], has_to_send: {1: [1]} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [], has_to_send: {1: [1]} }
+[MESSAGE] process 1 sends 1
+[MESSAGE] leader sends wake up message to node 5 at time 250020
+[MESSAGE] leader sends wake up message to node 6 at time 250020
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 250020 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 250020
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 250020
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 750000 TimestampActions : TimestampActions { to_wake_up: [1], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [1], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 750000
+[MESSAGE] leader sends wake up message to node 6 at time 750000
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 750000 
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(1, 750000) at time 750000
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 750000 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 0, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 750000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received HasToSend4(1, 0, Ipv4AddrC { segments: [10, 0, 0, 20] }, 2) at time 750000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 has to send ipv4 packet 2 via 0 to Ipv4AddrC { segments: [10, 0, 0, 20] }
+[INFO] nodes : Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [2, 0], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }
+[DEBUG] timestamp : 750020, n_use_random_number : [3, 0]
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(1, 1250000) at time 750000
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 1250000 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 750000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 750020 TimestampActions : TimestampActions { to_wake_up: [], has_to_send: {1: [2]} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [], has_to_send: {1: [2]} }
+[MESSAGE] process 1 sends 2
+[MESSAGE] leader sends wake up message to node 5 at time 750020
+[MESSAGE] leader sends wake up message to node 6 at time 750020
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 750020 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 750020
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 750020
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 1250000 TimestampActions : TimestampActions { to_wake_up: [1], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [1], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 1250000
+[MESSAGE] leader sends wake up message to node 6 at time 1250000
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 1250000 
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(1, 1250000) at time 1250000
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 1250000 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 0, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 1250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received HasToSend4(1, 0, Ipv4AddrC { segments: [10, 0, 0, 20] }, 3) at time 1250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 has to send ipv4 packet 3 via 0 to Ipv4AddrC { segments: [10, 0, 0, 20] }
+[INFO] nodes : Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [3, 0], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }
+[DEBUG] timestamp : 1250020, n_use_random_number : [4, 0]
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(1, 2250000) at time 1250000
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 2250000 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 1250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 1250020 TimestampActions : TimestampActions { to_wake_up: [], has_to_send: {1: [3]} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [], has_to_send: {1: [3]} }
+[MESSAGE] process 1 sends 3
+[MESSAGE] leader sends wake up message to node 5 at time 1250020
+[MESSAGE] leader sends wake up message to node 6 at time 1250020
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 1250020 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 1250020
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 1250020
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 2250000 TimestampActions : TimestampActions { to_wake_up: [1], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [1], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 2250000
+[MESSAGE] leader sends wake up message to node 6 at time 2250000
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 2250000 
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(1, 2250000) at time 2250000
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 2250000 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 0, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 2250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received HasToSend4(1, 0, Ipv4AddrC { segments: [10, 0, 0, 20] }, 4) at time 2250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 has to send ipv4 packet 4 via 0 to Ipv4AddrC { segments: [10, 0, 0, 20] }
+[INFO] nodes : Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [4, 0], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }
+[DEBUG] timestamp : 2250020, n_use_random_number : [5, 0]
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(1, 3250000) at time 2250000
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 3250000 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 2250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 2250020 TimestampActions : TimestampActions { to_wake_up: [], has_to_send: {1: [4]} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [], has_to_send: {1: [4]} }
+[MESSAGE] process 1 sends 4
+[MESSAGE] leader sends wake up message to node 5 at time 2250020
+[MESSAGE] leader sends wake up message to node 6 at time 2250020
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 2250020 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 2250020
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 2250020
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 3250000 TimestampActions : TimestampActions { to_wake_up: [1], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [1], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 3250000
+[MESSAGE] leader sends wake up message to node 6 at time 3250000
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 3250000 
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(1, 3250000) at time 3250000
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 3250000 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 0, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 3250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received HasToSend4(1, 0, Ipv4AddrC { segments: [10, 0, 0, 20] }, 5) at time 3250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 has to send ipv4 packet 5 via 0 to Ipv4AddrC { segments: [10, 0, 0, 20] }
+[INFO] nodes : Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [5, 0], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }
+[DEBUG] timestamp : 3250020, n_use_random_number : [6, 0]
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(1, 4250000) at time 3250000
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 4250000 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 3250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 3250020 TimestampActions : TimestampActions { to_wake_up: [], has_to_send: {1: [5]} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [], has_to_send: {1: [5]} }
+[MESSAGE] process 1 sends 5
+[MESSAGE] leader sends wake up message to node 5 at time 3250020
+[MESSAGE] leader sends wake up message to node 6 at time 3250020
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 3250020 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 3250020
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 3250020
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 4250000 TimestampActions : TimestampActions { to_wake_up: [1], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [1], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 4250000
+[MESSAGE] leader sends wake up message to node 6 at time 4250000
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 4250000 
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(1, 4250000) at time 4250000
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 4250000 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 0, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 4250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received HasToSend4(1, 0, Ipv4AddrC { segments: [10, 0, 0, 20] }, 6) at time 4250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 has to send ipv4 packet 6 via 0 to Ipv4AddrC { segments: [10, 0, 0, 20] }
+[INFO] nodes : Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [6, 0], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }
+[DEBUG] timestamp : 4250020, n_use_random_number : [7, 0]
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(1, 5250000) at time 4250000
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 5250000 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 4250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 4250020 TimestampActions : TimestampActions { to_wake_up: [], has_to_send: {1: [6]} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [], has_to_send: {1: [6]} }
+[MESSAGE] process 1 sends 6
+[MESSAGE] leader sends wake up message to node 5 at time 4250020
+[MESSAGE] leader sends wake up message to node 6 at time 4250020
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 4250020 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 4250020
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 4250020
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 5250000 TimestampActions : TimestampActions { to_wake_up: [1], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [1], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 5250000
+[MESSAGE] leader sends wake up message to node 6 at time 5250000
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 5250000 
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(1, 5250000) at time 5250000
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 5250000 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 0, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 5250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received HasToSend4(1, 0, Ipv4AddrC { segments: [10, 0, 0, 20] }, 7) at time 5250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 has to send ipv4 packet 7 via 0 to Ipv4AddrC { segments: [10, 0, 0, 20] }
+[INFO] nodes : Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [7, 0], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }
+[DEBUG] timestamp : 5250020, n_use_random_number : [8, 0]
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(1, 6250000) at time 5250000
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 6250000 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 5250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 5250020 TimestampActions : TimestampActions { to_wake_up: [], has_to_send: {1: [7]} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [], has_to_send: {1: [7]} }
+[MESSAGE] process 1 sends 7
+[MESSAGE] leader sends wake up message to node 5 at time 5250020
+[MESSAGE] leader sends wake up message to node 6 at time 5250020
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 5250020 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 5250020
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 5250020
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 6250000 TimestampActions : TimestampActions { to_wake_up: [1], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [1], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 6250000
+[MESSAGE] leader sends wake up message to node 6 at time 6250000
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 6250000 
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(1, 6250000) at time 6250000
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 6250000 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 0, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 6250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received HasToSend4(1, 0, Ipv4AddrC { segments: [10, 0, 0, 20] }, 8) at time 6250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 has to send ipv4 packet 8 via 0 to Ipv4AddrC { segments: [10, 0, 0, 20] }
+[INFO] nodes : Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [8, 0], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }
+[DEBUG] timestamp : 6250020, n_use_random_number : [9, 0]
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(1, 7250000) at time 6250000
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 7250000 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 6250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 6250020 TimestampActions : TimestampActions { to_wake_up: [], has_to_send: {1: [8]} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [], has_to_send: {1: [8]} }
+[MESSAGE] process 1 sends 8
+[MESSAGE] leader sends wake up message to node 5 at time 6250020
+[MESSAGE] leader sends wake up message to node 6 at time 6250020
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 6250020 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 6250020
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 6250020
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 7250000 TimestampActions : TimestampActions { to_wake_up: [1], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [1], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 7250000
+[MESSAGE] leader sends wake up message to node 6 at time 7250000
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 7250000 
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(1, 7250000) at time 7250000
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 7250000 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 0, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 7250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received HasToSend4(1, 0, Ipv4AddrC { segments: [10, 0, 0, 20] }, 9) at time 7250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 has to send ipv4 packet 9 via 0 to Ipv4AddrC { segments: [10, 0, 0, 20] }
+[INFO] nodes : Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [9, 0], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }
+[DEBUG] timestamp : 7250020, n_use_random_number : [10, 0]
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(1, 8250000) at time 7250000
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 8250000 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 7250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 7250020 TimestampActions : TimestampActions { to_wake_up: [], has_to_send: {1: [9]} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [], has_to_send: {1: [9]} }
+[MESSAGE] process 1 sends 9
+[MESSAGE] leader sends wake up message to node 5 at time 7250020
+[MESSAGE] leader sends wake up message to node 6 at time 7250020
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 7250020 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 7250020
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 7250020
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 8250000 TimestampActions : TimestampActions { to_wake_up: [1], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [1], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 8250000
+[MESSAGE] leader sends wake up message to node 6 at time 8250000
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 8250000 
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(1, 8250000) at time 8250000
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 8250000 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 0, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 8250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received HasToSend4(1, 0, Ipv4AddrC { segments: [10, 0, 0, 20] }, 10) at time 8250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 has to send ipv4 packet 10 via 0 to Ipv4AddrC { segments: [10, 0, 0, 20] }
+[INFO] nodes : Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [10, 0], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }
+[DEBUG] timestamp : 8250020, n_use_random_number : [11, 0]
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(1, 9250000) at time 8250000
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 9250000 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 8250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 8250020 TimestampActions : TimestampActions { to_wake_up: [], has_to_send: {1: [10]} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [], has_to_send: {1: [10]} }
+[MESSAGE] process 1 sends 10
+[MESSAGE] leader sends wake up message to node 5 at time 8250020
+[MESSAGE] leader sends wake up message to node 6 at time 8250020
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 8250020 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 8250020
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 8250020
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 9250000 TimestampActions : TimestampActions { to_wake_up: [1], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [1], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 9250000
+[MESSAGE] leader sends wake up message to node 6 at time 9250000
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 9250000 
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(1, 9250000) at time 9250000
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 9250000 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 0, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 9250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received HasToSend4(1, 0, Ipv4AddrC { segments: [10, 0, 0, 20] }, 11) at time 9250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 has to send ipv4 packet 11 via 0 to Ipv4AddrC { segments: [10, 0, 0, 20] }
+[INFO] nodes : Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [11, 0], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }
+[DEBUG] timestamp : 9250020, n_use_random_number : [12, 0]
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(1, 10250000) at time 9250000
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 10250000 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 9250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 9250020 TimestampActions : TimestampActions { to_wake_up: [], has_to_send: {1: [11]} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [], has_to_send: {1: [11]} }
+[MESSAGE] process 1 sends 11
+[MESSAGE] leader sends wake up message to node 5 at time 9250020
+[MESSAGE] leader sends wake up message to node 6 at time 9250020
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 9250020 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 9250020
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 9250020
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 10000000 TimestampActions : TimestampActions { to_wake_up: [2], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [2], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 10000000
+[MESSAGE] leader sends wake up message to node 6 at time 10000000
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 10000000 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 10000000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(2, 10000000) at time 10000000
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 10000000 for node 2
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received HasToSend4(2, 0, Ipv4AddrC { segments: [10, 0, 0, 1] }, 0) at time 10000000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 has to send ipv4 packet 0 via 0 to Ipv4AddrC { segments: [10, 0, 0, 1] }
+[INFO] nodes : Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [12, 0], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }
+[DEBUG] timestamp : 10000020, n_use_random_number : [12, 1]
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received HasToSend4(2, 0, Ipv4AddrC { segments: [10, 0, 0, 1] }, 1) at time 10000000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 has to send ipv4 packet 1 via 0 to Ipv4AddrC { segments: [10, 0, 0, 1] }
+[INFO] nodes : Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [12, 1], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }
+[DEBUG] timestamp : 10000020, n_use_random_number : [12, 2]
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(2, 10000000) at time 10000000
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 10000000 for node 2
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 10000000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 10000000 TimestampActions : TimestampActions { to_wake_up: [2], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [2], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 10000000
+[MESSAGE] leader sends wake up message to node 6 at time 10000000
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 10000000 
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(2, 10000000) at time 10000000
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 10000000 for node 2
+[DEBUG] nb-finished: 0, nf_blocked: 0, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 10000000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received HasToSend4(2, 0, Ipv4AddrC { segments: [10, 0, 0, 1] }, 2) at time 10000000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 has to send ipv4 packet 2 via 0 to Ipv4AddrC { segments: [10, 0, 0, 1] }
+[INFO] nodes : Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [12, 2], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }
+[DEBUG] timestamp : 10000020, n_use_random_number : [12, 3]
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(2, 10250000) at time 10000000
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 10250000 for node 2
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 10000000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 10000020 TimestampActions : TimestampActions { to_wake_up: [], has_to_send: {2: [0, 1, 2]} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [], has_to_send: {2: [0, 1, 2]} }
+[MESSAGE] process 2 sends 0
+[MESSAGE] process 2 sends 1
+[MESSAGE] process 2 sends 2
+[MESSAGE] leader sends wake up message to node 5 at time 10000020
+[MESSAGE] leader sends wake up message to node 6 at time 10000020
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 10000020 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 10000020
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 10000020
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 10250000 TimestampActions : TimestampActions { to_wake_up: [1, 2], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [1, 2], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 10250000
+[MESSAGE] leader sends wake up message to node 6 at time 10250000
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 10250000 
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(2, 10250000) at time 10250000
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 10250000 for node 2
+[DEBUG] nb-finished: 0, nf_blocked: 0, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(1, 10250000) at time 10250000
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 10250000 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 0, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received HasToSend4(2, 0, Ipv4AddrC { segments: [10, 0, 0, 1] }, 3) at time 10250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 has to send ipv4 packet 3 via 0 to Ipv4AddrC { segments: [10, 0, 0, 1] }
+[INFO] nodes : Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [12, 3], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }
+[DEBUG] timestamp : 10250020, n_use_random_number : [12, 4]
+[DEBUG] nb-finished: 0, nf_blocked: 0, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(2, 10750000) at time 10250000
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 10750000 for node 2
+[DEBUG] nb-finished: 0, nf_blocked: 0, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 10250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received HasToSend4(1, 0, Ipv4AddrC { segments: [10, 0, 0, 20] }, 12) at time 10250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 has to send ipv4 packet 12 via 0 to Ipv4AddrC { segments: [10, 0, 0, 20] }
+[INFO] nodes : Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [12, 4], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }
+[DEBUG] timestamp : 10250020, n_use_random_number : [13, 4]
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(1, 10250000) at time 10250000
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 10250000 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 10250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 10250000 TimestampActions : TimestampActions { to_wake_up: [1], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [1], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 10250000
+[MESSAGE] leader sends wake up message to node 6 at time 10250000
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 10250000 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 10250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(1, 10250000) at time 10250000
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 10250000 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received HasToSend4(1, 0, Ipv4AddrC { segments: [10, 0, 0, 20] }, 13) at time 10250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 has to send ipv4 packet 13 via 0 to Ipv4AddrC { segments: [10, 0, 0, 20] }
+[INFO] nodes : Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [13, 4], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }
+[DEBUG] timestamp : 10250020, n_use_random_number : [14, 4]
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(1, 10250000) at time 10250000
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 10250000 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 10250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 10250000 TimestampActions : TimestampActions { to_wake_up: [1], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [1], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 10250000
+[MESSAGE] leader sends wake up message to node 6 at time 10250000
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 10250000 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 10250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(1, 10250000) at time 10250000
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 10250000 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(1, 10284427) at time 10250000
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 10284427 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 10250000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 10250020 TimestampActions : TimestampActions { to_wake_up: [], has_to_send: {1: [12, 13], 2: [3]} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [], has_to_send: {1: [12, 13], 2: [3]} }
+[MESSAGE] process 1 sends 12
+[MESSAGE] process 1 sends 13
+[MESSAGE] process 2 sends 3
+[MESSAGE] leader sends wake up message to node 5 at time 10250020
+[MESSAGE] leader sends wake up message to node 6 at time 10250020
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 10250020 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 10250020
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 10250020
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 10284427 TimestampActions : TimestampActions { to_wake_up: [1], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [1], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 10284427
+[MESSAGE] leader sends wake up message to node 6 at time 10284427
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 10284427 
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(1, 10284427) at time 10284427
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 10284427 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 0, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 10284427
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received HasToSend4(1, 0, Ipv4AddrC { segments: [10, 0, 0, 20] }, 14) at time 10284427
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 has to send ipv4 packet 14 via 0 to Ipv4AddrC { segments: [10, 0, 0, 20] }
+[INFO] nodes : Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [14, 4], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }
+[DEBUG] timestamp : 10284447, n_use_random_number : [15, 4]
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(1, 10284427) at time 10284427
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 10284427 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 10284427
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 10284427 TimestampActions : TimestampActions { to_wake_up: [1], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [1], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 10284427
+[MESSAGE] leader sends wake up message to node 6 at time 10284427
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 10284427 
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(1, 10284427) at time 10284427
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 10284427 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 0, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 10284427
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received HasToSend4(1, 0, Ipv4AddrC { segments: [10, 0, 0, 20] }, 15) at time 10284427
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 has to send ipv4 packet 15 via 0 to Ipv4AddrC { segments: [10, 0, 0, 20] }
+[INFO] nodes : Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [15, 4], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }
+[DEBUG] timestamp : 10284447, n_use_random_number : [16, 4]
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(1, 10293802) at time 10284427
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 10293802 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 10284427
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 10284447 TimestampActions : TimestampActions { to_wake_up: [], has_to_send: {1: [14, 15]} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [], has_to_send: {1: [14, 15]} }
+[MESSAGE] process 1 sends 14
+[MESSAGE] process 1 sends 15
+[MESSAGE] leader sends wake up message to node 5 at time 10284447
+[MESSAGE] leader sends wake up message to node 6 at time 10284447
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 10284447 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 10284447
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 10284447
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 10293802 TimestampActions : TimestampActions { to_wake_up: [1], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [1], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 10293802
+[MESSAGE] leader sends wake up message to node 6 at time 10293802
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 10293802 
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(1, 10293802) at time 10293802
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 10293802 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 0, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(1, 14784427) at time 10293802
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 14784427 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 0, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 10293802
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 10293802
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 10750000 TimestampActions : TimestampActions { to_wake_up: [2], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [2], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 10750000
+[MESSAGE] leader sends wake up message to node 6 at time 10750000
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 10750000 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 10750000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(2, 10750000) at time 10750000
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 10750000 for node 2
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received HasToSend4(2, 0, Ipv4AddrC { segments: [10, 0, 0, 1] }, 4) at time 10750000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 has to send ipv4 packet 4 via 0 to Ipv4AddrC { segments: [10, 0, 0, 1] }
+[INFO] nodes : Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [16, 4], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }
+[DEBUG] timestamp : 10750020, n_use_random_number : [16, 5]
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(2, 10750000) at time 10750000
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 10750000 for node 2
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 10750000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 10750000 TimestampActions : TimestampActions { to_wake_up: [2], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [2], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 10750000
+[MESSAGE] leader sends wake up message to node 6 at time 10750000
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 10750000 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 10750000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(2, 10750000) at time 10750000
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 10750000 for node 2
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(2, 10759222) at time 10750000
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 10759222 for node 2
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 10750000
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 10750020 TimestampActions : TimestampActions { to_wake_up: [], has_to_send: {2: [4]} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [], has_to_send: {2: [4]} }
+[MESSAGE] process 2 sends 4
+[MESSAGE] leader sends wake up message to node 5 at time 10750020
+[MESSAGE] leader sends wake up message to node 6 at time 10750020
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 10750020 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 10750020
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 10750020
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 10759222 TimestampActions : TimestampActions { to_wake_up: [2], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [2], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 10759222
+[MESSAGE] leader sends wake up message to node 6 at time 10759222
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 10759222 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 10759222
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(2, 10759222) at time 10759222
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 10759222 for node 2
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received HasToSend4(2, 0, Ipv4AddrC { segments: [10, 0, 0, 1] }, 5) at time 10759222
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 has to send ipv4 packet 5 via 0 to Ipv4AddrC { segments: [10, 0, 0, 1] }
+[INFO] nodes : Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [16, 5], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }
+[DEBUG] timestamp : 10759242, n_use_random_number : [16, 6]
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(2, 10764492) at time 10759222
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 10764492 for node 2
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 10759222
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 10759242 TimestampActions : TimestampActions { to_wake_up: [], has_to_send: {2: [5]} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [], has_to_send: {2: [5]} }
+[MESSAGE] process 2 sends 5
+[MESSAGE] leader sends wake up message to node 5 at time 10759242
+[MESSAGE] leader sends wake up message to node 6 at time 10759242
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 10759242 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 10759242
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 10759242
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 10764492 TimestampActions : TimestampActions { to_wake_up: [2], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [2], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 10764492
+[MESSAGE] leader sends wake up message to node 6 at time 10764492
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 10764492 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 10764492
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(2, 10764492) at time 10764492
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 10764492 for node 2
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(2, 12362972) at time 10764492
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 12362972 for node 2
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 10764492
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 12362972 TimestampActions : TimestampActions { to_wake_up: [2], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [2], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 12362972
+[MESSAGE] leader sends wake up message to node 6 at time 12362972
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 12362972 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 12362972
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(2, 12362972) at time 12362972
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 12362972 for node 2
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received HasToSend4(2, 0, Ipv4AddrC { segments: [10, 0, 0, 1] }, 6) at time 12362972
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 has to send ipv4 packet 6 via 0 to Ipv4AddrC { segments: [10, 0, 0, 1] }
+[INFO] nodes : Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [16, 6], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }
+[DEBUG] timestamp : 12362992, n_use_random_number : [16, 7]
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received HasToSend4(2, 0, Ipv4AddrC { segments: [10, 0, 0, 1] }, 7) at time 12362972
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 has to send ipv4 packet 7 via 0 to Ipv4AddrC { segments: [10, 0, 0, 1] }
+[INFO] nodes : Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [16, 7], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }
+[DEBUG] timestamp : 12362992, n_use_random_number : [16, 8]
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received HasToSend4(2, 0, Ipv4AddrC { segments: [10, 0, 0, 1] }, 8) at time 12362972
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 has to send ipv4 packet 8 via 0 to Ipv4AddrC { segments: [10, 0, 0, 1] }
+[INFO] nodes : Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [16, 8], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }
+[DEBUG] timestamp : 12362992, n_use_random_number : [16, 9]
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(2, 14237972) at time 12362972
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 14237972 for node 2
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 12362972
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 12362992 TimestampActions : TimestampActions { to_wake_up: [], has_to_send: {2: [6, 7, 8]} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [], has_to_send: {2: [6, 7, 8]} }
+[MESSAGE] process 2 sends 6
+[MESSAGE] process 2 sends 7
+[MESSAGE] process 2 sends 8
+[MESSAGE] leader sends wake up message to node 5 at time 12362992
+[MESSAGE] leader sends wake up message to node 6 at time 12362992
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 12362992 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 12362992
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 12362992
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 14237972 TimestampActions : TimestampActions { to_wake_up: [2], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [2], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 14237972
+[MESSAGE] leader sends wake up message to node 6 at time 14237972
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 14237972 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 14237972
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(2, 14237972) at time 14237972
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 14237972 for node 2
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received HasToSend4(2, 0, Ipv4AddrC { segments: [10, 0, 0, 1] }, 9) at time 14237972
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 has to send ipv4 packet 9 via 0 to Ipv4AddrC { segments: [10, 0, 0, 1] }
+[INFO] nodes : Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [16, 9], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }
+[DEBUG] timestamp : 14237992, n_use_random_number : [16, 10]
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(2, 16112972) at time 14237972
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 16112972 for node 2
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 14237972
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 14237992 TimestampActions : TimestampActions { to_wake_up: [], has_to_send: {2: [9]} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [], has_to_send: {2: [9]} }
+[MESSAGE] process 2 sends 9
+[MESSAGE] leader sends wake up message to node 5 at time 14237992
+[MESSAGE] leader sends wake up message to node 6 at time 14237992
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 14237992 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 14237992
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 14237992
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 14784427 TimestampActions : TimestampActions { to_wake_up: [1], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [1], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 14784427
+[MESSAGE] leader sends wake up message to node 6 at time 14784427
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 14784427 
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(1, 14784427) at time 14784427
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 14784427 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 0, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 14784427
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received HasToSend4(1, 0, Ipv4AddrC { segments: [10, 0, 0, 20] }, 16) at time 14784427
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 has to send ipv4 packet 16 via 0 to Ipv4AddrC { segments: [10, 0, 0, 20] }
+[INFO] nodes : Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [16, 10], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }
+[DEBUG] timestamp : 14784447, n_use_random_number : [17, 10]
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(1, 14784427) at time 14784427
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 14784427 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 14784427
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 14784427 TimestampActions : TimestampActions { to_wake_up: [1], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [1], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 14784427
+[MESSAGE] leader sends wake up message to node 6 at time 14784427
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 14784427 
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(1, 14784427) at time 14784427
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 14784427 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 0, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 14784427
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received HasToSend4(1, 0, Ipv4AddrC { segments: [10, 0, 0, 20] }, 17) at time 14784427
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 has to send ipv4 packet 17 via 0 to Ipv4AddrC { segments: [10, 0, 0, 20] }
+[INFO] nodes : Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [17, 10], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }
+[DEBUG] timestamp : 14784447, n_use_random_number : [18, 10]
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(1, 24784427) at time 14784427
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 24784427 for node 1
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 14784427
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 14784447 TimestampActions : TimestampActions { to_wake_up: [], has_to_send: {1: [16, 17]} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [], has_to_send: {1: [16, 17]} }
+[MESSAGE] process 1 sends 16
+[MESSAGE] process 1 sends 17
+[MESSAGE] leader sends wake up message to node 5 at time 14784447
+[MESSAGE] leader sends wake up message to node 6 at time 14784447
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 14784447 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 14784447
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 14784447
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 16112972 TimestampActions : TimestampActions { to_wake_up: [2], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [2], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 16112972
+[MESSAGE] leader sends wake up message to node 6 at time 16112972
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 16112972 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 16112972
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(2, 16112972) at time 16112972
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 16112972 for node 2
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received HasToSend4(2, 0, Ipv4AddrC { segments: [10, 0, 0, 1] }, 10) at time 16112972
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 has to send ipv4 packet 10 via 0 to Ipv4AddrC { segments: [10, 0, 0, 1] }
+[INFO] nodes : Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [18, 10], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }
+[DEBUG] timestamp : 16112992, n_use_random_number : [18, 11]
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(2, 16112972) at time 16112972
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 16112972 for node 2
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 16112972
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 16112972 TimestampActions : TimestampActions { to_wake_up: [2], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [2], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 16112972
+[MESSAGE] leader sends wake up message to node 6 at time 16112972
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 16112972 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 16112972
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(2, 16112972) at time 16112972
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 16112972 for node 2
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received HasToSend4(2, 0, Ipv4AddrC { segments: [10, 0, 0, 1] }, 11) at time 16112972
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 has to send ipv4 packet 11 via 0 to Ipv4AddrC { segments: [10, 0, 0, 1] }
+[INFO] nodes : Config { nb_follower: 2, _qname: "some_queue", exe: [Process { name: "client", path: "picoquicdemo", args: ["./picoquicdemo", "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"] }, Process { name: "server", path: "picoquicdemo", args: ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"] }], random_number: 123, n_use_random_number: [18, 11], jitter_distribution: "no_jitter", jitter_coef: 10, topo: NetworkTopology { grf: Graph { directed: None, id: Some(5), label: Some("test"), nodes: [Node { id: 2, label: Some("Server"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.20"))] }))] }))] }, Node { id: 1, label: Some("Node 1"), attrs: [("interface", GMLObject(GMLObject { pairs: [("id", GMLInt(0)), ("label", GMLString("eth-0")), ("ip", GMLObject(GMLObject { pairs: [("type", GMLString("v4")), ("ip", GMLString("10.0.0.1"))] }))] }))] }], edges: [Edge { source: 1, target: 2, label: Some("Link"), attrs: [("type", GMLString("symmetric")), ("source_if", GMLInt(0)), ("metric", GMLInt(20)), ("target_if", GMLInt(0))] }], attrs: [] }, ip4_node: {Ipv4AddrC { segments: [10, 0, 0, 20] }: (2, 0), Ipv4AddrC { segments: [10, 0, 0, 1] }: (1, 0)}, ip6_node: {} } }
+[DEBUG] timestamp : 16112992, n_use_random_number : [18, 12]
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(2, 23244530) at time 16112972
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 23244530 for node 2
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 16112972
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 16112992 TimestampActions : TimestampActions { to_wake_up: [], has_to_send: {2: [10, 11]} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [], has_to_send: {2: [10, 11]} }
+[MESSAGE] process 2 sends 10
+[MESSAGE] process 2 sends 11
+[MESSAGE] leader sends wake up message to node 5 at time 16112992
+[MESSAGE] leader sends wake up message to node 6 at time 16112992
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 16112992 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 16112992
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 16112992
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 23244530 TimestampActions : TimestampActions { to_wake_up: [2], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [2], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 23244530
+[MESSAGE] leader sends wake up message to node 6 at time 23244530
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 23244530 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 23244530
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(2, 23244530) at time 23244530
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 23244530 for node 2
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received AddStep(2, 23244530) at time 23244530
+[TRACE] entering simulation::message_handler
+[TRACE] Adding a step 23244530 for node 2
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(2) at time 23244530
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 2, nb_follower: 2
+[DEBUG] event at time 23244530 TimestampActions : TimestampActions { to_wake_up: [2], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [2], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 23244530
+[MESSAGE] leader sends wake up message to node 6 at time 23244530
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 23244530 
+[INFO] running time loop
+[MESSAGE] Leader received Stuck(1) at time 23244530
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 is stuck
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(2, 23244530) at time 23244530
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 23244530 for node 2
+[DEBUG] nb-finished: 0, nf_blocked: 1, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Finished(2) at time 23244530
+[TRACE] entering simulation::message_handler
+[TRACE] Node 2 has finished
+[DEBUG] nb-finished: 1, nf_blocked: 1, nb_follower: 2
+[DEBUG] event at time 24784427 TimestampActions : TimestampActions { to_wake_up: [1], has_to_send: {} }
+[TRACE] entering simulation::sending_time_loop
+[DEBUG] entering simulation::sending_time_loop with args TimestampActions { to_wake_up: [1], has_to_send: {} }
+[MESSAGE] leader sends wake up message to node 5 at time 24784427
+[TRACE] entering simulation::running_time_loop
+[DEBUG] entering simulation::running_time_loop with args current_time : 24784427 
+[INFO] running time loop
+[MESSAGE] Leader received DelStep(1, 24784427) at time 24784427
+[TRACE] entering simulation::message_handler
+[TRACE] Deleting a step 24784427 for node 1
+[DEBUG] nb-finished: 1, nf_blocked: 0, nb_follower: 2
+[INFO] running time loop
+[MESSAGE] Leader received Finished(1) at time 24784427
+[TRACE] entering simulation::message_handler
+[TRACE] Node 1 has finished
+[DEBUG] nb-finished: 2, nf_blocked: 0, nb_follower: 2
+[INFO] Simulation finished by all process finishing

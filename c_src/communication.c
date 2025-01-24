@@ -295,3 +295,51 @@ void __attribute__((destructor)) send_finished() {
     Message m = {.tag = Finished, .finished = ID};
     send_msg(m);
 }
+
+void send_has_to_send(const struct sockaddr *dest_addr, packet_elem *pe)
+{
+        //todo put in communication.c
+        printf("send_has_to_send called\n");
+        fflush(stdout);
+        printf ("sa family %d\n", dest_addr->sa_family);
+        fflush(stdout);
+        switch (dest_addr->sa_family)
+        {
+        case AF_INET:
+                printf("HasToSend4\n");
+                char *ip = (char *)(&((struct sockaddr_in *)dest_addr)->sin_addr.s_addr);
+                Message m = {
+                    .tag = HasToSend4,
+                    .has_to_send4 = {
+                        ._0 = ID,
+                        ._1 = 0, // TODO: find interface id
+                        ._2 = {.segments = {ip[0], ip[1], ip[2], ip[3]}},
+                        ._3 = pe->pkt.id}};
+                send_msg(m);
+                break;
+
+        case AF_INET6:
+                printf("HasToSend6\n");
+                Message m2 = {
+                    .tag = HasToSend6,
+                    .has_to_send6 = {
+                        ._0 = ID,
+                        ._1 = 0, // TODO: find interface id
+                        ._2 = {
+                            .segments = {
+                                ((struct sockaddr_in6 *)dest_addr)->sin6_addr.__in6_u.__u6_addr16[0],
+                                ((struct sockaddr_in6 *)dest_addr)->sin6_addr.__in6_u.__u6_addr16[1],
+                                ((struct sockaddr_in6 *)dest_addr)->sin6_addr.__in6_u.__u6_addr16[2],
+                                ((struct sockaddr_in6 *)dest_addr)->sin6_addr.__in6_u.__u6_addr16[3],
+                                ((struct sockaddr_in6 *)dest_addr)->sin6_addr.__in6_u.__u6_addr16[4],
+                                ((struct sockaddr_in6 *)dest_addr)->sin6_addr.__in6_u.__u6_addr16[5],
+                                ((struct sockaddr_in6 *)dest_addr)->sin6_addr.__in6_u.__u6_addr16[6],
+                                ((struct sockaddr_in6 *)dest_addr)->sin6_addr.__in6_u.__u6_addr16[7]}},
+                        ._3 = pe->pkt.id}};
+                send_msg(m2);
+                break;
+
+        default:
+                fprintf(stderr, "Unknown AF\n");
+        }
+}

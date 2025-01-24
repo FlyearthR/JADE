@@ -1,5 +1,4 @@
 #include <sys/select.h>
-#include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <poll.h>
@@ -58,13 +57,23 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
         int flags_s = fcntl(sockfd, F_GETFL, 0);
         if (flags_s == -1)
                 return -1;
+        printf("1\n");
+        fflush(stdout);
         fcntl(sockfd, F_SETFL, O_NONBLOCK);
+        printf("2\n");
+        fflush(stdout);
         LIBC_FUNCTION(ssize_t, recvmsg, int sockfd, struct msghdr *msg, int flags);
+        printf("3\n");
+        fflush(stdout);
         int ret;
-        while (ret == -1 && empty_fun())
+        do
         {
+                printf("recvmsg -> in while loop ");
+                fflush(stdout);
                 ret = LIBC_FUNCTION_GET(recvmsg)(sockfd, msg, flags);
-        }
+                printf("%d\n",ret);
+                fflush(stdout);
+        }while (ret == -1 && errno == EWOULDBLOCK && empty_fun());
         return ret;
 }
 
@@ -265,54 +274,6 @@ struct sockaddr *get_ip(int fd){
         return &found->fi.addr;
 }
 
-void send_has_to_send(const struct sockaddr *dest_addr, packet_elem *pe)
-{
-        //todo put in communication.c
-        fprintf(logs, "send_has_to_send called\n");
-        fflush(stdout);
-        printf ("sa family %d\n", dest_addr->sa_family);
-        fflush(stdout);
-        switch (dest_addr->sa_family)
-        {
-        case AF_INET:
-                fprintf(logs, "HasToSend4\n");
-                char *ip = (char *)(&((struct sockaddr_in *)dest_addr)->sin_addr.s_addr);
-                Message m = {
-                    .tag = HasToSend4,
-                    .has_to_send4 = {
-                        ._0 = ID,
-                        ._1 = 0, // TODO: find interface id
-                        ._2 = {.segments = {ip[0], ip[1], ip[2], ip[3]}},
-                        ._3 = pe->pkt.id}};
-                send_msg(m);
-                break;
-
-        case AF_INET6:
-                fprintf(logs, "HasToSend6\n");
-                Message m2 = {
-                    .tag = HasToSend6,
-                    .has_to_send6 = {
-                        ._0 = ID,
-                        ._1 = 0, // TODO: find interface id
-                        ._2 = {
-                            .segments = {
-                                ((struct sockaddr_in6 *)dest_addr)->sin6_addr.__in6_u.__u6_addr16[0],
-                                ((struct sockaddr_in6 *)dest_addr)->sin6_addr.__in6_u.__u6_addr16[1],
-                                ((struct sockaddr_in6 *)dest_addr)->sin6_addr.__in6_u.__u6_addr16[2],
-                                ((struct sockaddr_in6 *)dest_addr)->sin6_addr.__in6_u.__u6_addr16[3],
-                                ((struct sockaddr_in6 *)dest_addr)->sin6_addr.__in6_u.__u6_addr16[4],
-                                ((struct sockaddr_in6 *)dest_addr)->sin6_addr.__in6_u.__u6_addr16[5],
-                                ((struct sockaddr_in6 *)dest_addr)->sin6_addr.__in6_u.__u6_addr16[6],
-                                ((struct sockaddr_in6 *)dest_addr)->sin6_addr.__in6_u.__u6_addr16[7]}},
-                        ._3 = pe->pkt.id}};
-                send_msg(m2);
-                break;
-
-        default:
-                fprintf(stderr, "Unknown AF\n");
-        }
-}
-
 ssize_t send(int sockfd, const void *buf, size_t len, int flags)
 {
         fprintf(logs, "send called\n");
@@ -437,7 +398,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
         printf ("%d\n", ((struct sockaddr_in*)(buf->msg_name))->sin_family);
         fflush(stdout);
 
-        send_has_to_send(pe->pkt.dest_addr, pe);
+        send_has_to_send(buf->msg_name, pe);
 
         return n_bytes_sent;
 }

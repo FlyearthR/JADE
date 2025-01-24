@@ -14,14 +14,14 @@ graph = '9_clients_1_server_quic.gml'
 [executables]
 [[executables.exe]]
 name = 'client'
-path = '../examples/quic_client.sh'
-args = ["./../examples/quic_client.sh"]
+path = 'picoquicdemo'
+args = ["./picoquicdemo",  "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"]
 
 node_ids = [1]
 
 [[executables.exe]]
 name = 'server'
-path = '../examples/quic_server.sh'
-args = ["./../examples/quic_server.sh"]
+path = 'picoquicdemo'
+args = ["./picoquicdemo", "-p", "4433", "-w", "../web_page_quic/", "-1", "-q", "../logs"]
 node_ids = [2]
 
