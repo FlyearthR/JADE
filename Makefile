@@ -30,7 +30,7 @@ testQuic: all
 	$(CC) ${CFLAGS} examples/simple_client.c -o testing/simple_client
 	$(CC) ${CFLAGS} examples/random_client.c -o testing/random_client
 	${CC} ${CFLAGS} examples/simple_server.c -o testing/simple_server
-	rm examples/picoquic/simulator examples/picoquic/syscalls.so examples/picoquic/9_clients_1_server_quic.*
+	rm -f examples/picoquic/simulator examples/picoquic/syscalls.so examples/picoquic/9_clients_1_server_quic.*
 	cp -f tests/9_clients_1_server_quic.* examples/picoquic/
 	cp c_src/syscalls.so examples/picoquic/
 	cp testing/simulator examples/picoquic/

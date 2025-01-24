@@ -5,6 +5,7 @@
 #include <mqueue.h>
 #include <stdio.h>
 #include <string.h>
+#include <arpa/inet.h>
 #include "helper.h"
 #include "rust_lib.h"
 
@@ -36,3 +37,5 @@ void suppress_event(struct timeval);
 int get_random();
 
 void sender(uint64_t pkt_id);
+
+void send_has_to_send(const struct sockaddr *dest_addr, packet_elem *pe);
