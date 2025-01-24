@@ -15,7 +15,7 @@ graph = '9_clients_1_server_quic.gml'
 [[executables.exe]]
 name = 'client'
 path = 'picoquicdemo'
-args = ["./picoquicdemo",  "-q", "../logs", "-n", "servername", "-o", "../recieved_pages_quic/", "10.0.0.20", "4433", "index.html"]
+args = ["./picoquicdemo",  "-q", "../logs", "-n", "servername", "-o", "../received_pages_quic/", "10.0.0.20", "4433", "index.html"]
 
 node_ids = [1]
 
