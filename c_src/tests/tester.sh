@@ -12,6 +12,10 @@ basic_test() {
     cp ../../tests/2_followers.gml ../../testing/2_followers.gml
     cd ../../testing
     sudo RUST_BACKTRACE=1 ./simulator 2_followers.toml
+    if [ $? -ne 0 ]
+    then
+        sudo ip -all netns del
+    fi
     grep "Error" *.out > /dev/null
     if [ $? -eq 0 ]
     then
@@ -24,9 +28,13 @@ basic_test() {
         echo "$EXE is not inter-process coherent"
         exit 2
     fi
-    mv 1.out 1.out.old
-    mv 2.out 2.out.old
+    mv -f 1.out 1.out.old
+    mv -f 2.out 2.out.old
     sudo RUST_BACKTRACE=1 ./simulator 2_followers.toml
+    if [ $? -ne 0 ]
+    then
+        sudo ip -all netns del
+    fi
     diff 1.out 1.out.old > /dev/null
     if [ $? -ne 0 ]
     then
@@ -57,6 +65,10 @@ client_server_test() {
     cp ../../tests/2_followers.gml ../../testing/2_followers.gml
     cd ../../testing
     sudo RUST_BACKTRACE=1 ./simulator 2_followers.toml
+    if [ $? -ne 0 ]
+    then
+        sudo ip -all netns del
+    fi
     grep "Error" *.out > /dev/null
     if [ $? -eq 0 ]
     then
@@ -69,9 +81,13 @@ client_server_test() {
         echo "$EXE1 and $EXE2 are not inter-process coherent"
         exit 2
     fi
-    mv 1.out 1.out.old
-    mv 2.out 2.out.old
+    mv -f 1.out 1.out.old
+    mv -f 2.out 2.out.old
     sudo RUST_BACKTRACE=1 ./simulator 2_followers.toml
+    if [ $? -ne 0 ]
+    then
+        sudo ip -all netns del
+    fi
     diff 1.out 1.out.old > /dev/null
     if [ $? -ne 0 ]
     then
@@ -151,6 +167,10 @@ case $EXE in
         sed "s/%%ARGS1%%/, \"2\"/g" |
         sed "s/%%ARGS2%%/, \"3\"/g" > ../../testing/2_followers.toml
     cd ../../testing && sudo RUST_BACKTRACE=1 ./simulator 2_followers.toml
+    if [ $? -ne 0 ]
+    then
+        sudo ip -all netns del
+    fi
     grep "Error" *.out > /dev/null
     if [ $? -eq 0 ]
     then

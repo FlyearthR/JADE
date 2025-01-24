@@ -15,7 +15,7 @@ int random_number = 42;
 
 int empty_fun()
 {
-        printf("empty_fun called\n");
+        fprintf(logs, "empty_fun called\n");
         fflush(stdout);
         blocking();
         return 1;
@@ -25,7 +25,7 @@ ssize_t recvfrom(int sockfd, void *buf, size_t len,
                  int flags, struct sockaddr *src_addr,
                  socklen_t *addrlen)
 {
-        printf("recvfrom called\n");
+        fprintf(logs, "recvfrom called\n");
         fflush(stdout);
         // TODO: configure socket as non blocking at opening time
         int flags_s = fcntl(sockfd, F_GETFL, 0);
@@ -35,12 +35,12 @@ ssize_t recvfrom(int sockfd, void *buf, size_t len,
         LIBC_FUNCTION(ssize_t, recvfrom, int sockfd, void *buf, size_t len,
                       int flags, struct sockaddr *src_addr,
                       socklen_t *addrlen);
-        // printf("inside recvfrom 3\n");
+        // fprintf(logs, "inside recvfrom 3\n");
         //  fflush(stdout);
         int ret;
         do
         {
-                printf("inside recvfrom loop\n");
+                fprintf(logs, "inside recvfrom loop\n");
                 fflush(stdout);
                 ret = LIBC_FUNCTION_GET(recvfrom)(sockfd, buf, len, flags, src_addr, addrlen);
                 if (ret == -1 && errno != EWOULDBLOCK) {
@@ -53,7 +53,7 @@ ssize_t recvfrom(int sockfd, void *buf, size_t len,
 
 ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
 {
-        printf("recvmsg called\n");
+        fprintf(logs, "recvmsg called\n");
         fflush(stdout);
         int flags_s = fcntl(sockfd, F_GETFL, 0);
         if (flags_s == -1)
@@ -72,7 +72,7 @@ int select(int nfds, fd_set *restrict readfds,
            fd_set *restrict writefds, fd_set *restrict exceptfds,
            struct timeval *restrict timeout)
 {
-        printf("select called\n");
+        fprintf(logs, "select called\n");
         fflush(stdout);
         struct timeval zeros = {.tv_sec = 0, .tv_usec = 0};
         struct timeval cur = get_time();
@@ -85,12 +85,12 @@ int select(int nfds, fd_set *restrict readfds,
                 return ret;
 
         add_event(to);
-        // printf("select called\n");
+        // fprintf(logs, "select called\n");
         cur = blocking();
         while (ret == 0 && before_timeval(cur, to))
         {
                 ret = LIBC_FUNCTION_GET(select)(nfds, readfds, writefds, exceptfds, &zeros);
-                // printf("select loop called\n");
+                // fprintf(logs, "select loop called\n");
                 cur = blocking();
         }
         suppress_event(to);
@@ -102,7 +102,7 @@ int pselect(int nfds, fd_set *restrict readfds,
             const struct timespec *restrict timeout,
             const sigset_t *restrict sigmask)
 {
-        printf("pselect called\n");
+        fprintf(logs, "pselect called\n");
         fflush(stdout);
         struct timespec zeros = {.tv_sec = 0, .tv_nsec = 0};
         struct timeval cur = get_time();
@@ -115,12 +115,12 @@ int pselect(int nfds, fd_set *restrict readfds,
         if (ret)
                 return ret;
         add_event(to);
-        // printf("pselect called\n");
+        // fprintf(logs, "pselect called\n");
         cur = blocking();
         while (ret == 0 && before_timeval(cur, to))
         {
                 ret = LIBC_FUNCTION_GET(pselect)(nfds, readfds, writefds, exceptfds, &zeros, sigmask);
-                // printf("pselect loop called\n");
+                // fprintf(logs, "pselect loop called\n");
                 cur = blocking();
         }
         suppress_event(to);
@@ -129,7 +129,7 @@ int pselect(int nfds, fd_set *restrict readfds,
 
 int infinity_poll(struct pollfd *fds, nfds_t nfds, int timeout)
 {
-        printf("infinity_poll called\n");
+        fprintf(logs, "infinity_poll called\n");
         fflush(stdout);
         LIBC_FUNCTION(int, poll, struct pollfd *fds, nfds_t nfds, int timeout);
         int ret;
@@ -142,7 +142,7 @@ int infinity_poll(struct pollfd *fds, nfds_t nfds, int timeout)
 
 int poll(struct pollfd *fds, nfds_t nfds, int timeout)
 {
-        printf("poll called\n");
+        fprintf(logs, "poll called\n");
         fflush(stdout);
         LIBC_FUNCTION(int, poll, struct pollfd *fds, nfds_t nfds, int timeout);
         if (timeout < 0)
@@ -153,12 +153,12 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
         if (ret)
                 return ret;
         add_event(to);
-        // printf("poll called\n");
+        // fprintf(logs, "poll called\n");
         cur = blocking();
         do
         {
                 ret = LIBC_FUNCTION_GET(poll)(fds, nfds, 0);
-                // printf("poll loop called\n");
+                // fprintf(logs, "poll loop called\n");
         } while (ret == 0 && before_timeval(blocking(), to));
         suppress_event(to);
         return ret;
@@ -167,7 +167,7 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
 int ppoll(struct pollfd *fds, nfds_t nfds,
           const struct timespec *tmo_p, const sigset_t *sigmask)
 {
-        printf("ppoll called\n");
+        fprintf(logs, "ppoll called\n");
         fflush(stdout);
         struct timespec zeros = {.tv_sec = 0, .tv_nsec = 0};
         struct timeval cur = get_time();
@@ -183,7 +183,7 @@ int ppoll(struct pollfd *fds, nfds_t nfds,
         do
         {
                 ret = LIBC_FUNCTION_GET(ppoll)(fds, nfds, &zeros, sigmask);
-                // printf("ppoll loop called\n");
+                // fprintf(logs, "ppoll loop called\n");
         } while (ret == 0 && before_timeval(blocking(), to));
         suppress_event(to);
         return ret;
@@ -192,7 +192,7 @@ int ppoll(struct pollfd *fds, nfds_t nfds,
 int gettimeofday(struct timeval *restrict tv,
                  void *restrict tz)
 {
-        printf("gettimeofday called\n");
+        fprintf(logs, "gettimeofday called\n");
         fflush(stdout);
         LIBC_FUNCTION(int, gettimeofday, struct timeval *restrict tv,
                       void *restrict tz);
@@ -205,7 +205,7 @@ int gettimeofday(struct timeval *restrict tv,
 
 unsigned int sleep(unsigned int seconds)
 {
-        printf("sleep called\n");
+        fprintf(logs, "sleep called\n");
         fflush(stdout);
         if (seconds == 0)
                 return 0;
@@ -213,7 +213,7 @@ unsigned int sleep(unsigned int seconds)
         struct timeval end = start;
         end.tv_sec += seconds;
         add_event(end);
-        // printf("sleep called (multiple blocking possible)\n");
+        // fprintf(logs, "sleep called (multiple blocking possible)\n");
         while (before_timeval(blocking(), end))
                 ;
         // libc: Zero if the requested time has elapsed,
@@ -226,7 +226,7 @@ unsigned int sleep(unsigned int seconds)
 
 int usleep(useconds_t usec)
 {
-        printf("usleep called\n");
+        fprintf(logs, "usleep called\n");
         fflush(stdout);
         if (usec == 0)
                 return 0;
@@ -234,7 +234,7 @@ int usleep(useconds_t usec)
         struct timeval end = {.tv_sec = 0, .tv_usec = usec};
         end = add_timeval(start, end);
         add_event(end);
-        // printf("usleep called (multiple blocking possible)\n");
+        // fprintf(logs, "usleep called (multiple blocking possible)\n");
         while (before_timeval(blocking(), end))
                 ;
         return 0;
@@ -242,7 +242,7 @@ int usleep(useconds_t usec)
 
 void srand(unsigned int local_seed)
 {
-        printf("srand called\n");
+        fprintf(logs, "srand called\n");
         fflush(stdout);
         fflush(stdout);
         seed = local_seed;
@@ -251,7 +251,7 @@ void srand(unsigned int local_seed)
 
 int rand(void)
 {
-        printf("gettimeofday called\n");
+        fprintf(logs, "gettimeofday called\n");
         fflush(stdout);
         return get_random();
 }
@@ -268,14 +268,14 @@ struct sockaddr *get_ip(int fd){
 void send_has_to_send(const struct sockaddr *dest_addr, packet_elem *pe)
 {
         //todo put in communication.c
-        printf("send_has_to_send called\n");
+        fprintf(logs, "send_has_to_send called\n");
         fflush(stdout);
         printf ("sa family %d\n", dest_addr->sa_family);
         fflush(stdout);
         switch (dest_addr->sa_family)
         {
         case AF_INET:
-                printf("HasToSend4\n");
+                fprintf(logs, "HasToSend4\n");
                 char *ip = (char *)(&((struct sockaddr_in *)dest_addr)->sin_addr.s_addr);
                 Message m = {
                     .tag = HasToSend4,
@@ -288,7 +288,7 @@ void send_has_to_send(const struct sockaddr *dest_addr, packet_elem *pe)
                 break;
 
         case AF_INET6:
-                printf("HasToSend6\n");
+                fprintf(logs, "HasToSend6\n");
                 Message m2 = {
                     .tag = HasToSend6,
                     .has_to_send6 = {
@@ -315,7 +315,7 @@ void send_has_to_send(const struct sockaddr *dest_addr, packet_elem *pe)
 
 ssize_t send(int sockfd, const void *buf, size_t len, int flags)
 {
-        printf("send called\n");
+        fprintf(logs, "send called\n");
         fflush(stdout);
         packet_elem *pe;
         if ((pe = (packet_elem *)malloc(sizeof *pe)) == NULL)
@@ -344,7 +344,7 @@ ssize_t send(int sockfd, const void *buf, size_t len, int flags)
 ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
                const struct sockaddr *dest_addr, socklen_t addrlen)
 {
-        printf("sendto called\n");
+        fprintf(logs, "sendto called\n");
         fflush(stdout);
         packet_elem *pe;
         if ((pe = (packet_elem *)malloc(sizeof *pe)) == NULL)
@@ -372,14 +372,14 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
 ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
 {
         // TODO
-        printf("sendmsg called\n");
+        fprintf(logs, "sendmsg called\n");
         fflush(stdout);
         packet_elem *pe;
         if ((pe = (packet_elem *)malloc(sizeof *pe)) == NULL)
                 exit(-13);
         if ((pe->pkt.buf = malloc(sizeof(struct msghdr))) == NULL)
                 exit(-13);
-        printf("malloc ok\n");
+        fprintf(logs, "malloc ok\n");
         fflush(stdout);
         struct msghdr *buf = (struct msghdr *)pe->pkt.buf;
         buf->msg_name = malloc(msg->msg_namelen);
@@ -387,7 +387,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
         buf->msg_namelen = msg->msg_namelen;
         buf->msg_iov = (struct iovec *)malloc(sizeof(struct iovec) * msg->msg_iovlen);
         int n_bytes_sent = 0;
-        printf("first part ok\n");
+        fprintf(logs, "first part ok\n");
         fflush(stdout);
         for (int i = 0; i < msg->msg_iovlen; i++)
         {
@@ -400,7 +400,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
                 iov->iov_base = tmp_buf;
                 iov->iov_len = len;
         }
-        printf("copy buffer ok\n");
+        fprintf(logs, "copy buffer ok\n");
         fflush(stdout);
         buf->msg_iovlen=msg->msg_iovlen;
         buf->msg_control = malloc(msg->msg_controllen);
@@ -419,7 +419,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
         memcpy(pe->pkt.dest_addr,(struct sockaddr *)(msg->msg_name),sizeof(struct sockaddr));
         
         pe->pkt.addrlen = msg->msg_namelen;*/
-        printf("copy finished\n");
+        fprintf(logs, "copy finished\n");
         fflush(stdout);
 
         LL_PREPEND(pkt_list, pe);
@@ -432,7 +432,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
         // pe->pkt.dest_addr = &dest_addr;
         // pe->pkt.addrlen=sizeof(dest_addr);
 
-        printf("sockaddr :\n");
+        fprintf(logs, "sockaddr :\n");
         printf ("%s\n", inet_ntoa (((struct sockaddr_in*)(buf->msg_name))->sin_addr));
         printf ("%d\n", ((struct sockaddr_in*)(buf->msg_name))->sin_family);
         fflush(stdout);
@@ -443,10 +443,10 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
 }
 
 int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen){
-        printf("bind called\n");
+        fprintf(logs, "bind called\n");
         fflush(stdout);
-        printf("sockaddr :\n");
-        printf ("%s\n", inet_ntoa (((struct sockaddr_in*) addr)->sin_addr));
+        fprintf(logs, "sockaddr :\n");
+        fprintf(logs, "%s\n", inet_ntoa (((struct sockaddr_in*) addr)->sin_addr));
 
         fd_ip_elem *f = (fd_ip_elem *)malloc(sizeof(fd_ip_elem));
         f->fi.fd = sockfd;
@@ -459,9 +459,9 @@ int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen){
 
 int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
-        printf("connect called\n");
+        fprintf(logs, "connect called\n");
         fflush(stdout);
-        printf("sockaddr :\n");
+        fprintf(logs, "sockaddr :\n");
         printf ("%s\n", inet_ntoa (((struct sockaddr_in*) addr)->sin_addr));
         
         fd_ip_elem *f = (fd_ip_elem *)malloc(sizeof(fd_ip_elem));
@@ -476,7 +476,7 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 
 int clock_getres(clockid_t clockid, struct timespec *res) // all clocks are based on the leader's one which is microsecond-precise
 {
-        printf("clock_getres called\n");
+        fprintf(logs, "clock_getres called\n");
         fflush(stdout);
         LIBC_FUNCTION(int, clock_getres, clockid_t clockid, struct timespec *res);
         switch (clockid)
@@ -503,7 +503,7 @@ int clock_getres(clockid_t clockid, struct timespec *res) // all clocks are base
 
 int clock_gettime(clockid_t clockid, struct timespec *tp)
 {
-        printf("clock_gettime called\n");
+        fprintf(logs, "clock_gettime called\n");
         fflush(stdout);
         LIBC_FUNCTION(int, clock_gettime, clockid_t clockid, struct timespec *tp);
         switch (clockid)
@@ -530,14 +530,14 @@ int clock_gettime(clockid_t clockid, struct timespec *tp)
 
 int clock_settime(clockid_t clockid, const struct timespec *tp)
 {
-        printf("clock_gettime called\n");
+        fprintf(logs, "clock_gettime called\n");
         fflush(stdout);
         return -1; // TODO: set errno
 }
 
 ssize_t read(int fd, void *buf, size_t count)
 {
-        printf("read called\n");
+        fprintf(logs, "read called\n");
         fflush(stdout);
         LIBC_FUNCTION(ssize_t, read, int fd, void *buf, size_t count);
         if (getsockname(fd, NULL, 0) == -1 && errno == ENOTSOCK)
@@ -559,7 +559,7 @@ ssize_t read(int fd, void *buf, size_t count)
 
 ssize_t __read_chk(int fd, void *buf, size_t count)
 {
-        printf("__read_chk called\n");
+        fprintf(logs, "__read_chk called\n");
         fflush(stdout);
         LIBC_FUNCTION(ssize_t, __read_chk, int fd, void *buf, size_t count);
         if (getsockname(fd, NULL, 0) == -1 && errno == ENOTSOCK)
