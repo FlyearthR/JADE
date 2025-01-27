@@ -19,8 +19,7 @@ Cargo.lock
 /target
 tags
 testing/
-examples/miniP/client
-examples/miniP/miniP_server.c
-examples/miniP/server
-examples/miniP/miniP_server.c
+examples/miniP/*
 examples/logs
+!examples/logs/.gitkeep
+examples/picoquic
