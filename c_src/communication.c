@@ -43,7 +43,8 @@ void __attribute__((constructor)) init_fd() { // TODO: get the name of the queue
     next_pkt_id = 0;
 
     char path[100];
-    snprintf(path, 100, "%snode%i.logs", "/home/flyearth/1-PHD/Thesis/network_time_simulator/network_time_simulator/logs/", id);
+
+    snprintf(path, 100, "%snode%i.logs", "../logs/", id);
 
     logs = fopen(path, "w"); // TODO: get log file from the env
 
