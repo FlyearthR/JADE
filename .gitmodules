@@ -1,0 +1,3 @@
+[submodule "examples/picoquic"]
+	path = examples/picoquic
+	url = https://github.com/private-octopus/picoquic
