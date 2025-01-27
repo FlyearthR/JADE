@@ -258,55 +258,17 @@ void sender(uint64_t pkt_id)
     send_msg(m);
 }
 
-void __attribute__((destructor)) send_finished() {
-    int count;
-    packet_elem* p;
-    Buffer msg;
-    LL_COUNT(pkt_list, p, count);
-    if (count != 0) // if there are still messages to send
-    {
-        Message m_stuck = {.tag = Stuck, .stuck = ID};
-        send_msg(m_stuck);
-        while(count) {
-            int ret = mq_receive(FDI, msg.buffer, SIZE_BUFFER, NULL);
-            if (ret == -1) {
-                fprintf(stderr, "Error receiving message in send_finished\n");
-                perror("Error: ");
-                exit(-6);
-            }
-            Message* m = deserialize(msg);
-            print_msg(*m);
-            if (m->tag == Send)
-            {
-                sender(m->send);
-                //count--;
-                // TODO understand impact of count--
-            }
-            else if (m->tag == WakeUp)
-            {
-                send_msg(m_stuck);
-            }
-            else
-            {
-                // ignore
-            }
-        }
-    }
-    Message m = {.tag = Finished, .finished = ID};
-    send_msg(m);
-}
-
 void send_has_to_send(const struct sockaddr *dest_addr, packet_elem *pe)
 {
         //todo put in communication.c
-        printf("send_has_to_send called\n");
-        fflush(stdout);
-        printf ("sa family %d\n", dest_addr->sa_family);
-        fflush(stdout);
+        fprintf(logs, "send_has_to_send called\n");
+        fflush(logs);
+        fprintf (logs, "sa family %d\n", dest_addr->sa_family);
+        fflush(logs);
         switch (dest_addr->sa_family)
         {
         case AF_INET:
-                printf("HasToSend4\n");
+                fprintf(logs, "HasToSend4\n");
                 char *ip = (char *)(&((struct sockaddr_in *)dest_addr)->sin_addr.s_addr);
                 Message m = {
                     .tag = HasToSend4,
@@ -342,4 +304,46 @@ void send_has_to_send(const struct sockaddr *dest_addr, packet_elem *pe)
         default:
                 fprintf(stderr, "Unknown AF\n");
         }
+}
+
+void __attribute__((destructor)) send_finished() {
+    int count;
+    packet_elem* p;
+    Buffer msg;
+    LL_COUNT(pkt_list, p, count);
+    if (count != 0) // if there are still messages to send
+    {
+        Message m_stuck = {.tag = Stuck, .stuck = ID};
+        send_msg(m_stuck);
+        while(count) {
+            fprintf(logs, "Finishing loop count: %i\n", count);
+            fflush(logs);
+            int ret = mq_receive(FDI, msg.buffer, SIZE_BUFFER, NULL);
+            if (ret == -1) {
+                fprintf(stderr, "Error receiving message in send_finished\n");
+                perror("Error: ");
+                exit(-6);
+            }
+            Message* m = deserialize(msg);
+            print_msg(*m);
+            if (m->tag == Send)
+            {
+                fprintf(logs, "FL: Send\n");
+                fflush(logs);
+                sender(m->send);
+                count--;
+                // TODO understand impact of count--
+            }
+            else if (m->tag == WakeUp)
+            {
+                send_msg(m_stuck);
+            }
+            else
+            {
+                // ignore
+            }
+        }
+    }
+    Message m = {.tag = Finished, .finished = ID};
+    send_msg(m);
 }
