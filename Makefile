@@ -69,7 +69,6 @@ simulator:
 	cargo build
 
 API:
-	#cargo install cbindgen
 	cbindgen --crate network_time_simulator --output c_src/rust_lib.h --lang c
 	CARGO_TARGET_DIR=target/lib cargo build --manifest-path src/Cargo.toml
 	cp target/lib/debug/libapi.a c_src/libAPI.a
