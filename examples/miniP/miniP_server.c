@@ -21,7 +21,7 @@ int pthread_create(pthread_t *restrict thread,
                           void *(*start_routine)(void *),
                           void *restrict arg);
 
-#define NUMBER_THREAD 1
+#define NUMBER_THREAD 8
 int fds[NUMBER_THREAD];
 
 void* respond(void* fd_p) {
@@ -62,7 +62,6 @@ void* respond(void* fd_p) {
 int main(int argc, char* argv[])
 {
 	printf("server launched\n");
-	fflush(stdout);
     char *ip = NULL;
     int port = 0;
     char opt;
@@ -82,7 +81,7 @@ int main(int argc, char* argv[])
     }
 
     for (int i = 0 ; i < NUMBER_THREAD ; i++) {
-	fds[i] = socket(AF_INET, SOCK_DGRAM,0);
+	fds[i] = socket(AF_INET, SOCK_DGRAM, 0);
 	if (fds[i] <= 0) {
 	    printf("socket: socket\n");
 	    exit(EXIT_FAILURE);
@@ -106,28 +105,26 @@ int main(int argc, char* argv[])
 
     pthread_t thread_id[NUMBER_THREAD]; 
     for (int i = 0 ; i < NUMBER_THREAD ; i++) {
-	struct msg buf;
-	struct sockaddr_in from;
-	socklen_t fromlen = sizeof(from);
-	printf("listenning\n");
-	fflush(stdout);
-	if (recvfrom(fds[i], (void*) &buf, sizeof(struct msg), 0, (struct sockaddr*) &from, &fromlen) == -1) {
-		printf("inside recvfrom else\n");
-		fflush(stdout);
-	    perror("recv");
-	    exit(EXIT_FAILURE);
-	}
-	printf("after recvfrom\n");
-	fflush(stdout);
-	print_msg(buf);
-	if(connect(fds[i], (struct sockaddr*) &from, fromlen)) {
-	    perror("connect");
-	    exit(EXIT_FAILURE);
-	}
-	if (NUMBER_THREAD > 1)
-		pthread_create(thread_id+i, NULL, respond, (void*)(fds+i));
-	else
-		respond((void*)fds);
+		struct msg buf;
+		struct sockaddr_in from;
+		socklen_t fromlen = sizeof(from);
+		printf("listenning\n");
+		if (recvfrom(fds[i], (void*) &buf, sizeof(struct msg), 0, (struct sockaddr*) &from, &fromlen) == -1) {
+			printf("inside recvfrom else\n");
+			fflush(stdout);
+			perror("recv");
+			exit(EXIT_FAILURE);
+		}
+		printf("after recvfrom\n");
+		print_msg(buf);
+		if(connect(fds[i], (struct sockaddr*) &from, fromlen)) {
+			perror("connect");
+			exit(EXIT_FAILURE);
+		}
+		if (NUMBER_THREAD > 1)
+			pthread_create(thread_id+i, NULL, respond, (void*)(fds+i));
+		else
+			respond((void*)fds);
     }
 	if (NUMBER_THREAD > 1) {
 		for (int i = 0 ; i < NUMBER_THREAD ; i++) {
