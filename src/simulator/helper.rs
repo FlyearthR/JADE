@@ -409,6 +409,7 @@ impl TimestampActions {
      * Returns the number of process occurences
      */
     pub fn del_process(&mut self, id: u8) -> usize {
+        println!("del_process - self: {:?}", self);
         self.to_wake_up.remove(self.to_wake_up.iter().position(|x| *x == id).unwrap());
         return self.to_wake_up.len();
     }

@@ -102,7 +102,8 @@ int select(int nfds, fd_set *restrict readfds,
                 // fprintf(logs, "select loop called\n");
                 cur = blocking();
         }
-        suppress_event(to);
+        if (before_timeval(cur, to))
+                suppress_event(to);
         return ret;
 }
 
@@ -132,7 +133,8 @@ int pselect(int nfds, fd_set *restrict readfds,
                 // fprintf(logs, "pselect loop called\n");
                 cur = blocking();
         }
-        suppress_event(to);
+        if (before_timeval(cur, to))
+                suppress_event(to);
         return ret;
 }
 
@@ -168,8 +170,9 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
         {
                 ret = LIBC_FUNCTION_GET(poll)(fds, nfds, 0);
                 // fprintf(logs, "poll loop called\n");
-        } while (ret == 0 && before_timeval(blocking(), to));
-        suppress_event(to);
+        } while (ret == 0 && before_timeval(cur = blocking(), to));
+        if (before_timeval(cur, to)) //TODO fix
+                suppress_event(to);
         return ret;
 }
 
@@ -193,8 +196,9 @@ int ppoll(struct pollfd *fds, nfds_t nfds,
         {
                 ret = LIBC_FUNCTION_GET(ppoll)(fds, nfds, &zeros, sigmask);
                 // fprintf(logs, "ppoll loop called\n");
-        } while (ret == 0 && before_timeval(blocking(), to));
-        suppress_event(to);
+        } while (ret == 0 && before_timeval(cur = blocking(), to));
+        if (before_timeval(cur, to))
+                suppress_event(to);
         return ret;
 }
 
@@ -496,14 +500,25 @@ int clock_settime(clockid_t clockid, const struct timespec *tp)
         return -1; // TODO: set errno
 }
 
+#ifdef DEBUG
+int open(const char *pathname, int flags, ...)
+{
+        va_list ap;
+        LIBC_FUNCTION(int, open, const char *pathname, int flags, ...);
+        int ret = LIBC_FUNCTION_GET(open)(pathname, flags, ap);
+        fprintf(logs, "fd correspondance - fd: %i; path: %s\n", ret, pathname);
+        return ret;
+}
+#endif
+
 ssize_t read(int fd, void *buf, size_t count)
 {
-        fprintf(logs, "read called\n");
+        fprintf(logs, "read called - fd: %i\n", fd);
         fflush(stdout);
         LIBC_FUNCTION(ssize_t, read, int fd, void *buf, size_t count);
         if (getsockname(fd, NULL, 0) == -1 && errno == ENOTSOCK)
         { // this is not an FD to a socket, we have to pass it to the kernel
-                LIBC_FUNCTION_GET(read)(fd, buf, count);
+                return LIBC_FUNCTION_GET(read)(fd, buf, count);
         }
         // TODO: configure socket as non blocking at opening time
         int flags_s = fcntl(fd, F_GETFL, 0);
@@ -525,7 +540,7 @@ ssize_t __read_chk(int fd, void *buf, size_t count)
         LIBC_FUNCTION(ssize_t, __read_chk, int fd, void *buf, size_t count);
         if (getsockname(fd, NULL, 0) == -1 && errno == ENOTSOCK)
         { // this is not an FD to a socket, we have to pass it to the kernel
-                LIBC_FUNCTION_GET(__read_chk)(fd, buf, count);
+                return LIBC_FUNCTION_GET(__read_chk)(fd, buf, count);
         }
         // TODO: configure socket as non blocking at opening time
         int flags_s = fcntl(fd, F_GETFL, 0);

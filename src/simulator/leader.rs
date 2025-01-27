@@ -640,6 +640,9 @@ impl Simulation {
                 Ok(Fork::Parent(child)) => Ok(child),
                 Ok(Fork::Child) => {
                     let _ = follower_init_queues(id, self.cfg.nb_follower, &self.cfg._qname);
+                    self.logs.log("debug", &format!("execve - path: {:?} - args: {:?}",
+                                                    &self.cfg.exe[(id - 1) as usize].path,
+                                                    &self.cfg.exe[(id - 1) as usize].args));
                     execve(
                         &self.cfg.exe[(id - 1) as usize].path,
                         &self.cfg.exe[(id - 1) as usize].args,
@@ -700,6 +703,7 @@ impl Simulation {
             Message::DelStep(id, t) => {
                 //println!("Deleting a step {} for node {}", t, id);
                 self.logs.log("trace", &format!("Deleting a step {} for node {}", t, id));
+                self.logs.log("debug", &format!("deleting process id: {} self: {:?}", id, self));
                 if let Some(x) = self.events.get_mut(&t) {
                     x.del_process(id);
                 }

@@ -30,13 +30,10 @@ void __attribute__((constructor)) init_fd() { // TODO: get the name of the queue
         .mq_curmsgs = 0,
     };
     fdi = mq_open(FD, O_RDONLY|O_CREAT, (mode_t) 0600, attr);
-    //fprintf(logs, "Opened %s in read mode\n", FD);
-    //fflush(stdout);
+    
     FD[12] = '0';
     FD[13] = '\0';
     fdo = mq_open(FD, O_WRONLY|O_CREAT, (mode_t) 0600, attr);
-    //fprintf(logs, "Opened %s in write mode\n", FD);
-    //fflush(stdout);
 
     pkt_list = NULL;
     fd_ip_list = NULL;
@@ -47,6 +44,9 @@ void __attribute__((constructor)) init_fd() { // TODO: get the name of the queue
     snprintf(path, 100, "%snode%i.logs", "../logs/", id);
 
     logs = fopen(path, "w"); // TODO: get log file from the env
+
+    fprintf(logs, "Process %i properly preloaded\n", id);
+    fflush(logs);
 
     current_time = receive_msg();
 }
@@ -61,7 +61,7 @@ void print_msg(Message m)
             fprintf(logs, "AddStep(%i, %i)\n", m.add_step._0, m.add_step._1);
             break;
         case DelStep:
-            fprintf(logs, "DelStep(%i)\n", m.del_step._0, m.del_step._1);
+            fprintf(logs, "DelStep(%i, %i)\n", m.del_step._0, m.del_step._1);
             break;
         case HasToSend4:
             fprintf(logs, "HasToSend4(%i, %i, %i.%i.%i.%i, %i)\n", m.has_to_send4._0, m.has_to_send4._1,
@@ -114,6 +114,8 @@ int send_msg(Message m) // TODO: extend this
 
 uint64_t receive_msg()
 {
+    fprintf(logs, "receive_msg\n");
+    fflush(logs);
     Buffer msg;
     do {
         int ret = mq_receive(FDI, msg.buffer, SIZE_BUFFER, NULL);
@@ -184,7 +186,7 @@ void add_event(struct timeval t)
 void suppress_event(struct timeval t)
 {
     Message m = {.tag = DelStep, .del_step = {._0 = ID, ._1 = timeval_to_uint_us(t)}};
-    //fprintf(logs, "suppress_event called \n");
+    print_msg(m);
     unsigned int ret = send_msg(m);
     if (ret != 0)
 	exit(-10);
