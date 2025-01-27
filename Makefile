@@ -82,6 +82,8 @@ clean:
 	rm -f examples/*_client
 	rm -f examples/*_server
 	rm -rf target/syscalls
+	rm -f examples/logs/*
+	rm -f logs/*
 
 little_clean:
 	rm -f testing/*
