@@ -87,3 +87,11 @@ clean:
 
 little_clean:
 	rm -f testing/*
+
+install-test:
+	cd examples 
+	mkdir logs
+	git clone https://github.com/private-octopus/picoquic.git
+	cd picoquic
+	cmake -DPICOQUIC_FETCH_PTLS=Y .
+	make
