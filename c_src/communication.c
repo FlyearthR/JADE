@@ -228,7 +228,14 @@ void custom_sendmsg(packet pkt)
     if (ret)
         perror("sendmsg: ");
     fprintf(logs, "return value custom_sendmsg : %d\n", ret);
-    //TODO : free better
+    
+    struct msghdr *buf = (struct msghdr *)pkt.buf;
+    for (int i = 0; i < buf->msg_iovlen; i++){
+        free((buf->msg_iov+i)->iov_base);
+    }
+    free(buf->msg_iov);
+    free(buf->msg_control);
+    free(buf->msg_name);
     free((void*) pkt.buf);
 }
 
