@@ -20,7 +20,6 @@ extern int seed;
 extern int fdi;
 extern int fdo;
 
-extern FILE* logs;
 
 int send_msg(Message m);
 

@@ -5,6 +5,8 @@ fd_ip_elem* fd_ip_list;
 
 uint64_t next_pkt_id;
 
+FILE* log_file;
+
 int before_timeval(struct timeval t1, struct timeval t2)
 {
     return t1.tv_sec != t2.tv_sec ? t1.tv_sec < t2.tv_sec : t1.tv_usec < t2.tv_usec;
@@ -45,6 +47,14 @@ int cmp_pkt(packet_elem* pe1, packet_elem* pe2)
     return pe2->pkt.id - pe1->pkt.id;
 }
 
-int cmp_fd_ip(fd_ip_elem* fd_ip1,fd_ip_elem* fd_ip2){
+int cmp_fd_ip(fd_ip_elem* fd_ip1,fd_ip_elem* fd_ip2)
+{
     return fd_ip1->fi.fd-fd_ip2->fi.fd;
+}
+
+void logs(char* str, ...)
+{
+    va_list ap;
+    fprintf(log_file, str, ap);
+    fflush(log_file);
 }

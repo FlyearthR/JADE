@@ -8,7 +8,11 @@
 #include <stdint.h>
 #include <dlfcn.h>
 #include <sys/socket.h>
+#include <stdio.h>
 #include "utlist.h"
+
+
+extern FILE* log_file;
 
 enum type_of_send {
     send_t,
@@ -63,6 +67,8 @@ struct timeval add_timeval(struct timeval, struct timeval);
 int cmp_pkt(packet_elem* pe1, packet_elem* pe2);
 
 int cmp_fd_ip(fd_ip_elem* fd_ip1,fd_ip_elem* fd_ip2);
+
+void logs(char* str, ...);
 
 #define LIBC_FUNCTION(ftype, fname, ...) ftype (* libc_##fname ) ( __VA_ARGS__ ); \
     libc_##fname = dlsym(RTLD_NEXT, #fname )
