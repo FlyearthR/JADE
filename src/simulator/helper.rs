@@ -224,6 +224,7 @@ pub struct Config {
     pub jitter_distribution: String, //"poisson" or "normal" or "no_jitter"
     pub jitter_coef: u64,
     pub topo: NetworkTopology,
+    pub log_level: Vec<String>,
 }
 
 impl Config {
@@ -236,10 +237,10 @@ impl Config {
         const EXE2_ARGS: [&CStr; 5] = [c"./server", c"-i", c"127.0.0.1", c"-p", c"4443"];
         const RANDOM_NUMBER: u64 = 84; //TODO
         let mut n_use_random_number = Vec::with_capacity(NB_FOLLOWER);
-        for i in 0..NB_FOLLOWER{
+        for _i in 0..NB_FOLLOWER{
             n_use_random_number.push(0);
         }
-    
+            
         return Self {
             nb_follower: NB_FOLLOWER,
             _qname: QNAME.to_string(),
@@ -250,6 +251,7 @@ impl Config {
             jitter_distribution: "no_jitter".to_string(),
             jitter_coef: 10, //TODO change
             topo: NetworkTopology::new(),
+            log_level: vec!["trace".to_string(), "debug".to_string(), "warn".to_string(), "error".to_string(), "info".to_string(), "message".to_string()]
         }
     }
 
@@ -275,16 +277,24 @@ impl Config {
                 }
             }
         }
+
+        let log_level = value.get("logs")
+            .and_then(Value::as_array)
+            .map(|f| f.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect())
+            .unwrap();
+
         let jitter_distribution = value.get("jitter_distribution")
             .and_then(Value::as_str)
             .unwrap_or("no_jitter")
             .to_string();
+
         let random_number = value.get("random_number").and_then(Value::as_integer).unwrap_or(0) as u64;
         let mut n_use_random_number = Vec::with_capacity(nb_follower);
-        for i in 0..nb_follower{
+        for _i in 0..nb_follower{
             n_use_random_number.push(0);
         }
         let jitter_coef = 10; // TODO change
+
         if let Some(topo_path) = value.get("graph").and_then(Value::as_str) {
             let topo =  NetworkTopology::from_graph(Graph::from_gml(
                                         GMLObject::from_str(
@@ -300,9 +310,10 @@ impl Config {
                 jitter_distribution: jitter_distribution,
                 jitter_coef: jitter_coef,
                 topo,
+                log_level,
             });
-            
         }
+
         return Ok(Config {
             nb_follower,
             _qname,
@@ -312,6 +323,7 @@ impl Config {
             jitter_distribution: jitter_distribution,
             jitter_coef: jitter_coef,
             topo: NetworkTopology::new(),
+            log_level,
         })
 
     }

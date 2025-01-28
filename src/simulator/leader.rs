@@ -117,15 +117,22 @@ impl Drop for Simulation {
 impl Simulation {
     // MARK: simulation : new
     fn new(cfg: Config) -> Self {
-        let logs = Logger::new("log.txt",true,true,true,true,true,true); //TODO Alix: change put the required types of logs in the configuration file
+        let logs= Logger::new("log.txt",
+                                cfg.log_level.contains(&"trace".to_string()),
+                                cfg.log_level.contains(&"debug".to_string()),
+                                cfg.log_level.contains(&"warn".to_string()),
+                                cfg.log_level.contains(&"error".to_string()),
+                                cfg.log_level.contains(&"info".to_string()),
+                                cfg.log_level.contains(&"message".to_string()));
         let nb_f = cfg.nb_follower;
         let _ = cfg.unlink_queues();
         let btm = BTreeMap::new();
 
-        let cfg = tokio::runtime::Runtime::new()
-            .expect("Failed to create runtime")
+        let rt = tokio::runtime::Runtime::new().expect("Failed to create runtime");
+        let cfg = rt
             .block_on(Self::create_namespaces(cfg,&logs))
             .expect("Failed to create namespaces");
+        rt.shutdown_background();
         let mut c = HashMap::with_capacity(nb_f);
         for i in 0..nb_f{c.insert(i+1, (1,0));}
 
@@ -273,6 +280,7 @@ impl Simulation {
 
         let (connection, handle, _) = new_connection().unwrap();
         tokio::spawn(connection);
+
         
         // Interface names
         // Interface veth_sourceNode_targetNode is the interface of sourceNode that is connected to targetNode
@@ -386,6 +394,12 @@ impl Simulation {
         //set both interface up
         Self::set_interface_up(id_source_namespace, id_target_namespace, ipv4_source, ipv6_source,&logs).await;
         Self::set_interface_up(id_target_namespace, id_source_namespace, ipv4_target, ipv6_target,&logs).await;
+        
+        // joinHandle.abort();
+        // let res = tokio::try_join!(joinHandle).unwrap();
+        // println!("res handle {:?}",res);
+        // println!("handle is finished {:?}",joinHandle.is_finished());
+
         Ok(0)
     }
 
@@ -757,7 +771,6 @@ impl Simulation {
                 let n_use_random_number = self.cfg.n_use_random_number.get_mut(usize::from(id)-1).expect("Node ID not found");
 
                 let timestamp = current_time + self.cfg.topo.get_delay_v4(id, if_id, &ip).unwrap() 
-                // TODO Alix : rendre n_use_random_number indépendant pour chaque noeud
                     + self.cfg.topo.get_jitter(self.cfg.random_number,*n_use_random_number,&self.cfg.jitter_distribution).unwrap()*self.cfg.jitter_coef;
                 // println!("timestamp : {}",timestamp);
                 *n_use_random_number += 1;

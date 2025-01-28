@@ -4,6 +4,9 @@ qname = 'some_queue'
 # Random number
 random_number = 123
 
+#logs
+logs = ["trace", "debug", "warn", "error", "info", "message"]
+
 # Number of followers
 nb_follower = 11
 
