@@ -97,13 +97,7 @@ int send_msg(Message m) // TODO: extend this
     logs("inside send_msg\n");
     print_msg(m);
     Buffer* b = serialize(m);
-    /*for (int i = 0 ; i < 27 ; i++) {
-        uint8_t tmp = b->buffer[i];
-        logs("%i ", tmp);
-    }
-    logs("\nmessage printed\n", b);*/
     int ret = mq_send(FDO, b->buffer, SIZE_BUFFER, (m.tag == GetTime || m.tag == GetRand) ? 2 : 1);
-    //logs("after mq_send\n");
     return ret;
 }
 
@@ -155,11 +149,8 @@ uint64_t get_u64_time()
 
 struct timeval blocking()
 {
-    //logs("inside blocking\n");
     Message m = {.tag = Stuck, .stuck = ID};
-    //logs("blocking called \n");
     unsigned int ret = send_msg(m);
-    //logs("ret of send_msg: %i\n", ret);
     if (ret != 0)
         exit(-8);
     ret = receive_msg();
@@ -170,7 +161,6 @@ struct timeval blocking()
 void add_event(struct timeval t)
 {
     Message m = {.tag = AddStep, .add_step = {._0 = ID, ._1 = timeval_to_uint_us(t)}};
-    //logs("add_event called \n");
     unsigned int ret = send_msg(m);
     if (ret != 0)
 	exit(-9);
@@ -188,7 +178,6 @@ void suppress_event(struct timeval t)
 int get_random()
 {
     Message m = {.tag = GetRand, .get_rand = {._0= ID, ._1 = seed}};
-    //logs("get_random called \n");
     unsigned int ret = send_msg(m);
     if (ret != 0)
         exit(-11);
@@ -256,13 +245,11 @@ void sender(uint64_t pkt_id)
     LL_DELETE(pkt_list, found);
     free(found);
     Message m = {.tag = Sent, .sent = {._0 = ID, ._1 = pkt_id}};
-    //logs("sender called \n");
     send_msg(m);
 }
 
 void send_has_to_send(const struct sockaddr *dest_addr, packet_elem *pe)
 {
-        //todo put in communication.c
         logs("send_has_to_send called\n");
         logs("sa family %d\n", dest_addr->sa_family);
         switch (dest_addr->sa_family)

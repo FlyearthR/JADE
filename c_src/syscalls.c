@@ -32,7 +32,6 @@ ssize_t recvfrom(int sockfd, void *buf, size_t len,
         LIBC_FUNCTION(ssize_t, recvfrom, int sockfd, void *buf, size_t len,
                       int flags, struct sockaddr *src_addr,
                       socklen_t *addrlen);
-        // logs("inside recvfrom 3\n");
         int ret;
         do
         {
@@ -77,12 +76,10 @@ int select(int nfds, fd_set *restrict readfds,
                 return ret;
 
         add_event(to);
-        // logs("select called\n");
         cur = blocking();
         while (ret == 0 && before_timeval(cur, to))
         {
                 ret = LIBC_FUNCTION_GET(select)(nfds, readfds, writefds, exceptfds, &zeros);
-                // logs("select loop called\n");
                 cur = blocking();
         }
         if (before_timeval(cur, to))
@@ -107,12 +104,10 @@ int pselect(int nfds, fd_set *restrict readfds,
         if (ret)
                 return ret;
         add_event(to);
-        // logs("pselect called\n");
         cur = blocking();
         while (ret == 0 && before_timeval(cur, to))
         {
                 ret = LIBC_FUNCTION_GET(pselect)(nfds, readfds, writefds, exceptfds, &zeros, sigmask);
-                // logs("pselect loop called\n");
                 cur = blocking();
         }
         if (before_timeval(cur, to))
@@ -144,12 +139,10 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
         if (ret)
                 return ret;
         add_event(to);
-        // logs("poll called\n");
         cur = blocking();
         do
         {
                 ret = LIBC_FUNCTION_GET(poll)(fds, nfds, 0);
-                // logs("poll loop called\n");
         } while (ret == 0 && before_timeval(cur = blocking(), to));
         if (before_timeval(cur, to))
                 suppress_event(to);
@@ -174,7 +167,6 @@ int ppoll(struct pollfd *fds, nfds_t nfds,
         do
         {
                 ret = LIBC_FUNCTION_GET(ppoll)(fds, nfds, &zeros, sigmask);
-                // logs("ppoll loop called\n");
         } while (ret == 0 && before_timeval(cur = blocking(), to));
         if (before_timeval(cur, to))
                 suppress_event(to);
@@ -203,9 +195,7 @@ unsigned int sleep(unsigned int seconds)
         struct timeval end = start;
         end.tv_sec += seconds;
         add_event(end);
-        // logs("sleep called (multiple blocking possible)\n");
-        while (before_timeval(blocking(), end))
-                ;
+        while (before_timeval(blocking(), end));
         // libc: Zero if the requested time has elapsed,
         //   or the number of seconds left to sleep, if the call was  interrupted
         //   by a signal handler.
@@ -223,7 +213,6 @@ int usleep(useconds_t usec)
         struct timeval end = {.tv_sec = 0, .tv_usec = usec};
         end = add_timeval(start, end);
         add_event(end);
-        // logs("usleep called (multiple blocking possible)\n");
         while (before_timeval(blocking(), end))
                 ;
         return 0;
@@ -307,7 +296,6 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
 
 ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
 {
-        // TODO
         logs("sendmsg called\n");
         packet_elem *pe;
         if ((pe = (packet_elem *)malloc(sizeof *pe)) == NULL)
