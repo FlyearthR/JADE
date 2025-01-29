@@ -96,3 +96,10 @@ install-test:
 	fi
 	cd examples/picoquic && cmake -DPICOQUIC_FETCH_PTLS=Y .
 	cd examples/picoquic && make
+
+CI-test: all
+	$(MAKE) test
+	$(MAKE) testQuic
+	$(MAKE) testsyscalls
+	$(MAKE) testffi
+	$(MAKE) usetest
