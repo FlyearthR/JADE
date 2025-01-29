@@ -437,13 +437,11 @@ int open(const char *pathname, int flags, ...)
 }
 #endif
 
-ssize_t read(int fd, void *buf, size_t count)
+ssize_t read_implem(ssize_t (*func)(int,  void *, size_t), int fd, void *buf, size_t count)
 {
-        logs("read called - fd: %i\n", fd);
-        LIBC_FUNCTION(ssize_t, read, int fd, void *buf, size_t count);
         if (getsockname(fd, NULL, 0) == -1 && errno == ENOTSOCK)
         { // this is not an FD to a socket, we have to pass it to the kernel
-                return LIBC_FUNCTION_GET(read)(fd, buf, count);
+                return func(fd, buf, count);
         }
         // TODO: configure socket as non blocking at opening time
         int flags_s = fcntl(fd, F_GETFL, 0);
@@ -453,28 +451,21 @@ ssize_t read(int fd, void *buf, size_t count)
         int ret;
         do
         {
-                ret = LIBC_FUNCTION_GET(read)(fd, buf, count);
+                ret = func(fd, buf, count);
         } while (ret == 0 && empty_fun());
         return ret;
+}
+
+ssize_t read(int fd, void *buf, size_t count)
+{
+        logs("read called - fd: %i\n", fd);
+        LIBC_FUNCTION(ssize_t, read, int fd, void *buf, size_t count);
+        return read_implem(LIBC_FUNCTION_GET(read), fd, buf, count);
 }
 
 ssize_t __read_chk(int fd, void *buf, size_t count)
 {
         logs("__read_chk called\n");
         LIBC_FUNCTION(ssize_t, __read_chk, int fd, void *buf, size_t count);
-        if (getsockname(fd, NULL, 0) == -1 && errno == ENOTSOCK)
-        { // this is not an FD to a socket, we have to pass it to the kernel
-                return LIBC_FUNCTION_GET(__read_chk)(fd, buf, count);
-        }
-        // TODO: configure socket as non blocking at opening time
-        int flags_s = fcntl(fd, F_GETFL, 0);
-        if (flags_s == -1)
-                return -1;
-
-        int ret;
-        do
-        {
-                ret = LIBC_FUNCTION_GET(__read_chk)(fd, buf, count);
-        } while (ret == 0 && empty_fun());
-        return ret;
+        return read_implem(LIBC_FUNCTION_GET(__read_chk), fd, buf, count);
 }
