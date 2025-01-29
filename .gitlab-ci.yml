@@ -20,7 +20,7 @@ build:
   stage: build
   image: ubuntu:latest
   script:
-    - make 
+    - make all
     - make install-test 
 
 test:
