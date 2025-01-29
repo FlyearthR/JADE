@@ -1,15 +1,15 @@
+use gml_parser::{Edge, GMLObject, GMLValue, Graph, HasGMLAttributes, ReadableGMLAttributes};
 use network_time_simulator::{Ipv4AddrC, Ipv6AddrC};
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
-use rand_distr::{Poisson, Normal, Distribution};
-use std::fs;
+use rand_distr::{Distribution, Normal, Poisson};
 use std::collections::{BTreeMap, HashMap};
 use std::ffi::{CStr, CString};
+use std::fs;
+use std::io::{ErrorKind as IOErrorKind, Result};
 use std::path::Path;
-use std::io::{Result, ErrorKind as IOErrorKind};
 use toml::de::Error as TomlError;
 use toml::Value;
-use gml_parser::{Edge, GMLObject, GMLValue, Graph, HasGMLAttributes, ReadableGMLAttributes};
 
 pub fn cstringify(arr: &[&CStr]) -> Vec<CString> {
     let mut ret: Vec<CString> = Vec::with_capacity(arr.len());
@@ -20,7 +20,7 @@ pub fn cstringify(arr: &[&CStr]) -> Vec<CString> {
 }
 
 #[derive(Debug)]
-pub struct NetworkTopology { 
+pub struct NetworkTopology {
     pub grf: Graph,
     pub ip4_node: HashMap<Ipv4AddrC, (u8, u8)>,
     pub ip6_node: HashMap<Ipv6AddrC, (u8, u8)>,
@@ -40,7 +40,9 @@ impl NetworkTopology {
             for att in node.attributes() {
                 if att.0 == "interface" {
                     let GMLValue::GMLObject(ref interface) = att.1 else {
-                        panic!("Failed to read the topology file: an interface should contains values")
+                        panic!(
+                            "Failed to read the topology file: an interface should contains values"
+                        )
                     };
                     let mut ip4s: Vec<Ipv4AddrC> = Vec::new();
                     let mut ip6s: Vec<Ipv6AddrC> = Vec::new();
@@ -53,18 +55,22 @@ impl NetworkTopology {
                                 // handle symmetric links
                                 if ip_att[0].1 == GMLValue::GMLString("v4".to_string()) {
                                     let GMLValue::GMLString(ref ip_addr) = ip_att[1].1 else {
-                                        panic!("Error parsing GML: an IP should contain a field ip");
+                                        panic!(
+                                            "Error parsing GML: an IP should contain a field ip"
+                                        );
                                     };
                                     ip4s.push(ip_addr.into());
                                 } else {
                                     let GMLValue::GMLString(ref ip_addr) = ip_att[1].1 else {
-                                        panic!("Error parsing GML: an IP should contain a field ip");
+                                        panic!(
+                                            "Error parsing GML: an IP should contain a field ip"
+                                        );
                                     };
                                     ip6s.push(ip_addr.into());
                                 }
-                            },
-                            ("label", _) => {},
-                            a => panic!("Error parsing GML: unknown attribute in IP: {:?}", a)
+                            }
+                            ("label", _) => {}
+                            a => panic!("Error parsing GML: unknown attribute in IP: {:?}", a),
                         }
                     }
                     if id == -1 {
@@ -88,53 +94,75 @@ impl NetworkTopology {
 
     #[allow(dead_code)]
     pub fn new() -> Self {
-        Self::load(r#"
+        Self::load(
+            r#"
 graph [            
    id 4           
-]"#)
+]"#,
+        )
     }
 
     fn match_peers(edge: &Edge, id_src: u8, id_if_src: u8, id_dst: u8, id_if_dst: u8) -> bool {
-        let GMLValue::GMLInt(e_if_src) = edge.get_attribute("source_if").unwrap().1 else {panic!("No source interface for the edge {:?}", edge)};
-        let GMLValue::GMLInt(e_if_dst) = edge.get_attribute("target_if").unwrap().1 else {panic!("No target interface for the edge {:?}", edge)};
-        let GMLValue::GMLString(ref edge_type) = edge.get_attribute("type").unwrap().1 else {panic!("No type for the edge {:?}", edge)};
+        let GMLValue::GMLInt(e_if_src) = edge.get_attribute("source_if").unwrap().1 else {
+            panic!("No source interface for the edge {:?}", edge)
+        };
+        let GMLValue::GMLInt(e_if_dst) = edge.get_attribute("target_if").unwrap().1 else {
+            panic!("No target interface for the edge {:?}", edge)
+        };
+        let GMLValue::GMLString(ref edge_type) = edge.get_attribute("type").unwrap().1 else {
+            panic!("No type for the edge {:?}", edge)
+        };
         match edge_type.as_str() {
             "symmetric" => {
-                (edge.source == id_src as i64 && edge.target == id_dst as i64
-                && e_if_src == id_if_src as i64 && e_if_dst == id_if_dst as i64)
-                || (edge.source == id_dst as i64 && edge.target == id_src as i64
-                && e_if_src == id_if_dst as i64 && e_if_dst == id_if_src as i64)
-            },
-            "directed" => edge.source == id_src as i64 && edge.target == id_dst as i64
-                            && e_if_src == id_if_src as i64 && e_if_dst == id_if_dst as i64,
+                (edge.source == id_src as i64
+                    && edge.target == id_dst as i64
+                    && e_if_src == id_if_src as i64
+                    && e_if_dst == id_if_dst as i64)
+                    || (edge.source == id_dst as i64
+                        && edge.target == id_src as i64
+                        && e_if_src == id_if_dst as i64
+                        && e_if_dst == id_if_src as i64)
+            }
+            "directed" => {
+                edge.source == id_src as i64
+                    && edge.target == id_dst as i64
+                    && e_if_src == id_if_src as i64
+                    && e_if_dst == id_if_dst as i64
+            }
             t => panic!("Bad link type : {t}"),
         }
-
     }
 
     fn get_delay(&self, peer: (u8, u8), id_src: u8, id_if_src: u8) -> Option<u64> {
-        self.grf.edges.iter()
+        self.grf
+            .edges
+            .iter()
             .find(|&edge| Self::match_peers(edge, id_src, id_if_src, peer.0, peer.1))
             .and_then(|edge| {
-                let Some((_, GMLValue::GMLInt(metric))) = edge.get_attribute("metric")
-                else {panic!("Error parsing link metric")};
+                let Some((_, GMLValue::GMLInt(metric))) = edge.get_attribute("metric") else {
+                    panic!("Error parsing link metric")
+                };
                 Some(*metric as u64)
             })
-        
     }
 
     #[allow(dead_code)]
-    pub fn get_jitter(&self, random_number:u64, n_use_random_number:u64, distribution:&str) -> std::result::Result<u64, &str>{
-        let mut rng = SmallRng::seed_from_u64(random_number+n_use_random_number);
-        match distribution{ // todo init distribution somewhere else ?
+    pub fn get_jitter(
+        &self,
+        random_number: u64,
+        n_use_random_number: u64,
+        distribution: &str,
+    ) -> std::result::Result<u64, &str> {
+        let mut rng = SmallRng::seed_from_u64(random_number + n_use_random_number);
+        match distribution {
             "poisson" => {
-                let poisson_distr = Poisson::new(2.0).unwrap(); 
+                let poisson_distr = Poisson::new(2.0).unwrap();
                 let jitter = poisson_distr.sample(&mut rng);
-                // println!("jitter : {}", jitter);
                 Ok(jitter as u64)
             }
             "normal" => {
-                let normal_distr = Normal::new(0.0, 3.0).map_err(|_| "Invalid parameters for Normal distribution")?;
+                let normal_distr = Normal::new(0.0, 3.0)
+                    .map_err(|_| "Invalid parameters for Normal distribution")?;
                 let jitter = normal_distr.sample(&mut rng);
                 // println!("jitter : {}", jitter);
                 Ok(jitter as u64)
@@ -142,7 +170,6 @@ graph [
             "no_jitter" => Ok(0),
             _ => Err("Choose one of the following distribution for jitter : poisson or normal"),
         }
-        
     }
 
     #[allow(dead_code)]
@@ -181,14 +208,14 @@ impl Process {
     }
 
     pub fn new(name: CString, path: CString, args: Vec<CString>) -> Self {
-        Self {
-            name,
-            path,
-            args,
-        }
+        Self { name, path, args }
     }
 
-    pub fn optionable_new(name: Option<&str>, path: Option<&str>, args: Option<&Vec<Value>>) -> Option<Self> {
+    pub fn optionable_new(
+        name: Option<&str>,
+        path: Option<&str>,
+        args: Option<&Vec<Value>>,
+    ) -> Option<Self> {
         let mut ret = Self::empty_new();
         if let Some(n) = name {
             ret.name = CString::new(n).unwrap();
@@ -203,7 +230,8 @@ impl Process {
         }
 
         if let Some(a) = args {
-            let args_vec = a.iter()
+            let args_vec = a
+                .iter()
                 .filter_map(|arg| arg.as_str().map(|s| CString::new(s).unwrap()))
                 .collect();
             ret.args = args_vec;
@@ -237,29 +265,53 @@ impl Config {
         const EXE2_ARGS: [&CStr; 5] = [c"./server", c"-i", c"127.0.0.1", c"-p", c"4443"];
         const RANDOM_NUMBER: u64 = 84; //TODO
         let mut n_use_random_number = Vec::with_capacity(NB_FOLLOWER);
-        for _i in 0..NB_FOLLOWER{
+        for _i in 0..NB_FOLLOWER {
             n_use_random_number.push(0);
         }
-            
+
         return Self {
             nb_follower: NB_FOLLOWER,
             _qname: QNAME.to_string(),
-            exe: vec![Process::new(CString::from(c"name"), CString::from(EXE_NAMES[0]),cstringify(&EXE1_ARGS)),
-                        Process::new(CString::from(c"name"), CString::from(EXE_NAMES[1]), cstringify(&EXE2_ARGS))],
+            exe: vec![
+                Process::new(
+                    CString::from(c"name"),
+                    CString::from(EXE_NAMES[0]),
+                    cstringify(&EXE1_ARGS),
+                ),
+                Process::new(
+                    CString::from(c"name"),
+                    CString::from(EXE_NAMES[1]),
+                    cstringify(&EXE2_ARGS),
+                ),
+            ],
             random_number: RANDOM_NUMBER,
             n_use_random_number: n_use_random_number,
             jitter_distribution: "no_jitter".to_string(),
             jitter_coef: 10, //TODO change
             topo: NetworkTopology::new(),
-            log_level: vec!["trace".to_string(), "debug".to_string(), "warn".to_string(), "error".to_string(), "info".to_string(), "message".to_string()]
-        }
+            log_level: vec![
+                "trace".to_string(),
+                "debug".to_string(),
+                "warn".to_string(),
+                "error".to_string(),
+                "info".to_string(),
+                "message".to_string(),
+            ],
+        };
     }
 
     fn from(content: String) -> std::result::Result<Config, TomlError> {
         let value: Value = toml::from_str(&content)?;
 
-        let nb_follower:usize = value.get("nb_follower").and_then(Value::as_integer).unwrap_or(0) as usize;
-        let _qname = value.get("qname").and_then(Value::as_str).unwrap_or("").to_string();
+        let nb_follower: usize = value
+            .get("nb_follower")
+            .and_then(Value::as_integer)
+            .unwrap_or(0) as usize;
+        let _qname = value
+            .get("qname")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
 
         let mut exe = Vec::new();
 
@@ -267,10 +319,11 @@ impl Config {
             if let Some(exes) = executables.get("exe").and_then(Value::as_array) {
                 for e in exes {
                     if let Some(exe_table) = e.as_table() {
-                        if let Some(e) = Process::optionable_new(exe_table.get("name").and_then(Value::as_str),
-                                                                exe_table.get("path").and_then(Value::as_str),
-                                                                exe_table.get("args").and_then(Value::as_array))
-                        {
+                        if let Some(e) = Process::optionable_new(
+                            exe_table.get("name").and_then(Value::as_str),
+                            exe_table.get("path").and_then(Value::as_str),
+                            exe_table.get("args").and_then(Value::as_array),
+                        ) {
                             exe.push(e);
                         }
                     }
@@ -278,29 +331,43 @@ impl Config {
             }
         }
 
-        let log_level = value.get("logs")
+        let log_level = value
+            .get("logs")
             .and_then(Value::as_array)
-            .map(|f| f.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect())
+            .map(|f| {
+                f.iter()
+                    .filter_map(|x| x.as_str().map(|s| s.to_string()))
+                    .collect()
+            })
             .unwrap();
 
-        let jitter_distribution = value.get("jitter_distribution")
+        let jitter_distribution = value
+            .get("jitter_distribution")
             .and_then(Value::as_str)
             .unwrap_or("no_jitter")
             .to_string();
 
-        let random_number = value.get("random_number").and_then(Value::as_integer).unwrap_or(0) as u64;
+        let random_number = value
+            .get("random_number")
+            .and_then(Value::as_integer)
+            .unwrap_or(0) as u64;
         let mut n_use_random_number = Vec::with_capacity(nb_follower);
-        for _i in 0..nb_follower{
+        for _i in 0..nb_follower {
             n_use_random_number.push(0);
         }
         let jitter_coef = 10; // TODO change
 
         if let Some(topo_path) = value.get("graph").and_then(Value::as_str) {
-            let topo =  NetworkTopology::from_graph(Graph::from_gml(
-                                        GMLObject::from_str(
-                                            &fs::read_to_string(Path::new(topo_path)).expect("Failed to read the topology file")
-                                            ).unwrap())
-                                        .unwrap());
+            let topo = NetworkTopology::from_graph(
+                Graph::from_gml(
+                    GMLObject::from_str(
+                        &fs::read_to_string(Path::new(topo_path))
+                            .expect("Failed to read the topology file"),
+                    )
+                    .unwrap(),
+                )
+                .unwrap(),
+            );
             return Ok(Config {
                 nb_follower,
                 _qname,
@@ -324,31 +391,30 @@ impl Config {
             jitter_coef: jitter_coef,
             topo: NetworkTopology::new(),
             log_level,
-        })
-
+        });
     }
 
     pub fn new(path: &Path) -> std::result::Result<Config, TomlError> {
-        let content = fs::read_to_string(path).expect(&format!("Failed to read the config file at {:?}",path));
+        let content = fs::read_to_string(path)
+            .expect(&format!("Failed to read the config file at {:?}", path));
 
         Self::from(content)
-        
     }
 
     /**
      * Deletes the queues created for the run
      * @return: Ok on success
      **/
-    pub fn unlink_queues(&self) -> Result<()>{
+    pub fn unlink_queues(&self) -> Result<()> {
         let mut ret = None;
-        for i in 0..self.nb_follower+1 {
+        for i in 0..self.nb_follower + 1 {
             match posixmq::remove_queue(&format!("{}_{}", self._qname, i)) {
                 Err(e) => {
                     if e.kind() != IOErrorKind::NotFound {
                         eprintln!("Cannot remove queue {}: {}", i, e);
                         ret = Some(e);
                     }
-                },
+                }
                 _ => {
                     //All is ok
                 }
@@ -375,14 +441,13 @@ pub struct TimestampActions {
 
 #[allow(dead_code)]
 impl TimestampActions {
-    
     /**
      * Create a new empty TimestampActions
      */
     pub fn new() -> Self {
         TimestampActions {
             to_wake_up: Vec::new(),
-            has_to_send: BTreeMap::new()
+            has_to_send: BTreeMap::new(),
         }
     }
     /**
@@ -391,7 +456,7 @@ impl TimestampActions {
     pub fn new_process(id: u8) -> Self {
         TimestampActions {
             to_wake_up: vec![id],
-            has_to_send: BTreeMap::new()
+            has_to_send: BTreeMap::new(),
         }
     }
 
@@ -401,7 +466,7 @@ impl TimestampActions {
     pub fn new_pkt_id(id: u8, pkt_id: u64) -> Self {
         let mut t = TimestampActions {
             to_wake_up: Vec::new(),
-            has_to_send: BTreeMap::new()
+            has_to_send: BTreeMap::new(),
         };
         t.add_packet(id, pkt_id);
         return t;
@@ -422,7 +487,8 @@ impl TimestampActions {
      */
     pub fn del_process(&mut self, id: u8) -> usize {
         println!("del_process - self: {:?}", self);
-        self.to_wake_up.remove(self.to_wake_up.iter().position(|x| *x == id).unwrap());
+        self.to_wake_up
+            .remove(self.to_wake_up.iter().position(|x| *x == id).unwrap());
         return self.to_wake_up.len();
     }
 
@@ -472,14 +538,13 @@ impl TimestampActions {
     }
 }
 
-
 #[cfg(test)]
 mod unit_testing {
-    use super::{Config, TimestampActions};
-    use std::ffi::CString;
     use super::cstringify;
-    use std::path::Path;
+    use super::{Config, TimestampActions};
     use network_time_simulator::Ipv4AddrC;
+    use std::ffi::CString;
+    use std::path::Path;
 
     #[test]
     fn simple_config() {
@@ -488,23 +553,43 @@ mod unit_testing {
         assert_eq!(cfg.random_number, 123);
         assert_eq!(cfg.exe[0].name, CString::from(c"client"));
         assert_eq!(cfg.exe[0].path, CString::from(c"examples/miniP/client"));
-        assert_eq!(cfg.exe[0].args, cstringify(&[c"./client", c"-i", c"127.0.0.1", c"-p", c"4443"]));
+        assert_eq!(
+            cfg.exe[0].args,
+            cstringify(&[c"./client", c"-i", c"127.0.0.1", c"-p", c"4443"])
+        );
         assert_eq!(cfg.exe[1].name, CString::from(c"server"));
         assert_eq!(cfg.exe[1].path, CString::from(c"examples/miniP/server"));
-        assert_eq!(cfg.exe[1].args, cstringify(&[c"./server", c"-i", c"127.0.0.1", c"-p", c"4443"]));
+        assert_eq!(
+            cfg.exe[1].args,
+            cstringify(&[c"./server", c"-i", c"127.0.0.1", c"-p", c"4443"])
+        );
     }
 
     #[test]
     fn delayed_links() {
         let cfg = Config::new(Path::new("tests/linked_graph_config.toml")).unwrap();
         // First edge
-        assert_eq!(cfg.topo.get_delay_v4(2, 0, &Ipv4AddrC::from("192.168.1.2")), Some(20));
-        assert_eq!(cfg.topo.get_delay_v4(2, 0, &Ipv4AddrC::from("192.168.1.1")), Some(20));
-        assert_eq!(cfg.topo.get_delay_v4(1, 0, &Ipv4AddrC::from("172.16.0.2")), Some(20));
+        assert_eq!(
+            cfg.topo.get_delay_v4(2, 0, &Ipv4AddrC::from("192.168.1.2")),
+            Some(20)
+        );
+        assert_eq!(
+            cfg.topo.get_delay_v4(2, 0, &Ipv4AddrC::from("192.168.1.1")),
+            Some(20)
+        );
+        assert_eq!(
+            cfg.topo.get_delay_v4(1, 0, &Ipv4AddrC::from("172.16.0.2")),
+            Some(20)
+        );
         // Second edge
-        assert_eq!(cfg.topo.get_delay_v4(1, 1, &Ipv4AddrC::from("172.16.0.2")), Some(10));
-        assert_eq!(cfg.topo.get_delay_v4(2, 0, &Ipv4AddrC::from("10.0.0.1")), Some(10));
-
+        assert_eq!(
+            cfg.topo.get_delay_v4(1, 1, &Ipv4AddrC::from("172.16.0.2")),
+            Some(10)
+        );
+        assert_eq!(
+            cfg.topo.get_delay_v4(2, 0, &Ipv4AddrC::from("10.0.0.1")),
+            Some(10)
+        );
     }
 
     #[test]
@@ -532,24 +617,24 @@ mod unit_testing {
         assert_eq!(ta_n.add_process(1), 2);
         assert_eq!(ta_n.nb_process(), 2);
         assert!(ta_n.contain_process(1));
-        
+
         assert_eq!(ta_n.add_process(1), 3);
         assert_eq!(ta_n.nb_process(), 3);
         assert!(ta_n.contain_process(1));
-        
+
         assert_eq!(ta_n.del_process(1), 2);
         assert_eq!(ta_n.nb_process(), 2);
         assert!(ta_n.contain_process(1));
-        
+
         assert_eq!(ta_n.del_process(1), 1);
         assert_eq!(ta_n.nb_process(), 1);
         assert!(ta_n.contain_process(1));
         assert_eq!(ta_n, ta_pc);
-        
+
         assert_eq!(ta_n.del_process(1), 0);
         assert_eq!(ta_n.nb_process(), 0);
         assert!(!ta_n.contain_process(1));
-        
+
         ta_n.add_packet(2, 2);
         assert_eq!(ta_n, ta_pk);
 
@@ -565,23 +650,22 @@ mod unit_testing {
         assert_eq!(ta_pc.nb_pkt(), 2);
 
         let mut ta_vec = ta_pc.flatten();
-        
-        assert!(ta_vec.contains(&(3,2)));
-        let index = ta_vec.iter().position(|x| *x == (3,2)).unwrap();
+
+        assert!(ta_vec.contains(&(3, 2)));
+        let index = ta_vec.iter().position(|x| *x == (3, 2)).unwrap();
         ta_vec.swap_remove(index);
-        
-        assert!(ta_vec.contains(&(2,4)));
-        let index = ta_vec.iter().position(|x| *x == (2,4)).unwrap();
+
+        assert!(ta_vec.contains(&(2, 4)));
+        let index = ta_vec.iter().position(|x| *x == (2, 4)).unwrap();
         ta_vec.swap_remove(index);
-        
-        assert!(ta_vec.contains(&(2,5)));
-        let index = ta_vec.iter().position(|x| *x == (2,5)).unwrap();
+
+        assert!(ta_vec.contains(&(2, 5)));
+        let index = ta_vec.iter().position(|x| *x == (2, 5)).unwrap();
         ta_vec.swap_remove(index);
-        
-        assert!(ta_vec.contains(&(3,4)));
-        let index = ta_vec.iter().position(|x| *x == (3,4)).unwrap();
+
+        assert!(ta_vec.contains(&(3, 4)));
+        let index = ta_vec.iter().position(|x| *x == (3, 4)).unwrap();
         ta_vec.swap_remove(index);
         assert_eq!(ta_vec.len(), 0);
-
     }
 }
