@@ -7,6 +7,10 @@ random_number = 123
 # Number of followers
 nb_follower = 2
 
+#logs
+logs = ["trace", "debug", "warn", "error", "info", "message"]
+log_file = "log.txt"
+
 # Graph
 graph = 'tests/linked_graph.gml'
 

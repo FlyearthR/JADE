@@ -6,6 +6,7 @@ random_number = 123
 
 #logs
 logs = ["trace", "debug", "warn", "error", "info", "message"]
+log_file = "log.txt"
 
 # Number of followers
 nb_follower = 2

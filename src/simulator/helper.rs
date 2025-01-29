@@ -253,6 +253,7 @@ pub struct Config {
     pub jitter_coef: u64,
     pub topo: NetworkTopology,
     pub log_level: Vec<String>,
+    pub log_file: String,
 }
 
 impl Config {
@@ -297,6 +298,7 @@ impl Config {
                 "info".to_string(),
                 "message".to_string(),
             ],
+            log_file: "logs/log.txt".to_string(),
         };
     }
 
@@ -351,6 +353,12 @@ impl Config {
             .get("random_number")
             .and_then(Value::as_integer)
             .unwrap_or(0) as u64;
+
+        let log_file = value
+            .get("log_file")
+            .and_then(Value::as_str)
+            .unwrap_or("log.txt")
+            .to_string();
         let mut n_use_random_number = Vec::with_capacity(nb_follower);
         for _i in 0..nb_follower {
             n_use_random_number.push(0);
@@ -378,6 +386,7 @@ impl Config {
                 jitter_coef: jitter_coef,
                 topo,
                 log_level,
+                log_file,
             });
         }
 
@@ -391,6 +400,7 @@ impl Config {
             jitter_coef: jitter_coef,
             topo: NetworkTopology::new(),
             log_level,
+            log_file,
         });
     }
 

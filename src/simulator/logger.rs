@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::io::Write;
+use std::env;
 
 pub struct Logger {
     log_file: File,
@@ -31,8 +32,7 @@ impl Logger {
         info: bool,
         message: bool,
     ) -> Self {
-        let n = "../logs/".to_owned() + file_name;
-        let log_file = File::create(n).expect("creation failed");
+        let log_file = File::create(file_name).expect("creation failed");
         Self {
             log_file: log_file,
             trace: trace,

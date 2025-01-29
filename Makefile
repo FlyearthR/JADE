@@ -6,7 +6,7 @@ INSTANCE = 9_clients_1_server_random
 
 test: all
 	cargo test --package network_time_simulator --bin simulator -- unit_testing --show-output --nocapture
-	cargo test --package network_time_simulator --bin simulator -- determinism --show-output --nocapture
+	sudo cargo test --package network_time_simulator --bin simulator -- determinism --show-output --nocapture
 
 diff: all
 	$(MAKE) usetest | grep Sen[dt]\( > testing/sim.1.sendt.log
