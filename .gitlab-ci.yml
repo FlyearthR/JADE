@@ -1,0 +1,30 @@
+stages:
+  - build
+  - test
+
+variables:
+  RUST_VERSION: stable
+  C_COMPILER: gcc
+
+before_script:
+  - apt update && DEBIAN_FRONTEND=noninteractive apt install -y build-essential curl make git cmake openssl pkg-config libssl-dev
+  - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+  - export PATH="$HOME/.cargo/bin:$PATH"
+  - rustc --version
+  - cargo --version
+  - $C_COMPILER --version
+  - make --version
+  - cargo install cbindgen
+
+build:
+  stage: build
+  image: ubuntu:latest
+  script:
+    - make all
+    - make install-test 
+
+test:
+  stage: test
+  needs: ["build"]
+  script:
+    - make CI-test
