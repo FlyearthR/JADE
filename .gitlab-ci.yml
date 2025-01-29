@@ -7,7 +7,7 @@ variables:
   C_COMPILER: gcc
 
 before_script:
-  - apt update && DEBIAN_FRONTEND=noninteractive apt install -y build-essential curl make git
+  - apt update && DEBIAN_FRONTEND=noninteractive apt install -y build-essential curl make git cmake
   - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
   - export PATH="$HOME/.cargo/bin:$PATH"
   - rustc --version
