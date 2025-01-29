@@ -1780,6 +1780,7 @@ mod determinism {
                 jitter_distribution: "poisson".to_string(),
                 jitter_coef: 10,
                 topo: NetworkTopology::test_topo(nb),
+                log_level: vec!["trace".to_string(), "debug".to_string(), "warn".to_string(), "error".to_string(), "info".to_string(), "message".to_string()],
             };
         }
     }
