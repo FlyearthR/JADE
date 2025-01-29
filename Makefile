@@ -88,6 +88,11 @@ little_clean:
 	rm -f testing/*
 
 install-test:
-	cd examples && mkdir logs && [ ! -d "picoquic" ] && git clone https://github.com/private-octopus/picoquic.git&& git clone https://github.com/private-octopus/picoquic.git
+	cd examples && mkdir -p logs && \
+	if [ ! -d "picoquic" ]; then \
+		git clone https://github.com/private-octopus/picoquic.git; \
+	else \
+	    cd picoquic && make clean && git pull; \
+	fi
 	cd examples/picoquic && cmake -DPICOQUIC_FETCH_PTLS=Y .
 	cd examples/picoquic && make
