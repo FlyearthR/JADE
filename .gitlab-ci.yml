@@ -17,10 +17,20 @@ build:
   stage: build
   image: ubuntu:latest
   script:
-    - make
+    - make > build.log 2>&1
+    - make install-test > install-test.log 2>&1
+  artifacts:
+    when: always
+    paths:
+      - build.log
+      - install-test.log
 
 test:
   stage: test
   needs: ["build"]
   script:
-    - make CI-test
+    - make CI-test > test.log 2>&1
+  artifacts:
+    when: always
+    paths:
+      - test.log
