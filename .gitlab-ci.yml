@@ -7,11 +7,14 @@ variables:
   C_COMPILER: gcc
 
 before_script:
-  - apt update && apt install -y build-essential rustc cargo make
+  - apt update && DEBIAN_FRONTEND=noninteractive apt install -y build-essential curl make
+  - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+  - export PATH="$HOME/.cargo/bin:$PATH"
   - rustc --version
   - cargo --version
   - $C_COMPILER --version
   - make --version
+  - cargo install cbindgen
 
 build:
   stage: build
