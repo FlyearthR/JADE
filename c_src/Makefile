@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -g
+CFLAGS = -g -DDEBUG
 
 %.o: %.c
 	$(CC) -fPIC -I. -llibAPI -c $^ -o $@

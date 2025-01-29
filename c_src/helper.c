@@ -51,10 +51,3 @@ int cmp_fd_ip(fd_ip_elem* fd_ip1,fd_ip_elem* fd_ip2)
 {
     return fd_ip1->fi.fd-fd_ip2->fi.fd;
 }
-
-void logs(char* str, ...)
-{
-    va_list ap;
-    fprintf(log_file, str, ap);
-    fflush(log_file);
-}

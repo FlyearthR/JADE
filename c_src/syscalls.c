@@ -22,7 +22,7 @@ ssize_t recvfrom(int sockfd, void *buf, size_t len,
                  int flags, struct sockaddr *src_addr,
                  socklen_t *addrlen)
 {
-        logs("recvfrom called\n");
+        LOGS("recvfrom called\n");
 
         // TODO: configure socket as non blocking at opening time
         int flags_s = fcntl(sockfd, F_GETFL, 0);
@@ -35,7 +35,7 @@ ssize_t recvfrom(int sockfd, void *buf, size_t len,
         int ret;
         do
         {
-                logs("inside recvfrom loop\n");
+                LOGS("inside recvfrom loop\n");
                 ret = LIBC_FUNCTION_GET(recvfrom)(sockfd, buf, len, flags, src_addr, addrlen);
                 if (ret == -1 && errno != EWOULDBLOCK) {
                         perror("recvfrom: ");
@@ -46,7 +46,7 @@ ssize_t recvfrom(int sockfd, void *buf, size_t len,
 
 ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
 {
-        logs("recvmsg called\n");
+        LOGS("recvmsg called\n");
         int flags_s = fcntl(sockfd, F_GETFL, 0);
         if (flags_s == -1)
                 return -1;
@@ -64,7 +64,7 @@ int select(int nfds, fd_set *restrict readfds,
            fd_set *restrict writefds, fd_set *restrict exceptfds,
            struct timeval *restrict timeout)
 {
-        logs("select called\n");
+        LOGS("select called\n");
         struct timeval zeros = {.tv_sec = 0, .tv_usec = 0};
         struct timeval cur = get_time();
         struct timeval to = add_timeval(cur, *timeout);
@@ -92,7 +92,7 @@ int pselect(int nfds, fd_set *restrict readfds,
             const struct timespec *restrict timeout,
             const sigset_t *restrict sigmask)
 {
-        logs("pselect called\n");
+        LOGS("pselect called\n");
         struct timespec zeros = {.tv_sec = 0, .tv_nsec = 0};
         struct timeval cur = get_time();
         struct timeval to = add_timeval(cur, timespec_to_timeval(*timeout));
@@ -117,7 +117,7 @@ int pselect(int nfds, fd_set *restrict readfds,
 
 int infinity_poll(struct pollfd *fds, nfds_t nfds, int timeout)
 {
-        logs("infinity_poll called\n");
+        LOGS("infinity_poll called\n");
         LIBC_FUNCTION(int, poll, struct pollfd *fds, nfds_t nfds, int timeout);
         int ret;
         do
@@ -129,7 +129,7 @@ int infinity_poll(struct pollfd *fds, nfds_t nfds, int timeout)
 
 int poll(struct pollfd *fds, nfds_t nfds, int timeout)
 {
-        logs("poll called\n");
+        LOGS("poll called\n");
         LIBC_FUNCTION(int, poll, struct pollfd *fds, nfds_t nfds, int timeout);
         if (timeout < 0)
                 return infinity_poll(fds, nfds, timeout);
@@ -152,7 +152,7 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
 int ppoll(struct pollfd *fds, nfds_t nfds,
           const struct timespec *tmo_p, const sigset_t *sigmask)
 {
-        logs("ppoll called\n");
+        LOGS("ppoll called\n");
         struct timespec zeros = {.tv_sec = 0, .tv_nsec = 0};
         struct timeval cur = get_time();
         struct timeval to = add_timeval(cur, timespec_to_timeval(*tmo_p));
@@ -176,7 +176,7 @@ int ppoll(struct pollfd *fds, nfds_t nfds,
 int gettimeofday(struct timeval *restrict tv,
                  void *restrict tz)
 {
-        logs("gettimeofday called\n");
+        LOGS("gettimeofday called\n");
         LIBC_FUNCTION(int, gettimeofday, struct timeval *restrict tv,
                       void *restrict tz);
         int ret = LIBC_FUNCTION_GET(gettimeofday)(tv, tz);
@@ -188,7 +188,7 @@ int gettimeofday(struct timeval *restrict tv,
 
 unsigned int sleep(unsigned int seconds)
 {
-        logs("sleep called\n");
+        LOGS("sleep called\n");
         if (seconds == 0)
                 return 0;
         struct timeval start = get_time();
@@ -206,7 +206,7 @@ unsigned int sleep(unsigned int seconds)
 
 int usleep(useconds_t usec)
 {
-        logs("usleep called\n");
+        LOGS("usleep called\n");
         if (usec == 0)
                 return 0;
         struct timeval start = get_time();
@@ -220,14 +220,14 @@ int usleep(useconds_t usec)
 
 void srand(unsigned int local_seed)
 {
-        logs("srand called\n");
+        LOGS("srand called\n");
         seed = local_seed;
         random_number = get_random();
 }
 
 int rand(void)
 {
-        logs("gettimeofday called\n");
+        LOGS("gettimeofday called\n");
         return get_random();
 }
 
@@ -242,7 +242,7 @@ struct sockaddr *get_ip(int fd){
 
 ssize_t send(int sockfd, const void *buf, size_t len, int flags)
 {
-        logs("send called\n");
+        LOGS("send called\n");
         packet_elem *pe;
         if ((pe = (packet_elem *)malloc(sizeof *pe)) == NULL)
                 exit(-13);
@@ -270,7 +270,7 @@ ssize_t send(int sockfd, const void *buf, size_t len, int flags)
 ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
                const struct sockaddr *dest_addr, socklen_t addrlen)
 {
-        logs("sendto called\n");
+        LOGS("sendto called\n");
         packet_elem *pe;
         if ((pe = (packet_elem *)malloc(sizeof *pe)) == NULL)
                 exit(-13);
@@ -296,7 +296,7 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
 
 ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
 {
-        logs("sendmsg called\n");
+        LOGS("sendmsg called\n");
         packet_elem *pe;
         if ((pe = (packet_elem *)malloc(sizeof *pe)) == NULL)
                 exit(-13);
@@ -340,9 +340,9 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
 }
 
 int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen){
-        logs("bind called\n");
-        logs("sockaddr :\n");
-        logs("%s\n", inet_ntoa (((struct sockaddr_in*) addr)->sin_addr));
+        LOGS("bind called\n");
+        LOGS("sockaddr :\n");
+        LOGS("%s\n", inet_ntoa (((struct sockaddr_in*) addr)->sin_addr));
 
         fd_ip_elem *f = (fd_ip_elem *)malloc(sizeof(fd_ip_elem));
         f->fi.fd = sockfd;
@@ -355,8 +355,8 @@ int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen){
 
 int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
-        logs("connect called\n");
-        logs("sockaddr :\n");
+        LOGS("connect called\n");
+        LOGS("sockaddr :\n");
         
         fd_ip_elem *f = (fd_ip_elem *)malloc(sizeof(fd_ip_elem));
         f->fi.fd = sockfd;
@@ -370,7 +370,7 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 
 int clock_getres(clockid_t clockid, struct timespec *res) // all clocks are based on the leader's one which is microsecond-precise
 {
-        logs("clock_getres called\n");
+        LOGS("clock_getres called\n");
         LIBC_FUNCTION(int, clock_getres, clockid_t clockid, struct timespec *res);
         switch (clockid)
         {
@@ -396,7 +396,7 @@ int clock_getres(clockid_t clockid, struct timespec *res) // all clocks are base
 
 int clock_gettime(clockid_t clockid, struct timespec *tp)
 {
-        logs("clock_gettime called\n");
+        LOGS("clock_gettime called\n");
         LIBC_FUNCTION(int, clock_gettime, clockid_t clockid, struct timespec *tp);
         switch (clockid)
         {
@@ -422,7 +422,7 @@ int clock_gettime(clockid_t clockid, struct timespec *tp)
 
 int clock_settime(clockid_t clockid, const struct timespec *tp)
 {
-        logs("clock_gettime called\n");
+        LOGS("clock_gettime called\n");
         return -1; // TODO: set errno
 }
 
@@ -432,7 +432,7 @@ int open(const char *pathname, int flags, ...)
         va_list ap;
         LIBC_FUNCTION(int, open, const char *pathname, int flags, ...);
         int ret = LIBC_FUNCTION_GET(open)(pathname, flags, ap);
-        logs("fd correspondance - fd: %i; path: %s\n", ret, pathname);
+        LOGS("fd correspondance - fd: %i; path: %s\n", ret, pathname);
         return ret;
 }
 #endif
@@ -458,14 +458,14 @@ ssize_t read_implem(ssize_t (*func)(int,  void *, size_t), int fd, void *buf, si
 
 ssize_t read(int fd, void *buf, size_t count)
 {
-        logs("read called - fd: %i\n", fd);
+        LOGS("read called - fd: %i\n", fd);
         LIBC_FUNCTION(ssize_t, read, int fd, void *buf, size_t count);
         return read_implem(LIBC_FUNCTION_GET(read), fd, buf, count);
 }
 
 ssize_t __read_chk(int fd, void *buf, size_t count)
 {
-        logs("__read_chk called\n");
+        LOGS("__read_chk called\n");
         LIBC_FUNCTION(ssize_t, __read_chk, int fd, void *buf, size_t count);
         return read_implem(LIBC_FUNCTION_GET(__read_chk), fd, buf, count);
 }

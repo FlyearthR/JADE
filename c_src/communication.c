@@ -43,7 +43,7 @@ void __attribute__((constructor)) init_fd() { // TODO: get the name of the queue
 
     log_file = fopen(path, "w"); // TODO: get log file from the env
 
-    logs("Process %i properly preloaded\n", id);
+    LOGS("Process %i properly preloaded\n", id);
 
     current_time = receive_msg();
 }
@@ -52,49 +52,49 @@ void print_msg(Message m)
 {
     switch (m.tag) {
         case Stuck:
-            logs("Stuck(%i)\n", m.stuck);
+            LOGS("Stuck(%i)\n", m.stuck);
             break;
         case AddStep:
-            logs("AddStep(%i, %i)\n", m.add_step._0, m.add_step._1);
+            LOGS("AddStep(%i, %i)\n", m.add_step._0, m.add_step._1);
             break;
         case DelStep:
-            logs("DelStep(%i, %i)\n", m.del_step._0, m.del_step._1);
+            LOGS("DelStep(%i, %i)\n", m.del_step._0, m.del_step._1);
             break;
         case HasToSend4:
-            logs("HasToSend4(%i, %i, %i.%i.%i.%i, %i)\n", m.has_to_send4._0, m.has_to_send4._1,
+            LOGS("HasToSend4(%i, %i, %i.%i.%i.%i, %i)\n", m.has_to_send4._0, m.has_to_send4._1,
                 m.has_to_send4._2.segments[0], m.has_to_send4._2.segments[1], m.has_to_send4._2.segments[2],
                 m.has_to_send4._2.segments[3], m.has_to_send4._3);
             break;
         case HasToSend6:
-            logs("HasToSend6(%i, %i, %i:%i:%i:%i:%i:%i:%i:%i, %i)\n", m.has_to_send6._0, m.has_to_send6._1,
+            LOGS("HasToSend6(%i, %i, %i:%i:%i:%i:%i:%i:%i:%i, %i)\n", m.has_to_send6._0, m.has_to_send6._1,
                 m.has_to_send6._2.segments[0], m.has_to_send6._2.segments[1], m.has_to_send6._2.segments[2],
                 m.has_to_send6._2.segments[3], m.has_to_send6._2.segments[4], m.has_to_send6._2.segments[5],
                 m.has_to_send6._2.segments[6], m.has_to_send6._2.segments[7], m.has_to_send6._3);
             break;
         case Send:
-            logs("Send(%i)\n", m.send);
+            LOGS("Send(%i)\n", m.send);
             break;
         case Sent:
-            logs("Sent(%i, %i)\n", m.sent._0, m.sent._1);
+            LOGS("Sent(%i, %i)\n", m.sent._0, m.sent._1);
             break;
         case GetTime:
-            logs("GetTime(%i)\n", m.get_time);
+            LOGS("GetTime(%i)\n", m.get_time);
             break;
         case GetRand:
-            logs("GetRand(%i)\n", m.get_rand);
+            LOGS("GetRand(%i)\n", m.get_rand);
             break;
         case WakeUp:
-            logs("WakeUp(%i)\n", m.wake_up);
+            LOGS("WakeUp(%i)\n", m.wake_up);
             break;
         case Finished:
-            logs("Finished(%i)\n", m.finished);
+            LOGS("Finished(%i)\n", m.finished);
             break;
     }
 }
 
 int send_msg(Message m) // TODO: extend this
 {
-    logs("inside send_msg\n");
+    LOGS("inside send_msg\n");
     print_msg(m);
     Buffer* b = serialize(m);
     int ret = mq_send(FDO, b->buffer, SIZE_BUFFER, (m.tag == GetTime || m.tag == GetRand) ? 2 : 1);
@@ -103,7 +103,7 @@ int send_msg(Message m) // TODO: extend this
 
 uint64_t receive_msg()
 {
-    logs("receive_msg\n");
+    LOGS("receive_msg\n");
     Buffer msg;
     do {
         int ret = mq_receive(FDI, msg.buffer, SIZE_BUFFER, NULL);
@@ -111,12 +111,12 @@ uint64_t receive_msg()
             perror("Error: ");
             exit(-6);
         }
-        logs("received a message\n");
+        LOGS("received a message\n");
         for (int i = 0 ; i < SIZE_BUFFER ; i++)
         {
-            logs("%3i ", msg.buffer[i]);
+            LOGS("%3i ", msg.buffer[i]);
         }
-        logs("\n");
+        LOGS("\n");
         Message* m = deserialize(msg);
         print_msg(*m);
         if (m->tag == Send)
@@ -134,7 +134,7 @@ uint64_t receive_msg()
 struct timeval get_time()
 {
     /*Message m = {.tag = GetTime, .get_time = ID};
-    logs("get_time called\n");
+    LOGS("get_time called\n");
     unsigned int ret = send_msg(m);
     if (ret != 0)
 	exit(-6);
@@ -203,12 +203,12 @@ void custom_sendto(packet pkt)
 
 void custom_sendmsg(packet pkt)
 {
-    logs("custom_sendmsg\n");
+    LOGS("custom_sendmsg\n");
     LIBC_FUNCTION(ssize_t, sendmsg, int sockfd, const struct msghdr *msg, int flags);
     int ret = LIBC_FUNCTION_GET(sendmsg)(pkt.sockfd,(struct msghdr *)pkt.buf,pkt.flags);
     if (ret)
         perror("sendmsg: ");
-    logs("return value custom_sendmsg : %d\n", ret);
+    LOGS("return value custom_sendmsg : %d\n", ret);
     
     struct msghdr *buf = (struct msghdr *)pkt.buf;
     for (int i = 0; i < buf->msg_iovlen; i++){
@@ -222,13 +222,13 @@ void custom_sendmsg(packet pkt)
 
 void sender(uint64_t pkt_id)
 {
-    logs("sender called\n");
+    LOGS("sender called\n");
     packet_elem goal = {.pkt = {.id = pkt_id}};
     packet_elem* found = NULL;
     LL_SEARCH(pkt_list, found, &goal, cmp_pkt);
     if (!found)
         exit (-12);
-    logs("pkt tos : %d\n",found->pkt.tos);
+    LOGS("pkt tos : %d\n",found->pkt.tos);
     switch(found->pkt.tos) {
         case send_t:
             custom_send(found->pkt);
@@ -250,12 +250,12 @@ void sender(uint64_t pkt_id)
 
 void send_has_to_send(const struct sockaddr *dest_addr, packet_elem *pe)
 {
-        logs("send_has_to_send called\n");
-        logs("sa family %d\n", dest_addr->sa_family);
+        LOGS("send_has_to_send called\n");
+        LOGS("sa family %d\n", dest_addr->sa_family);
         switch (dest_addr->sa_family)
         {
         case AF_INET:
-                logs("HasToSend4\n");
+                LOGS("HasToSend4\n");
                 char *ip = (char *)(&((struct sockaddr_in *)dest_addr)->sin_addr.s_addr);
                 Message m = {
                     .tag = HasToSend4,
@@ -268,7 +268,7 @@ void send_has_to_send(const struct sockaddr *dest_addr, packet_elem *pe)
                 break;
 
         case AF_INET6:
-                logs("HasToSend6\n");
+                LOGS("HasToSend6\n");
                 Message m2 = {
                     .tag = HasToSend6,
                     .has_to_send6 = {
@@ -303,7 +303,7 @@ void __attribute__((destructor)) send_finished() {
         Message m_stuck = {.tag = Stuck, .stuck = ID};
         send_msg(m_stuck);
         while(count) {
-            logs("Finishing loop count: %i\n", count);
+            LOGS("Finishing loop count: %i\n", count);
             int ret = mq_receive(FDI, msg.buffer, SIZE_BUFFER, NULL);
             if (ret == -1) {
                 fprintf(stderr, "Error receiving message in send_finished\n");
@@ -314,7 +314,7 @@ void __attribute__((destructor)) send_finished() {
             print_msg(*m);
             if (m->tag == Send)
             {
-                logs("FL: Send\n");
+                LOGS("FL: Send\n");
                 sender(m->send);
                 count--;
             }

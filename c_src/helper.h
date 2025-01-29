@@ -9,6 +9,7 @@
 #include <dlfcn.h>
 #include <sys/socket.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include "utlist.h"
 
 
@@ -68,7 +69,9 @@ int cmp_pkt(packet_elem* pe1, packet_elem* pe2);
 
 int cmp_fd_ip(fd_ip_elem* fd_ip1,fd_ip_elem* fd_ip2);
 
-void logs(char* str, ...);
+#define LOGS(...) \
+    fprintf(log_file, __VA_ARGS__); \
+    fflush(log_file)
 
 #define LIBC_FUNCTION(ftype, fname, ...) ftype (* libc_##fname ) ( __VA_ARGS__ ); \
     libc_##fname = dlsym(RTLD_NEXT, #fname )
