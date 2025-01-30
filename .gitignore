@@ -23,3 +23,10 @@ examples/miniP/*
 examples/logs
 !examples/logs/.gitkeep
 examples/picoquic
+examples/web_page_quic/dynamic.html
+examples/web_page_quic/form.html
+examples/web_page_quic/heavy.html
+examples/web_page_quic/images.html
+examples/web_page_quic/index.html
+examples/web_page_quic/static.html
+logs/log.txt
