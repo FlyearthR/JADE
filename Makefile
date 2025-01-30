@@ -5,8 +5,7 @@ INSTANCE = 9_clients_1_server_random
 .PHONY: syscalls.so all test API leader clean little_clean
 
 test: all
-	cargo test --package network_time_simulator --bin simulator -- unit_testing --show-output --nocapture
-	sudo cargo test --package network_time_simulator --bin simulator -- determinism --show-output --nocapture
+	./test.sh
 
 diff: all
 	$(MAKE) usetest | grep Sen[dt]\( > testing/sim.1.sendt.log
