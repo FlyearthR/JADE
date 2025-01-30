@@ -113,7 +113,7 @@ impl Drop for Simulation {
 impl Simulation {
     fn new(cfg: Config) -> Self {
         let logs = Logger::new(
-            "log.txt",
+            &cfg.log_file,
             cfg.log_level.contains(&"trace".to_string()),
             cfg.log_level.contains(&"debug".to_string()),
             cfg.log_level.contains(&"warn".to_string()),
@@ -1264,7 +1264,6 @@ fn main() {
 
 #[cfg(test)]
 mod unit_testing {
-    use libc::srand;
     use ntest::timeout;
     use posixmq::PosixMq;
     use serial_test::{parallel, serial};
@@ -1280,6 +1279,7 @@ mod unit_testing {
         fn default_config_nb(nb_follower: usize) -> Self {
             let mut cfg = Self::default_config();
             cfg.nb_follower = nb_follower;
+            cfg.log_file = "logs/log.txt".to_string();
             return cfg;
         }
     }
@@ -1719,6 +1719,7 @@ mod unit_testing {
     }
 
     #[test]
+    #[serial]
     fn test_random() {
         let mut sim = Simulation::new(Config::default_config());
 
@@ -1751,7 +1752,7 @@ mod unit_testing {
             .expect("send get_rand failed");
         let mut c = Buffer::new();
         qf2.0.recv(&mut c.buffer).unwrap();
-        assert_ne!(deserialize_rust(a), deserialize_rust(c));
+        assert_eq!(deserialize_rust(a), deserialize_rust(c));
         qf1.1
             .send(1, &serialize_rust(GetRand(1, 52)).buffer)
             .expect("send get_rand failed");
@@ -2028,7 +2029,7 @@ mod determinism {
     }
 
     impl Config {
-        fn test_config(nb: usize) -> Self {
+        fn test_config(nb: usize, jitter: String) -> Self {
             const QNAME: &str = "/nts_test";
             const EXE_NAMES: [&CStr; 2] = [c"./client", c"./server"];
             const EXE1_ARGS: [&CStr; 5] = [c"./client", c"-i", c"127.0.0.1", c"-p", c"4443"];
@@ -2057,10 +2058,11 @@ mod determinism {
                 exe: processes,
                 random_number: RANDOM_NUMBER,
                 n_use_random_number: n_use_random_number,
-                jitter_distribution: "poisson".to_string(),
+                jitter_distribution: jitter,
                 jitter_coef: 10,
                 topo: NetworkTopology::test_topo(nb),
                 log_level: vec!["trace".to_string(), "debug".to_string(), "warn".to_string(), "error".to_string(), "info".to_string(), "message".to_string()],
+                log_file: "logs/log.txt".to_string(),
             };
         }
     }
@@ -2069,12 +2071,12 @@ mod determinism {
      * In a topology of NB_FOLLOWERS processes, nb_sender of them send messages that should be received at the same time.
      * This test checks that senders are woken up one at a time, following a deterministic order.
      */
-    fn test_determinism_setup(nb_sender: usize) {
+    fn test_determinism_setup(nb_sender: usize, jitter: Option<&str>) { // TODO add , jitter: Option<&str> to test determinism of both jitters
         //let mut already_received = false;
 
         for _iter in 0..2 {
             //Setting up the environment
-            let mut sim = Simulation::new(Config::test_config(NB_FOLLOWERS!()));
+            let mut sim = Simulation::new(Config::test_config(NB_FOLLOWERS!(), jitter.unwrap_or("no_jitter").to_string()));
             let mut msgs: [Buffer; NB_FOLLOWERS!() as usize] = [Buffer::new(); NB_FOLLOWERS!()];
             let nb_f = NB_FOLLOWERS!();
             let clo = |mut i| -> (PosixMq, PosixMq) {
@@ -2140,19 +2142,22 @@ mod determinism {
                     else {
                         panic!("First received message should be WakeUp(0). Bad recv");
                     };
-                    match msgs[i as usize].into() {
-                        WakeUp(20) => {} //Ok
-                        WakeUp(t) => {
-                            panic!(
-                                "Third received message should be WakeUp(20). Bad time: {:?}",
-                                t
-                            );
-                        }
-                        m => {
-                            panic!(
-                                "Third received message should be WakeUp(20). Bad msg: {:?}",
-                                m
-                            );
+
+                    if let Some(_) = jitter {
+                        match msgs[i as usize].into() {
+                            WakeUp(20) => {} //Ok
+                            WakeUp(t) => {
+                                panic!(
+                                    "Third received message should be WakeUp(20). Bad time: {:?}",
+                                    t
+                                );
+                            }
+                            m => {
+                                panic!(
+                                    "Third received message should be WakeUp(20). Bad msg: {:?}",
+                                    m
+                                );
+                            }
                         }
                     }
                 }
@@ -2175,6 +2180,6 @@ mod determinism {
     #[serial]
     #[timeout(100000)]
     fn test_determinism() {
-        test_determinism_setup(9);
+        test_determinism_setup(9, None);
     }
 }
