@@ -23,7 +23,7 @@ usetest: all
 	cp -f tests/$(INSTANCE).* testing/
 	cd testing && sudo RUST_BACKTRACE=1 ./simulator $(INSTANCE).toml
 
-testQuic: all
+testPicoquic: all
 	cp -f target/debug/simulator testing/simulator
 	cp -f target/syscalls/syscalls.so testing/syscalls.so
 	$(CC) ${CFLAGS} examples/simple_client.c -o testing/simple_client
@@ -33,7 +33,19 @@ testQuic: all
 	cp -f tests/9_clients_1_server_quic.* examples/picoquic/
 	cp c_src/syscalls.so examples/picoquic/
 	cp testing/simulator examples/picoquic/
+	cd examples/web_page_quic && python3 create_pages.py
 	cd examples/picoquic/ && sudo RUST_BACKTRACE=1 ./simulator 9_clients_1_server_quic.toml
+
+testQuiche: all
+	cp -f target/debug/simulator testing/simulator
+	cp -f target/syscalls/syscalls.so testing/syscalls.so
+	cp examples/quiche/target/debug/examples/http3-client testing/http3-client
+	cp examples/quiche/target/debug/examples/http3-server testing/http3-server
+	cd testing && mkdir -p examples 
+	cd testing/examples && mkdir -p root
+	cp examples/web_page_quic/create_pages.py testing/examples/root/create_pages.py
+	cd testing/examples/root && python3 create_pages.py
+	
 
 testffi: API
 	cd c_src && $(MAKE) test_ffi && cp test_ffi ../testing/test_ffi
@@ -86,7 +98,7 @@ clean:
 little_clean:
 	rm -f testing/*
 
-install-test:
+installTestQuic:
 	cd examples && mkdir -p logs && \
 	if [ ! -d "picoquic" ]; then \
 		git clone https://github.com/private-octopus/picoquic.git; \
@@ -96,9 +108,24 @@ install-test:
 	cd examples/picoquic && cmake -DPICOQUIC_FETCH_PTLS=Y .
 	cd examples/picoquic && make
 
-CI-test: all
+installTestQuicClean:
+	rm -rf examples/picoquic
+	rm -rf examples/logs
+
+installTestQuiche:
+	cd examples && mkdir -p logs && \
+	if [ ! -d "quiche" ]; then \
+		git clone --recursive https://github.com/cloudflare/quiche; \
+	else \
+	    cd quiche && make clean && git pull; \
+	fi
+	rm -f examples/quiche/quiche/examples/http3-server.rs
+	cp tests/modified-http3-server-quiche.rs examples/quiche/quiche/examples/http3-server.rs
+	cd examples/quiche && cargo build --examples
+
+CITest: all
 	$(MAKE) test
-	$(MAKE) testQuic
+	$(MAKE) testPicoquic
 	$(MAKE) testsyscalls
 	$(MAKE) testffi
 	$(MAKE) usetest

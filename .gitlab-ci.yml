@@ -21,10 +21,10 @@ build:
   image: ubuntu:latest
   script:
     - make all
-    - make install-test 
+    - make installTestQuic 
 
 test:
   stage: test
   needs: ["build"]
   script:
-    - make CI-test
+    - make CITest
