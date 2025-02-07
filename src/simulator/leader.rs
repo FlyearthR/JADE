@@ -955,7 +955,8 @@ impl Simulation {
                     .n_use_random_number
                     .get_mut(usize::from(id) - 1)
                     .expect("Node ID not found");
-
+                // println!("{:?}", self.cfg.topo);
+                // println!("id {}, if_id {}, ip {:?}",id, if_id, &ip);
                 let timestamp = current_time
                     + self.cfg.topo.get_delay_v4(id, if_id, &ip).unwrap()
                     + self
@@ -1730,7 +1731,7 @@ mod unit_testing {
         let qf2 =
             follower_init_queues(2, 2, &"/nts_test".to_string()).expect("creating follower queues");
 
-        let t = thread::spawn(move || sim.main_loop());
+        let _t = thread::spawn(move || sim.main_loop());
         let mut msg: Buffer = Buffer::new();
 
         qf1.0.recv(&mut msg.buffer).unwrap();
@@ -1967,23 +1968,23 @@ mod determinism {
 
     impl NetworkTopology {
         /**
-         * Return a star centred on 10.0.0.100
+         * Return a star centred on 10.0.0.10
          */
         fn test_topo(nb: usize) -> Self {
-            let mut nodes: String = String::from(
+            let mut nodes: String = String::from(&format!(
                 "  node [
-    id 100
-    label \"Node 100\"
+    id {}
+    label \"Node {}\"
     interface [
       id 0
       label \"wlp4s0\"
       ip [
         type \"v4\"
-        ip \"10.0.0.100\"
+        ip \"10.0.0.{}\"
       ]
     ]
   ]
-",
+",nb+1,nb+1,nb+1),
             );
             let mut edges: String = String::new();
             for i in 1..nb + 1 {
@@ -2007,14 +2008,14 @@ mod determinism {
                     "  edge [
     source {}
     source_if 0
-    target 100
+    target {}
     target_if 0
     label \"Link\"
     metric 20
     type \"symmetric\"
   ]
 ",
-                    i
+                    i,nb+1
                 ));
             }
             let final_graph = format!(
@@ -2048,7 +2049,7 @@ mod determinism {
                 ),
             ];
             let mut n_use_random_number = Vec::with_capacity(nb);
-            for i in 0..nb {
+            for _i in 0..nb {
                 n_use_random_number.push(0);
             }
 
@@ -2092,7 +2093,7 @@ mod determinism {
                 let mut receiving_order: [usize; NB_FOLLOWERS!()] = [0; NB_FOLLOWERS!()];
 
                 m_send!(
-                    HasToSend4(_, Ipv4AddrC::new(10, 0, 0, 100), pkt_id),
+                    HasToSend4(_, Ipv4AddrC::new(10, 0, 0, NB_FOLLOWERS!()+1), pkt_id),
                     qfs,
                     nb_sender
                 );

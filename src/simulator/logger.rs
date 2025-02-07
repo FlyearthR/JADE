@@ -1,6 +1,5 @@
 use std::fs::File;
 use std::io::Write;
-use std::env;
 
 pub struct Logger {
     log_file: File,

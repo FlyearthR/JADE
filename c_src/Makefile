@@ -8,7 +8,7 @@ syscalls.so: communication.o helper.o syscalls.o
 	$(CC) -shared -o syscalls.so communication.o helper.o syscalls.o libAPI.a -ldl && mkdir -p ../target/syscalls && cp syscalls.so ../target/syscalls/syscalls.so
 
 test_ffi:
-	$(CC) ${CFLAGS} -I. -lcunit -o test_ffi test_ffi.c libAPI.a
+	$(CC) ${CFLAGS} -I. -o tests/test_ffi tests/test_ffi.c libAPI.a -lcunit
 
 clean:
 	rm *.o && rm *.a

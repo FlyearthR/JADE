@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -g
-INSTANCE = 9_clients_1_server_random
+INSTANCE = 9_clients_1_server
 
 .PHONY: syscalls.so all test API leader clean little_clean
 
@@ -34,7 +34,10 @@ testPicoquic: all
 	cp c_src/syscalls.so examples/picoquic/
 	cp testing/simulator examples/picoquic/
 	cd examples/web_page_quic && python3 create_pages.py
-	cd examples/picoquic/ && sudo RUST_BACKTRACE=1 ./simulator 9_clients_1_server_quic.toml
+	if [ "$$(whoami)" != "root" ]; then \
+	    cd examples/picoquic/ && sudo RUST_BACKTRACE=1 ./simulator 9_clients_1_server_quic.toml; \
+		else cd examples/picoquic/ && RUST_BACKTRACE=1 ./simulator 9_clients_1_server_quic.toml; \
+	fi
 
 testQuiche: all
 	cp -f target/debug/simulator testing/simulator
@@ -43,12 +46,14 @@ testQuiche: all
 	cp examples/quiche/target/debug/examples/http3-server testing/http3-server
 	cd testing && mkdir -p examples 
 	cd testing/examples && mkdir -p root
+	cp examples/quiche/quiche/examples/cert.crt testing/examples/cert.crt
+	cp examples/quiche/quiche/examples/cert.key testing/examples/cert.key
 	cp examples/web_page_quic/create_pages.py testing/examples/root/create_pages.py
 	cd testing/examples/root && python3 create_pages.py
 	
 
 testffi: API
-	cd c_src && $(MAKE) test_ffi && cp test_ffi ../testing/test_ffi
+	cd c_src && $(MAKE) test_ffi && cp tests/test_ffi ../testing/test_ffi
 	./testing/test_ffi
 
 testsyscalls: all
@@ -85,10 +90,11 @@ API:
 	cp target/lib/debug/libapi.a c_src/libAPI.a
 
 clean:
-	rm -f testing/*
+	rm -rf testing/*
 	rm -f c_src/*.o
 	rm -f c_src/*.so
 	rm -f c_src/*.a
+	rm -f c_src/tests/test_ffi
 	rm -f examples/*_client
 	rm -f examples/*_server
 	rm -rf target/syscalls
@@ -103,8 +109,9 @@ installTestQuic:
 	if [ ! -d "picoquic" ]; then \
 		git clone https://github.com/private-octopus/picoquic.git; \
 	else \
-	    cd picoquic && make clean && git pull; \
+	    cd picoquic && git pull; \
 	fi
+	ls examples/picoquic
 	cd examples/picoquic && cmake -DPICOQUIC_FETCH_PTLS=Y .
 	cd examples/picoquic && make
 

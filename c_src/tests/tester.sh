@@ -64,10 +64,16 @@ client_server_test() {
     sed "s/%%ARGS.%%//g" > ../../testing/2_followers.toml
     cp ../../tests/2_followers.gml ../../testing/2_followers.gml
     cd ../../testing
-    sudo RUST_BACKTRACE=1 ./simulator 2_followers.toml
+    if [ "$$(whoami)" != "root" ]; then \
+      sudo RUST_BACKTRACE=1 ./simulator 2_followers.toml;\
+      else RUST_BACKTRACE=1 ./simulator 2_followers.toml;\
+    fi
     if [ $? -ne 0 ]
     then
-        sudo ip -all netns del
+        if [ "$$(whoami)" != "root" ]; then \
+          sudo ip -all netns del;\
+          else ip -all netns del;\
+        fi
     fi
     grep "Error" *.out > /dev/null
     if [ $? -eq 0 ]

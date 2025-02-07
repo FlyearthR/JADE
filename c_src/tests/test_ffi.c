@@ -1,4 +1,4 @@
-#include "rust_lib.h"
+#include "../rust_lib.h"
 #include <CUnit/Basic.h>
 #include <stdio.h>
 
@@ -56,9 +56,9 @@ Message sent_1_20 = {.tag = Sent, .sent = {._0 = 1, ._1 = 20}};
 Message getTime_1 = {.tag = GetTime, .get_time = 1};
 Message getTime_42 = {.tag = GetTime, .get_time = 42};
 
-Message getRand_1 = {.tag = GetRand, .get_rand = {._0 = 1, ._1 = 10}};
-Message getRand_42 = {.tag = GetRand, .get_rand = {._0 = 2, ._1 = 10}};
-Message getRand_42 = {.tag = GetRand, .get_rand = {._0 = 1, ._1 = 20}};
+Message getRand_1_10 = {.tag = GetRand, .get_rand = {._0 = 1, ._1 = 10}};
+Message getRand_2_10 = {.tag = GetRand, .get_rand = {._0 = 2, ._1 = 10}};
+Message getRand_1_20 = {.tag = GetRand, .get_rand = {._0 = 1, ._1 = 20}};
 
 Message wakeUp_1 = {.tag = WakeUp, .wake_up = 1};
 Message wakeUp_42 = {.tag = WakeUp, .wake_up = 42};
@@ -192,9 +192,9 @@ void test_ser_get_time()
 
 void test_ser_get_rand()
 {
-    Buffer* b1 = serialize(getRand_1);
-    Buffer* b2 = serialize(getRand_1);
-    Buffer* b3 = serialize(getRand_42);
+    Buffer* b1 = serialize(getRand_1_10);
+    Buffer* b2 = serialize(getRand_1_20);
+    Buffer* b3 = serialize(getRand_2_10);
 
     CU_ASSERT_FALSE(memcmp(b1->buffer, b2->buffer, SIZE_BUFFER));
 
