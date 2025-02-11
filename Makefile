@@ -40,17 +40,21 @@ testPicoquic: all
 	fi
 
 testQuiche: all
+	cp -f tests/1_client_1_server_quiche.* testing/
 	cp -f target/debug/simulator testing/simulator
 	cp -f target/syscalls/syscalls.so testing/syscalls.so
-	cp examples/quiche/target/debug/examples/http3-client testing/http3-client
-	cp examples/quiche/target/debug/examples/http3-server testing/http3-server
+	cp examples/quiche/target/debug/quiche-client testing/quiche-client
+	cp examples/quiche/target/debug/quiche-server testing/quiche-server
 	cd testing && mkdir -p examples 
 	cd testing/examples && mkdir -p root
 	cp examples/quiche/quiche/examples/cert.crt testing/examples/cert.crt
 	cp examples/quiche/quiche/examples/cert.key testing/examples/cert.key
 	cp examples/web_page_quic/create_pages.py testing/examples/root/create_pages.py
 	cd testing/examples/root && python3 create_pages.py
-	
+	if [ "$$(whoami)" != "root" ]; then \
+	    cd testing && sudo RUST_BACKTRACE=1 ./simulator 1_client_1_server_quiche.toml; \
+		else cd testing && RUST_BACKTRACE=1 ./simulator 1_client_1_server_quiche.toml; \
+	fi
 
 testffi: API
 	cd c_src && $(MAKE) test_ffi && cp tests/test_ffi ../testing/test_ffi

@@ -1,0 +1,31 @@
+# Queue name
+qname = '/some_queue'
+
+# Random number
+random_number = 123
+
+#logs
+logs = ["trace", "debug", "warn", "error", "info", "message"]
+log_file = "log.txt"
+
+# Number of followers
+nb_follower = 2
+
+# Graph
+graph = '1_client_1_server_quiche.gml'
+
+# Executables
+[executables]
+[[executables.exe]]
+name = 'client'
+path = 'quiche-client'
+args = ["./quiche-client", "--no-verify", "https://10.0.0.20:4433/index.html"]
+node_ids = [1]
+
+
+[[executables.exe]]
+name = 'server'
+path = 'quiche-server'
+args = ["./quiche-server", "--listen", "10.0.0.20:4433", "--cert", "../../apps/src/bin/cert.crt", "--key", "../../apps/src/bin/cert.key", "--root", "examples/root/"]
+node_ids = [2]
+

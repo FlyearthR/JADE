@@ -84,6 +84,24 @@ int clock_settime(clockid_t clockid, const struct timespec *tp)
     return -1; // TODO: set errno
 }
 
+int cmp_fd_ip(fd_ip_elem *a, fd_ip_elem *b)
+{
+    return a->fi.fd == b->fi.fd;
+}
+
+int close(int fd){
+    LIBC_FUNCTION(int, close, int fd);
+    fd_ip_elem goal = {.fi = {.fd = fd}};
+    fd_ip_elem *found = NULL;
+    LL_SEARCH(fd_ip_list, found, &goal, cmp_fd_ip);
+    if (found)
+    {
+        LL_DELETE(fd_ip_list, found);
+        free(found);
+    }
+    return LIBC_FUNCTION_GET(close)(fd);
+}
+
 int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
     LOGS("connect called\n");
@@ -105,6 +123,10 @@ int empty_fun()
     return 1;
 }
 
+int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout){
+    return 0;
+}
+
 struct sockaddr *get_ip(int fd)
 {
     fd_ip_elem goal = {.fi = {.fd = fd}};
@@ -115,9 +137,9 @@ struct sockaddr *get_ip(int fd)
     return &found->fi.addr;
 }
 
-// ssize_t getrandom(void buf[.buflen], size_t buflen, unsigned int flags){
+ssize_t getrandom(void *buf, size_t buflen, unsigned int flags){
 
-// }
+}
 
 int gettimeofday(struct timeval *restrict tv,
                  void *restrict tz)
@@ -130,6 +152,10 @@ int gettimeofday(struct timeval *restrict tv,
     tv->tv_sec = t.tv_sec;
     tv->tv_usec = t.tv_usec;
     return ret;
+}
+
+struct tm *gmtime_r(const time_t *timep, struct tm *result){
+    return NULL;
 }
 
 int infinity_poll(struct pollfd *fds, nfds_t nfds, int timeout)
@@ -485,5 +511,13 @@ int usleep(useconds_t usec)
     add_event(end);
     while (before_timeval(blocking(), end))
         ;
+    return 0;
+}
+
+ssize_t write(int fildes, const void *buf, size_t nbyte){
+    return 0;
+}
+
+ssize_t writev(int fd, const struct iovec *iov, int iovcnt){
     return 0;
 }
