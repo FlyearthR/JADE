@@ -1,16 +1,4 @@
-#include <sys/select.h>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <poll.h>
-#include <dlfcn.h>
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <errno.h>
-#include <sys/socket.h>
-#include <time.h>
-#include "communication.h"
-
-int random_number = 42;
+#include <syscalls.h>
 
 int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
@@ -84,16 +72,17 @@ int clock_settime(clockid_t clockid, const struct timespec *tp)
     return -1; // TODO: set errno
 }
 
-int cmp_fd_ip(fd_ip_elem *a, fd_ip_elem *b)
+int cmp_fd_ip_ip(fd_ip_elem *a, fd_ip_elem *b)
 {
     return a->fi.fd == b->fi.fd;
 }
 
 int close(int fd){
+    LOGS("close called\n");
     LIBC_FUNCTION(int, close, int fd);
     fd_ip_elem goal = {.fi = {.fd = fd}};
     fd_ip_elem *found = NULL;
-    LL_SEARCH(fd_ip_list, found, &goal, cmp_fd_ip);
+    LL_SEARCH(fd_ip_list, found, &goal, cmp_fd_ip_ip);
     if (found)
     {
         LL_DELETE(fd_ip_list, found);
@@ -124,6 +113,23 @@ int empty_fun()
 }
 
 int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout){
+    LOGS("epoll_wait called\n");
+    LIBC_FUNCTION(int, epoll_wait, int epfd, struct epoll_event *events, int maxevents, int timeout);
+    if (timeout < 0)
+        return infinity_epoll(epfd, events, maxevents, timeout);
+    struct timeval cur = get_time();
+    struct timeval to = add_timeval(cur, int_to_timeval_s(timeout));
+    int ret = LIBC_FUNCTION_GET(epoll_wait)(epfd, events, maxevents, 0);
+    if (ret)
+        return ret;
+    add_event(to);
+    cur = blocking();
+    int n_events = 0;
+    do
+    {
+        ret = LIBC_FUNCTION_GET(epoll_wait)(epfd, events, maxevents-n_events, 0);
+        n_events += ret;
+    } while (ret == 0 && before_timeval(cur = blocking(), to) && n_events < maxevents);
     return 0;
 }
 
@@ -131,14 +137,24 @@ struct sockaddr *get_ip(int fd)
 {
     fd_ip_elem goal = {.fi = {.fd = fd}};
     fd_ip_elem *found = NULL;
-    LL_SEARCH(fd_ip_list, found, &goal, cmp_fd_ip);
+    LL_SEARCH(fd_ip_list, found, &goal, cmp_fd_ip_ip);
     if (!found)
         exit(-12);
     return &found->fi.addr;
 }
 
 ssize_t getrandom(void *buf, size_t buflen, unsigned int flags){
-
+    LOGS("getrandom called\n");
+    //use get_random to fill a buffer of at least buflen with random bytes then truncate it to buflen
+    int n_bytes = 0;
+    while (n_bytes < buflen)
+    {
+        int r = get_random();
+        size_t l = sizeof(r) < buflen - n_bytes ? sizeof(r) : buflen - n_bytes;
+        memcpy(buf + n_bytes, &r, l);
+        n_bytes += l;
+    }
+    return buflen;
 }
 
 int gettimeofday(struct timeval *restrict tv,
@@ -155,7 +171,34 @@ int gettimeofday(struct timeval *restrict tv,
 }
 
 struct tm *gmtime_r(const time_t *timep, struct tm *result){
-    return NULL;
+    LOGS("gmtime_r called\n");
+    LIBC_FUNCTION(struct tm *, gmtime_r, const time_t *timep, struct tm *result);
+    struct tm *ret = LIBC_FUNCTION_GET(gmtime_r)(timep, result);
+    struct timeval t = get_time();
+    result->tm_sec = t.tv_sec;
+    result->tm_min = t.tv_sec / 60;
+    result->tm_hour = t.tv_sec / 3600;
+    result->tm_mday = t.tv_sec / 86400;
+    result->tm_mon = t.tv_sec / 2592000;
+    result->tm_year = t.tv_sec / 31536000;
+    result->tm_wday = t.tv_sec / 86400 % 7;
+    result->tm_yday = t.tv_sec / 86400 % 365;
+    result->tm_isdst = -1;
+    return ret;
+}
+
+int infinty_epoll(int epfd, struct epoll_event *events, int maxevents, int timeout)
+{
+    LOGS("infinity_epoll called\n");
+    LIBC_FUNCTION(int, epoll_wait, int epfd, struct epoll_event *events, int maxevents, int timeout);
+    int ret;
+    int n_events = 0;
+    do
+    {
+        ret = LIBC_FUNCTION_GET(epoll_wait)(epfd, events, maxevents-n_events, 0);
+        n_events += ret;
+    } while (ret == 0 && empty_fun() && n_events < maxevents);
+    return ret;
 }
 
 int infinity_poll(struct pollfd *fds, nfds_t nfds, int timeout)
@@ -173,6 +216,7 @@ int infinity_poll(struct pollfd *fds, nfds_t nfds, int timeout)
 #ifdef DEBUG
 int open(const char *pathname, int flags, ...)
 {
+    LOGS("open called\n");
     va_list ap;
     LIBC_FUNCTION(int, open, const char *pathname, int flags, ...);
     int ret = LIBC_FUNCTION_GET(open)(pathname, flags, ap);
@@ -182,6 +226,7 @@ int open(const char *pathname, int flags, ...)
 #endif
 
 int pause(void){
+    LOGS("pause called\n");
     //todo support signals
     return -1;
 }
@@ -268,6 +313,7 @@ int rand(void)
 
 ssize_t read_implem(ssize_t (*func)(int, void *, size_t), int fd, void *buf, size_t count)
 {
+    LOGS("read_implem called\n");
     if (getsockname(fd, NULL, 0) == -1 && errno == ENOTSOCK)
     { // this is not an FD to a socket, we have to pass it to the kernel
         return func(fd, buf, count);
@@ -469,6 +515,7 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
 }
 
 int socket(int domain, int type, int protocol){
+    LOGS("socket called\n");
     LIBC_FUNCTION(int, socket, int domain, int type, int protocol);
     int ret = LIBC_FUNCTION_GET(socket)(domain, type|O_NONBLOCK, protocol);
     return ret;
@@ -515,9 +562,60 @@ int usleep(useconds_t usec)
 }
 
 ssize_t write(int fildes, const void *buf, size_t nbyte){
+    LOGS("write called\n");
+    if (getsockname(fildes, NULL, 0) == -1 && errno == ENOTSOCK){
+        return write(fildes, buf, nbyte);
+    }
+    packet_elem *pe;
+    if ((pe = (packet_elem *)malloc(sizeof *pe)) == NULL)
+        exit(-13);
+    void *tmp_buf;
+    if ((tmp_buf = malloc(nbyte))== NULL)
+        exit(-13);
+    memcpy(tmp_buf, buf, nbyte);
+    pe->pkt.buf = tmp_buf;
+    pe->pkt.tos = write_t;
+    pe->pkt.sockfd = fildes;
+    pe->pkt.len = nbyte;
+
+    LL_PREPEND(pkt_list, pe);
+
+    struct sockaddr *dest_addr = get_ip(fildes);
+
+    send_has_to_send(dest_addr, pe);
+
     return 0;
 }
 
 ssize_t writev(int fd, const struct iovec *iov, int iovcnt){
-    return 0;
+    LOGS("writev called\n");
+    if (getsockname(fd, NULL, 0) == -1 && errno == ENOTSOCK){
+        return writev(fd, iov, iovcnt);
+    }
+    packet_elem *pe;
+    if ((pe = (packet_elem *)malloc(sizeof *pe)) == NULL)
+        exit(-13);
+    struct iovec *buf;
+    if ((buf = (struct iovec *)malloc(sizeof(struct iovec) * iovcnt)) == NULL)
+        exit(-13);
+    int n_bytes_sent = 0;
+    for (int i = 0; i < iovcnt; i++)
+    {
+        buf[i].iov_base = malloc((iov + i)->iov_len);
+        memcpy(buf[i].iov_base, (iov + i)->iov_base, (iov + i)->iov_len);
+        buf[i].iov_len = (iov + i)->iov_len;
+        n_bytes_sent += (iov + i)->iov_len;
+    }
+    pe->pkt.buf = buf;
+    pe->pkt.tos = writev_t;
+    pe->pkt.sockfd = fd;
+    pe->pkt.len = iovcnt;
+    
+    LL_PREPEND(pkt_list, pe);
+
+    struct sockaddr *dest_addr = get_ip(fd);
+
+    send_has_to_send(dest_addr, pe);
+
+    return n_bytes_sent;
 }

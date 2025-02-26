@@ -18,7 +18,9 @@ extern FILE* log_file;
 enum type_of_send {
     send_t,
     sendto_t,
-    sendmsg_t
+    sendmsg_t,
+    write_t,
+    writev_t
 };
 
 typedef struct packet {

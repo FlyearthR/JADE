@@ -132,7 +132,9 @@ installTestQuiche:
 	fi
 	rm -f examples/quiche/quiche/examples/http3-server.rs
 	cp tests/modified-http3-server-quiche.rs examples/quiche/quiche/examples/http3-server.rs
-	cd examples/quiche && cargo build --examples
+	rm -f examples/quiche/quiche/Cargo.toml
+	cp tests/modified_Cargo.toml examples/quiche/quiche/Cargo.toml
+	cd examples/quiche && cargo build 
 
 CITest: all
 	$(MAKE) test

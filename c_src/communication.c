@@ -218,6 +218,25 @@ void custom_sendmsg(packet pkt)
     free((void *)pkt.buf);
 }
 
+void custom__write(packet pkt)
+{
+    LIBC_FUNCTION(ssize_t, write, int fildes, const void *buf, size_t nbyte);
+    int ret = LIBC_FUNCTION_GET(write)(pkt.sockfd, pkt.buf, pkt.len);
+    free((void *)pkt.buf);
+}
+
+void custom__writev(packet pkt)
+{
+    LIBC_FUNCTION(ssize_t, writev, int fd, const struct iovec *iov, int iovcnt);
+    int ret = LIBC_FUNCTION_GET(writev)(pkt.sockfd, (struct iovec *)pkt.buf, pkt.len);
+    struct iovec *buf = (struct iovec *)pkt.buf;
+    for (int i = 0; i < pkt.len; i++)
+    {
+        free(buf[i].iov_base);
+    }
+    free((void *)pkt.buf);
+}
+
 void sender(uint64_t pkt_id)
 {
     LOGS("sender called\n");
@@ -240,7 +259,16 @@ void sender(uint64_t pkt_id)
     case sendmsg_t:
         custom_sendmsg(found->pkt);
         break;
+
+    case write_t:
+        custom__write(found->pkt);
+        break;
+    
+    case writev_t:
+        custom__writev(found->pkt);
+        break;
     }
+
     LL_DELETE(pkt_list, found);
     free(found);
     Message m = {.tag = Sent, .sent = {._0 = ID, ._1 = pkt_id}};
