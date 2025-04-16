@@ -1180,6 +1180,9 @@ impl Simulation {
                 /************** Second half, running time ***************/
                 let msg = serialize_rust(Message::WakeUp(time));
                 for (s, q) in self.states.iter_mut().zip(self.qs[1..].iter()) {
+                    //TODO: if no send has been done, only wake up processes that need to be
+                    // wake them up multiple times if needed
+                    // update receive_msg() according to it (so after sending a signal it will go back in the receiving loop)
                     if s != &State::Finished {
                         self.logs.log(
                             "message",
