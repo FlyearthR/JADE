@@ -6,7 +6,7 @@ int id = 0;
 int seed = 0;
 int fdi = 0;
 int fdo = 0;
-int current_time;
+uint64_t current_time;
 
 void __attribute__((constructor)) init_fd()
 { // TODO: get the name of the queue from the env
@@ -130,6 +130,11 @@ uint64_t receive_msg()
         else
         {
             current_time = m->wake_up;
+            // check if we have to send a signal
+            if (before_timeval(timer_real, u64_to_timeval_us(current_time))) {
+                raise(SIGALRM);
+                // we could have also received a message, so we should leave the loop
+            }
             return m->wake_up;
         }
     } while (true);

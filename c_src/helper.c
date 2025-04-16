@@ -7,6 +7,8 @@ uint64_t next_pkt_id;
 
 FILE *log_file;
 
+struct itimerval timer_real;
+
 int before_timeval(struct timeval t1, struct timeval t2)
 {
     return t1.tv_sec != t2.tv_sec ? t1.tv_sec < t2.tv_sec : t1.tv_usec < t2.tv_usec;
@@ -41,6 +43,14 @@ struct timeval add_timeval(struct timeval t1, struct timeval t2)
                         .tv_usec = (t1.tv_usec + t2.tv_usec) % 1000000};
     return t;
 }
+
+struct timeval susbstract_timeval(struct timeval t1, struct timeval t2)
+{
+    struct timeval t = {.tv_sec = t1.tv_sec - t2.tv_sec - (t1.tv_usec<t2.tv_usec ? 1 + (t2.tv_usec - t1.tv_usec)/1000000 : 0),
+                        .tv_usec = (t1.tv_usec - t2.tv_usec) % 1000000};
+    return t;
+}
+
 
 int cmp_pkt(packet_elem *pe1, packet_elem *pe2)
 {

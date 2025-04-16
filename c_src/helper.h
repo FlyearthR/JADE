@@ -53,6 +53,8 @@ extern fd_ip_elem* fd_ip_list;
 
 extern uint64_t next_pkt_id;
 
+extern struct itimerval timer_real;
+
 int before_timeval(struct timeval, struct timeval);
 
 unsigned int timeval_to_uint_us(struct timeval);
@@ -64,6 +66,8 @@ struct timeval int_to_timeval_s(int);
 struct timeval u64_to_timeval_us(uint64_t);
 
 struct timeval add_timeval(struct timeval, struct timeval);
+
+struct timeval susbstract_timeval(struct timeval t1, struct timeval t2);
 
 int cmp_pkt(packet_elem* pe1, packet_elem* pe2);
 

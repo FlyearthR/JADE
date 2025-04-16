@@ -164,7 +164,7 @@ case $EXE in
     # TODO
     ;;
 
-  gettimeofday | rand | srand | clock_getres | clock_gettime)
+  gettimeofday | rand | srand | clock_getres | clock_gettime | setitimer)
     basic_test $EXE
     ;;
   sleep | usleep)

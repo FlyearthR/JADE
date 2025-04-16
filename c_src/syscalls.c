@@ -12,6 +12,13 @@
 
 int random_number = 42;
 
+void abort()
+{
+    send_finished();
+    // TODO: let config tell if we abord the whole simulation
+    // TODO: decide if we add another parameter to finished message to let know that we aborted
+}
+
 int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
     LOGS("bind called\n");
@@ -299,6 +306,14 @@ ssize_t read(int fd, void *buf, size_t count)
     return read_implem(LIBC_FUNCTION_GET(read), fd, buf, count);
 }
 
+ssize_t pread(int fd, void* buf, size_t count,
+    off_t offset)
+{
+    LOGS("pread called - fd: %i\n", fd);
+    LIBC_FUNCTION(ssize_t, pread, int fd, void *buf, size_t count, off_t offset);
+    return read_implem(LIBC_FUNCTION_GET(pread), fd, buf, count, offset);
+}
+
 ssize_t recvfrom(int sockfd, void *buf, size_t len,
                  int flags, struct sockaddr *src_addr,
                  socklen_t *addrlen)
@@ -467,6 +482,34 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
     send_has_to_send(dest_addr, pe);
     return len;
 }
+
+int setitimer(int which, const struct itimerval *restrict new_value,
+    struct itimerval * restrict old_value) {
+        switch (which) {
+            case ITIMER_REAL:
+            if (old_value != NULL) {
+                old_value->it_value = susbstract_timeval(timer_real.it_value, get_time());
+                old_value->it_interval = timer_real.it_interval;
+            }
+            timer_real = {
+                .it_value = add_timeval(get_time(), new_value->it_value),
+                .it_interval = new_value.it_interval
+            }
+            add_event(timer_real.it_value);
+            case ITIMER_VIRTUAL:
+                LOGS("setitimer called with ITIMER_VIRTUAL, but computational time is considered as zero by simulation\n");
+                errno = EINVAL;
+                return -1;
+            case ITIMER_PROF:
+                LOGS("setitimer called with ITIMER_PROF, but computational time is considered as zero by simulation\n");
+                errno = EINVAL;
+                return -1;
+            default:
+                LOGS("setitimer called with unknown timer\n");
+                errno = EINVAL;
+                return -1;
+        }
+    }
 
 int socket(int domain, int type, int protocol){
     LIBC_FUNCTION(int, socket, int domain, int type, int protocol);
