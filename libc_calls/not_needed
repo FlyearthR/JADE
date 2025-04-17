@@ -1,0 +1,100 @@
+aligned_alloc
+__assert_fail
+bind
+calloc
+cbrt
+close
+__cxa_finalize
+__errno_location
+_exit
+exit
+fclose
+__fdelt_chk
+feof
+ferror
+fflush
+fgets
+fopen
+__fprintf_chk
+fputc
+fputs
+fread
+__fread_chk
+free
+freeaddrinfo
+fseek
+ftell
+fwrite
+__fxstat
+gai_strerror
+getaddrinfo
+getenv
+getopt_long
+getsockname
+getsockopt
+in6addr_any
+inet_ntop
+inet_pton
+__isoc99_sscanf -> fichier
+KO ? setsockopt -> find specific
+ __libc_start_main
+__libc_start_main
+malloc
+memchr
+memcmp
+memcpy
+__memcpy_chk
+memmove
+__memmove_chk
+memset
+__memset_chk
+open -> fichier
+optarg
+optind
+optopt
+perror
+pipe
+posix_memalign
+prctl -> multithread
+__printf_chk
+pthread_cancel -> multithread
+pthread_cond_broadcast
+pthread_cond_destroy
+pthread_cond_init
+pthread_cond_timedwait
+pthread_cond_wait
+pthread_create -> multithread
+pthread_exit -> multithread
+pthread_join
+pthread_mutex_destroy
+pthread_mutex_init
+pthread_mutex_lock
+pthread_mutex_unlock
+putc -> fichier
+putchar
+puts
+realloc
+signal
+__snprintf_chk
+socket
+sqrt
+__stack_chk_fail
+stderr
+stdin
+stdout
+strcasecmp
+strchr
+strcmp
+strcpy
+strdup
+strerror
+strlen
+strncmp
+strrchr
+strsep
+strstr
+strtol
+unlink
+unlink -> fichier
+__vfprintf_chk
+__vsnprintf_chk
