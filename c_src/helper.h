@@ -39,7 +39,7 @@ typedef struct packet_elem {
 
 typedef struct fd_ip {
     int fd;
-    const struct sockaddr addr;
+    struct sockaddr addr;
 } fd_ip;
 
 typedef struct fd_ip_elem {

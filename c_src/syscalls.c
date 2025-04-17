@@ -1,4 +1,6 @@
+#include <sys/epoll.h>
 #include <sys/select.h>
+#include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <poll.h>
@@ -6,7 +8,6 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <errno.h>
-#include <sys/socket.h>
 #include <time.h>
 #include "communication.h"
 
@@ -17,6 +18,7 @@ void abort()
     send_finished();
     // TODO: let config tell if we abord the whole simulation
     // TODO: decide if we add another parameter to finished message to let know that we aborted
+    exit(-1);
 }
 
 int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
@@ -91,12 +93,7 @@ int clock_settime(clockid_t clockid, const struct timespec *tp)
     return -1; // TODO: set errno
 }
 
-int cmp_fd_ip(fd_ip_elem *a, fd_ip_elem *b)
-{
-    return a->fi.fd == b->fi.fd;
-}
-
-int close(int fd){
+int close(int fd){ // TODO: check if still used
     LIBC_FUNCTION(int, close, int fd);
     fd_ip_elem goal = {.fi = {.fd = fd}};
     fd_ip_elem *found = NULL;
@@ -109,7 +106,7 @@ int close(int fd){
     return LIBC_FUNCTION_GET(close)(fd);
 }
 
-int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
+int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) // TODO: check if still used
 {
     LOGS("connect called\n");
     LOGS("sockaddr :\n");
@@ -134,7 +131,7 @@ int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout)
     return 0;
 }
 
-struct sockaddr *get_ip(int fd)
+struct sockaddr *get_ip(int fd) // TODO: check if still used
 {
     fd_ip_elem goal = {.fi = {.fd = fd}};
     fd_ip_elem *found = NULL;
@@ -189,7 +186,7 @@ int open(const char *pathname, int flags, ...)
 #endif
 
 int pause(void){
-    //todo support signals
+    // TODO: support signals
     return -1;
 }
 
@@ -273,24 +270,34 @@ int rand(void)
     return get_random();
 }
 
-ssize_t read_implem(ssize_t (*func)(int, void *, size_t), int fd, void *buf, size_t count)
-{
-    if (getsockname(fd, NULL, 0) == -1 && errno == ENOTSOCK)
-    { // this is not an FD to a socket, we have to pass it to the kernel
-        return func(fd, buf, count);
-    }
-    // TODO: configure socket as non blocking at opening time
-    int flags_s = fcntl(fd, F_GETFL, 0);
-    if (flags_s == -1)
-        return -1;
+#define GET_FD(fd, ...) fd
 
-    int ret;
-    do
-    {
-        ret = func(fd, buf, count);
-    } while (ret == 0 && empty_fun());
-    return ret;
-}
+#define READ_IMPLEM(ret, func, ...) \
+    if (getsockname(GET_FD(__VA_ARGS__), NULL, 0) == -1 && errno == ENOTSOCK) \
+    { /* this is not an FD to a socket, we have to pass it to the kernel */ \
+        ret = func(__VA_ARGS__); \
+    } \
+    else \
+    { \
+        /* TODO: configure socket as non blocking at opening time */ \
+        int flags_s = fcntl(GET_FD(__VA_ARGS__), F_GETFL, 0); \
+        if (flags_s == -1) \
+        { \
+            ret = -1; \
+        } \
+        else \
+        { \
+            do \
+            { \
+                ret = func(__VA_ARGS__); \
+            } while (ret == 0 && empty_fun()); \
+        } \
+    }
+
+#define read_implem(f, ...) \
+({ ssize_t _ret; \
+READ_IMPLEM(_ret, f, __VA_ARGS__); \
+_ret;})
 
 ssize_t __read_chk(int fd, void *buf, size_t count)
 {
@@ -491,10 +498,9 @@ int setitimer(int which, const struct itimerval *restrict new_value,
                 old_value->it_value = susbstract_timeval(timer_real.it_value, get_time());
                 old_value->it_interval = timer_real.it_interval;
             }
-            timer_real = {
-                .it_value = add_timeval(get_time(), new_value->it_value),
-                .it_interval = new_value.it_interval
-            }
+            timer_real.it_value = add_timeval(get_time(), new_value->it_value);
+            timer_real.it_interval = new_value->it_interval;
+            return 0;
             add_event(timer_real.it_value);
             case ITIMER_VIRTUAL:
                 LOGS("setitimer called with ITIMER_VIRTUAL, but computational time is considered as zero by simulation\n");
@@ -557,7 +563,15 @@ int usleep(useconds_t usec)
     return 0;
 }
 
-ssize_t write(int fildes, const void *buf, size_t nbyte){
+ssize_t write(int fd, const void *buf, size_t count)
+{
+    if (getsockname(fd, NULL, 0) == -1 && errno == ENOTSOCK) 
+    { // this is not an FD to a socket, we have to pass it to the kernel
+        LIBC_FUNCTION(ssize_t, write, int fd, const void *buf, size_t count);
+        return LIBC_FUNCTION_GET(write)(fd, buf, count); 
+    }
+    LOGS("write called, will call send");
+    send(fd, buf, count, 0);
     return 0;
 }
 

@@ -131,8 +131,9 @@ uint64_t receive_msg()
         {
             current_time = m->wake_up;
             // check if we have to send a signal
-            if (before_timeval(timer_real, u64_to_timeval_us(current_time))) {
+            if (before_timeval(timer_real.it_value, u64_to_timeval_us(current_time))) {
                 raise(SIGALRM);
+                timer_real.it_value = add_timeval(u64_to_timeval_us(current_time), timer_real.it_interval);
                 // we could have also received a message, so we should leave the loop
             }
             return m->wake_up;
