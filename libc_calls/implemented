@@ -27,3 +27,5 @@ sleep
 srand
 usleep
 write
+writev
+gmtime_r

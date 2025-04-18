@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <arpa/inet.h>
+#include <signal.h>
 #include "helper.h"
 #include "rust_lib.h"
 
@@ -40,3 +41,5 @@ int get_random();
 void sender(uint64_t pkt_id);
 
 void send_has_to_send(const struct sockaddr *dest_addr, packet_elem *pe);
+
+void __attribute__((destructor)) send_finished();
