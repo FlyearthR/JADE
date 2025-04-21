@@ -4,7 +4,6 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <poll.h>
-#include <dlfcn.h>
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <errno.h>
