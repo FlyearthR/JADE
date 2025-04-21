@@ -7,7 +7,6 @@
 #include <string.h>
 #include <arpa/inet.h>
 #include <signal.h>
-#include <dlfcn.h>
 #include "helper.h"
 #include "rust_lib.h"
 
