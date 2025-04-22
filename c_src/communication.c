@@ -84,7 +84,7 @@ void print_msg(Message m)
         LOGS("GetTime(%i)\n", m.get_time);
         break;
     case GetRand:
-        LOGS("GetRand(%li)\n", m.get_rand);
+        LOGS("GetRand(%i, %li)\n", m.get_rand._0, m.get_rand._1);
         break;
     case WakeUp:
         LOGS("WakeUp(%li)\n", m.wake_up);
