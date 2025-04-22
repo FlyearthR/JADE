@@ -1,4 +1,5 @@
 #include "helper.h"
+#include <dlfcn.h>
 
 packet_elem *pkt_list;
 fd_ip_elem *fd_ip_list;

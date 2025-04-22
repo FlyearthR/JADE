@@ -1,4 +1,5 @@
 #include "communication.h"
+#include <dlfcn.h>
 
 // TODO: fix memory leaks due to (de)serialization
 

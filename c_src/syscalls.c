@@ -8,6 +8,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <time.h>
+#include <dlfcn.h>
 #include "communication.h"
 
 int random_number = 42;
