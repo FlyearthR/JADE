@@ -58,36 +58,36 @@ void print_msg(Message m)
         LOGS("Stuck(%i)\n", m.stuck);
         break;
     case AddStep:
-        LOGS("AddStep(%i, %i)\n", m.add_step._0, m.add_step._1);
+        LOGS("AddStep(%i, %li)\n", m.add_step._0, m.add_step._1);
         break;
     case DelStep:
-        LOGS("DelStep(%i, %i)\n", m.del_step._0, m.del_step._1);
+        LOGS("DelStep(%i, %li)\n", m.del_step._0, m.del_step._1);
         break;
     case HasToSend4:
-        LOGS("HasToSend4(%i, %i, %i.%i.%i.%i, %i)\n", m.has_to_send4._0, m.has_to_send4._1,
+        LOGS("HasToSend4(%i, %i, %i.%i.%i.%i, %li)\n", m.has_to_send4._0, m.has_to_send4._1,
              m.has_to_send4._2.segments[0], m.has_to_send4._2.segments[1], m.has_to_send4._2.segments[2],
              m.has_to_send4._2.segments[3], m.has_to_send4._3);
         break;
     case HasToSend6:
-        LOGS("HasToSend6(%i, %i, %i:%i:%i:%i:%i:%i:%i:%i, %i)\n", m.has_to_send6._0, m.has_to_send6._1,
+        LOGS("HasToSend6(%i, %i, %i:%i:%i:%i:%i:%i:%i:%i, %li)\n", m.has_to_send6._0, m.has_to_send6._1,
              m.has_to_send6._2.segments[0], m.has_to_send6._2.segments[1], m.has_to_send6._2.segments[2],
              m.has_to_send6._2.segments[3], m.has_to_send6._2.segments[4], m.has_to_send6._2.segments[5],
              m.has_to_send6._2.segments[6], m.has_to_send6._2.segments[7], m.has_to_send6._3);
         break;
     case Send:
-        LOGS("Send(%i)\n", m.send);
+        LOGS("Send(%li)\n", m.send);
         break;
     case Sent:
-        LOGS("Sent(%i, %i)\n", m.sent._0, m.sent._1);
+        LOGS("Sent(%i, %li)\n", m.sent._0, m.sent._1);
         break;
     case GetTime:
         LOGS("GetTime(%i)\n", m.get_time);
         break;
     case GetRand:
-        LOGS("GetRand(%i)\n", m.get_rand);
+        LOGS("GetRand(%li)\n", m.get_rand);
         break;
     case WakeUp:
-        LOGS("WakeUp(%i)\n", m.wake_up);
+        LOGS("WakeUp(%li)\n", m.wake_up);
         break;
     case Finished:
         LOGS("Finished(%i)\n", m.finished);
