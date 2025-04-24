@@ -13,19 +13,7 @@ RUN mkdir /network-time-simulator
 WORKDIR /network-time-simulator
 COPY . .
 
-COPY <<EOF /network-time-simulator/c_src/Makefile
-CC = gcc
-CFLAGS = -g -DDEBUG -Wall
-
-%.o: %.c
-	$(CC) -static -static-libgcc -fPIC -I. -llibAPI -c $^ -o $@
-
-syscalls.so: communication.o helper.o syscalls.o
-	$(CC) -shared -o syscalls.so communication.o helper.o syscalls.o libAPI.a -ldl && mkdir -p ../target/syscalls && cp syscalls.so ../target/syscalls/syscalls.so
-
-test_ffi:
-	$(CC) ${CFLAGS} -I. -o tests/test_ffi tests/test_ffi.c libAPI.a -lcunit
-EOF
+COPY Makefile_static Makefile
 
 WORKDIR /network-time-simulator
 
