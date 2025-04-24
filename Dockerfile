@@ -13,7 +13,7 @@ RUN mkdir /network-time-simulator
 WORKDIR /network-time-simulator
 COPY . .
 
-COPY /network-time-simulator/c_src/Makefile_static /network-time-simulator/c_src/Makefile
+COPY c_src/Makefile_static /network-time-simulator/c_src/Makefile
 
 WORKDIR /network-time-simulator
 
