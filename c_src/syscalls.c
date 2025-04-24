@@ -269,6 +269,7 @@ int clock_gettime(clockid_t clockid, struct timespec *tp)
 {
     LOGS("clock_gettime called\n");
     LIBC_FUNCTION(int, clock_gettime, clockid_t clockid, struct timespec *tp);
+    uint64_t t;
     switch (clockid)
     {
     case CLOCK_REALTIME: // TODO: should we support processes that set this clock?
@@ -280,7 +281,7 @@ int clock_gettime(clockid_t clockid, struct timespec *tp)
     case CLOCK_MONOTONIC_RAW:
     case CLOCK_BOOTTIME:
     case CLOCK_BOOTTIME_ALARM:
-        uint64_t t = get_u64_time();
+        t = get_u64_time();
         tp->tv_sec = t / 1000000;
         tp->tv_nsec = (t % 1000000) * 1000;
         return 0;

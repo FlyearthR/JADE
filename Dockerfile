@@ -1,4 +1,6 @@
-FROM ubuntu:latest
+ARG image
+
+FROM $image:latest
 
 RUN apt update
 RUN apt install -y wget gawk bison build-essential curl snapd python3 sudo make git cmake openssl pkg-config libssl-dev libcunit1 libcunit1-doc libcunit1-dev
