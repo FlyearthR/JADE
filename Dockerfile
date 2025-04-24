@@ -1,6 +1,6 @@
 ARG image
 
-FROM $image:latest
+FROM ubuntu:latest
 
 RUN apt update
 RUN apt install -y wget gawk bison build-essential curl snapd python3 sudo make git cmake openssl pkg-config libssl-dev libcunit1 libcunit1-doc libcunit1-dev
@@ -39,7 +39,11 @@ RUN mkdir /glibc && \
     make install
 
 WORKDIR /network-time-simulator
+
 RUN make all
 
+ARG image
 
-#-static -static-libgcc
+FROM $image:latest
+
+COPY --from=0 /network-time-simulator
