@@ -5,7 +5,7 @@ CFLAGS = -g -DDEBUG -Wall
 	$(CC) -static -static-libgcc -fPIC -I. -llibAPI -c $^ -o $@
 
 syscalls.so: communication.o helper.o syscalls.o
-	$(CC) -static -static-libgcc -shared -o syscalls.so communication.o helper.o syscalls.o libAPI.a -ldl && mkdir -p ../target/syscalls && cp syscalls.so ../target/syscalls/syscalls.so
+	$(CC) -shared -o syscalls.so communication.o helper.o syscalls.o libAPI.a -ldl && mkdir -p ../target/syscalls && cp syscalls.so ../target/syscalls/syscalls.so
 
 test_ffi:
 	$(CC) ${CFLAGS} -I. -o tests/test_ffi tests/test_ffi.c libAPI.a -lcunit
