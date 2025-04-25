@@ -15,7 +15,7 @@ COPY . .
 
 WORKDIR /network-time-simulator
 
-RUN make static
+RUN make musl
 
 ARG image
 

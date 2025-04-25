@@ -67,6 +67,8 @@ all: syscalls.so simulator API
 
 static: syscalls.so-static simulator API-static
 
+musl: syscalls.so simulator-musl API-musl
+
 syscalls.so: API
 	cd c_src && $(MAKE) syscalls.so
 
@@ -93,6 +95,9 @@ target/examples/simple_server:
 simulator:
 	cargo build
 
+simulator-musl:
+	cargo build --target x86_64-unknown-linux-musl
+
 simulator-static:
 	RUSTFLAGS="-C target-feature=+crt-static" cargo build --target x86_64-unknown-linux-gnu
 
@@ -104,6 +109,11 @@ API:
 API-static:
 	cbindgen --crate network_time_simulator --output c_src/rust_lib.h --lang c
 	CARGO_TARGET_DIR=target/lib RUSTFLAGS="-C target-feature=+crt-static" cargo build --manifest-path src/Cargo.toml --target x86_64-unknown-linux-gnu
+	cp target/lib/debug/libapi.a c_src/libAPI.a
+
+API-musl:
+	cbindgen --crate network_time_simulator --output c_src/rust_lib.h --lang c
+	CARGO_TARGET_DIR=target/lib cargo build --manifest-path src/Cargo.toml --target x86_64-unknown-linux-musl
 	cp target/lib/debug/libapi.a c_src/libAPI.a
 
 clean:
