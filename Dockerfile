@@ -1,6 +1,6 @@
 ARG image
 
-FROM ubuntu:latest
+FROM $image:latest
 
 RUN apt update
 RUN apt install --fix-missing -y wget gawk bison build-essential curl snapd python3 sudo make git cmake openssl pkg-config libssl-dev libcunit1 libcunit1-doc libcunit1-dev libc6-dev
@@ -16,9 +16,3 @@ COPY . .
 WORKDIR /network-time-simulator
 
 RUN make all
-
-ARG image
-
-FROM $image:latest
-
-COPY --from=0 /network-time-simulator /network-time-simulator
