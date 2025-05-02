@@ -12,7 +12,7 @@ log_file = "log.txt"
 nb_follower = 2
 
 # Graph
-graph = '1_client_1_server.gml'
+graph = '1_client_1_server_ivy.gml'
 
 # Executables
 [executables]
