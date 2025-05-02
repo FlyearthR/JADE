@@ -23,6 +23,14 @@ usetest: all
 	cp -f tests/$(INSTANCE).* testing/
 	cd testing && sudo RUST_BACKTRACE=1 ./simulator $(INSTANCE).toml
 
+ivy: all
+	cp -f target/debug/simulator testing/simulator
+	cp -f target/syscalls/syscalls.so testing/syscalls.so
+	cp -f /PFV/Protocols-Ivy/protocol-testing/minip/test/temp/6/ping_server_test testing/ping_server_test
+	cp -f /PFV/implementations/minip-implementations/ping-pong-fail/miniP_server testing/miniP_server
+	cp -f tests/1_client_1_server_ivy.* testing/
+	cd testing && sudo RUST_BACKTRACE=1 ./simulator 1_client_1_server_ivy.toml
+
 testPicoquic: all
 	cp -f target/debug/simulator testing/simulator
 	cp -f target/syscalls/syscalls.so testing/syscalls.so
