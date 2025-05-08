@@ -21,16 +21,22 @@ int empty_fun()
 
 int cmp_fd_ip_ip(fd_ip_elem *a, fd_ip_elem *b)
 {
-    return a->fi.fd == b->fi.fd;
+    return a->fi.fd - b->fi.fd;
 }
 
-struct sockaddr *get_ip(int fd) // TODO: check if still used
+struct sockaddr *get_ip(int fd)
 {
     fd_ip_elem goal = {.fi = {.fd = fd}};
     fd_ip_elem *found = NULL;
+    LOGS("get_ip fd: %i\n", fd);
     LL_SEARCH(fd_ip_list, found, &goal, cmp_fd_ip_ip);
-    if (!found)
+    if (!found) {
+        perror("ip not found");
+        printf("bad ip\n");
+        fflush(stdout);
+        LOGS("no ip found\n");
         exit(-12);
+    }
     return &found->fi.addr;
 }
 
@@ -58,6 +64,7 @@ ssize_t recvfrom(int sockfd, void *buf, size_t len,
             perror("recvfrom: ");
         }
     } while (ret == -1 && errno == EWOULDBLOCK && empty_fun());
+    LOGS("will quit recvfrom\n");
     return ret;
 }
 
@@ -85,8 +92,8 @@ int select(int nfds, fd_set *restrict readfds,
 {
     LOGS("select called\n");
     struct timeval zeros = {.tv_sec = 0, .tv_usec = 0};
-    struct timeval cur = get_time();
-    struct timeval to = add_timeval(cur, *timeout);
+    uint64_t cur = get_u64_time();
+    uint64_t to = cur + timeval_to_uint_us(*timeout);
     LIBC_FUNCTION(int, select, int nfds, fd_set *restrict readfds,
             fd_set *restrict writefds, fd_set *restrict exceptfds,
             struct timeval *restrict timeout);
@@ -94,15 +101,15 @@ int select(int nfds, fd_set *restrict readfds,
     if (ret)
         return ret;
 
-    add_event(to);
-    cur = blocking();
-    while (ret == 0 && before_timeval(cur, to))
+    add_event_t(to);
+    cur = blocking_t();
+    while (ret == 0 && cur < to)
     {
         ret = LIBC_FUNCTION_GET(select)(nfds, readfds, writefds, exceptfds, &zeros);
-        cur = blocking();
+        cur = blocking_t();
     }
-    if (before_timeval(cur, to))
-        suppress_event(to);
+    if (cur < to)
+        suppress_event_t(to);
     return ret;
 }
 
@@ -113,8 +120,8 @@ int pselect(int nfds, fd_set *restrict readfds,
 {
     LOGS("pselect called\n");
     struct timespec zeros = {.tv_sec = 0, .tv_nsec = 0};
-    struct timeval cur = get_time();
-    struct timeval to = add_timeval(cur, timespec_to_timeval(*timeout));
+    uint64_t cur = get_u64_time();
+    uint64_t to = cur + timeval_to_uint_us(timespec_to_timeval(*timeout));
     LIBC_FUNCTION(int, pselect, int nfds, fd_set *restrict readfds,
             fd_set *restrict writefds, fd_set *restrict exceptfds,
             const struct timespec *restrict timeout,
@@ -122,15 +129,15 @@ int pselect(int nfds, fd_set *restrict readfds,
     int ret = LIBC_FUNCTION_GET(pselect)(nfds, readfds, writefds, exceptfds, &zeros, sigmask);
     if (ret)
         return ret;
-    add_event(to);
-    cur = blocking();
-    while (ret == 0 && before_timeval(cur, to))
+    add_event_t(to);
+    cur = blocking_t();
+    while (ret == 0 && cur < to)
     {
         ret = LIBC_FUNCTION_GET(pselect)(nfds, readfds, writefds, exceptfds, &zeros, sigmask);
-        cur = blocking();
+        cur = blocking_t();
     }
-    if (before_timeval(cur, to))
-        suppress_event(to);
+    if (cur < to)
+        suppress_event_t(to);
     return ret;
 }
 
@@ -166,19 +173,19 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
     LIBC_FUNCTION(int, poll, struct pollfd *fds, nfds_t nfds, int timeout);
     if (timeout < 0)
         return infinity_poll(fds, nfds, timeout);
-    struct timeval cur = get_time();
-    struct timeval to = add_timeval(cur, int_to_timeval_s(timeout));
+    uint64_t cur = get_u64_time();
+    uint64_t to = cur + timeout*1000;
     int ret = LIBC_FUNCTION_GET(poll)(fds, nfds, 0);
     if (ret)
         return ret;
-    add_event(to);
-    cur = blocking();
+    add_event_t(to);
+    cur = blocking_t();
     do
     {
         ret = LIBC_FUNCTION_GET(poll)(fds, nfds, 0);
-    } while (ret == 0 && before_timeval(cur = blocking(), to));
-    if (before_timeval(cur, to))
-        suppress_event(to);
+    } while (ret == 0 && (cur = blocking_t()) < to);
+    if (cur < to)
+        suppress_event_t(to);
     return ret;
 }
 
@@ -187,22 +194,21 @@ int ppoll(struct pollfd *fds, nfds_t nfds,
 {
     LOGS("ppoll called\n");
     struct timespec zeros = {.tv_sec = 0, .tv_nsec = 0};
-    struct timeval cur = get_time();
-    struct timeval to = add_timeval(cur, timespec_to_timeval(*tmo_p));
+    uint64_t cur = get_u64_time();
+    uint64_t to = cur + timeval_to_uint_us(timespec_to_timeval(*tmo_p));
     LIBC_FUNCTION(int, ppoll, struct pollfd *fds, nfds_t nfds,
                   const struct timespec *tmo_p, const sigset_t *sigmask);
     int ret = LIBC_FUNCTION_GET(ppoll)(fds, nfds, &zeros, sigmask);
     if (ret)
         return ret;
-    add_event(to);
-
-    cur = blocking();
+    add_event_t(to);
+    cur = blocking_t();
     do
     {
         ret = LIBC_FUNCTION_GET(ppoll)(fds, nfds, &zeros, sigmask);
-    } while (ret == 0 && before_timeval(cur = blocking(), to));
-    if (before_timeval(cur, to))
-        suppress_event(to);
+    } while (ret == 0 && (cur = blocking_t()) < to);
+    if (cur < to)
+        suppress_event_t(to);
     return ret;
 }
 
@@ -211,19 +217,19 @@ int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout)
     LIBC_FUNCTION(int, epoll_wait, int epfd, struct epoll_event *events, int maxevents, int timeout);
     if (timeout < 0)
         return infinity_epoll(epfd, events, maxevents, timeout);
-    struct timeval cur = get_time();
-    struct timeval to = add_timeval(cur, int_to_timeval_s(timeout));
+        uint64_t cur = get_u64_time();
+        uint64_t to = cur + timeout*1000;
     int ret = LIBC_FUNCTION_GET(epoll_wait)(epfd, events, maxevents, 0);
     if (ret)
         return ret;
-    add_event(to);
-    cur = blocking();
+    add_event_t(to);
+    cur = blocking_t();
     int n_events = 0;
     do
     {
         ret = LIBC_FUNCTION_GET(epoll_wait)(epfd, events, maxevents-n_events, 0);
         n_events += ret;
-    } while (ret == 0 && before_timeval(cur = blocking(), to) && n_events < maxevents);
+    } while (ret == 0 && (cur = blocking_t()) < to && n_events < maxevents);
     return 0;
 }
 
@@ -343,16 +349,16 @@ int setitimer(int which, const struct itimerval *restrict new_value,
     }
 }
 
-int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
+int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen) // TODO: should we intercept this call?
 {
     LOGS("bind called\n");
-    LOGS("sockaddr :\n");
-    LOGS("%s\n", inet_ntoa(((struct sockaddr_in *)addr)->sin_addr));
+    LOGS("sockaddr: %s, fd: %i\n", inet_ntoa(((struct sockaddr_in *)addr)->sin_addr), sockfd);
 
-    fd_ip_elem *f = (fd_ip_elem *)malloc(sizeof(fd_ip_elem));
+    // bind associate an fd with a SOURCE ip, our data structure match fd to DESTINATION ip
+    /*fd_ip_elem *f = (fd_ip_elem *)malloc(sizeof(fd_ip_elem));
     f->fi.fd = sockfd;
     memcpy(&f->fi.addr, addr, addrlen);
-    LL_PREPEND(fd_ip_list, f);
+    LL_PREPEND(fd_ip_list, f);*/
 
     LIBC_FUNCTION(int, bind, int sockfd, const struct sockaddr *addr, socklen_t addrlen);
     return LIBC_FUNCTION_GET(bind)(sockfd, addr, addrlen);
@@ -362,11 +368,19 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) // TODO:
 {
     LOGS("connect called\n");
     LOGS("sockaddr :\n");
+    LOGS("%s\n", inet_ntoa(((struct sockaddr_in *)addr)->sin_addr));
 
     fd_ip_elem *f = (fd_ip_elem *)malloc(sizeof(fd_ip_elem));
     f->fi.fd = sockfd;
     memcpy(&f->fi.addr, addr, addrlen);
+    fd_ip_elem* elem;
+    LOGS("list before prepend\n");
+    DL_FOREACH(fd_ip_list, elem) LOGS("fd: %i, ip: %s\n", elem->fi.fd, inet_ntoa(((struct sockaddr_in*)&(elem->fi.addr))->sin_addr));
     LL_PREPEND(fd_ip_list, f);
+    LOGS("list after prepend\n");
+    DL_FOREACH(fd_ip_list, elem) LOGS("fd: %i, ip: %s\n", elem->fi.fd, inet_ntoa(((struct sockaddr_in*)&(elem->fi.addr))->sin_addr));
+
+    LOGS("prepending fd: %i, ip: %s\n", sockfd, inet_ntoa(((struct sockaddr_in *)addr)->sin_addr));
 
     LIBC_FUNCTION(int, connect, int sockfd, const struct sockaddr *addr,
                   socklen_t addrlen);
@@ -399,10 +413,13 @@ ssize_t send(int sockfd, const void *buf, size_t len, int flags)
     pe->pkt.dest_addr = NULL;
     pe->pkt.addrlen = 0;
 
+    LOGS("send called 2\n");
     LL_PREPEND(pkt_list, pe);
+    LOGS("send called 3\n");
 
     struct sockaddr *dest_addr = get_ip(sockfd);
 
+    LOGS("send called 4\n");
     send_has_to_send(dest_addr, pe);
 
     return len;
@@ -647,17 +664,17 @@ unsigned int sleep(unsigned int seconds)
     LOGS("sleep called\n");
     if (seconds == 0)
         return 0;
-    struct timeval start = get_time();
-    struct timeval end = start;
-    end.tv_sec += seconds;
-    add_event(end);
-    while (before_timeval(blocking(), end))
+    uint64_t start = get_u64_time();
+    uint64_t end = start;
+    end += seconds*1000000;
+    add_event_t(end);
+    while (blocking_t() < end)
         ;
     // libc: Zero if the requested time has elapsed,
     //   or the number of seconds left to sleep, if the call was  interrupted
     //   by a signal handler.
     //   We do not currently support signals
-    //
+    // TODO: see what can be done as we partially support signals now
     return 0;
 }
 
@@ -666,11 +683,12 @@ int usleep(useconds_t usec)
     LOGS("usleep called\n");
     if (usec == 0)
         return 0;
-    struct timeval start = get_time();
-    struct timeval end = {.tv_sec = 0, .tv_usec = usec};
-    end = add_timeval(start, end);
-    add_event(end);
-    while (before_timeval(blocking(), end))
-        ;
+        uint64_t start = get_u64_time();
+        uint64_t end = start;
+        end += usec;
+        add_event_t(end);
+        while (blocking_t() < end) {
+        LOGS("in loop, current time: %llu, deadline: %llu\n", get_u64_time(), end);
+    }
     return 0;
 }

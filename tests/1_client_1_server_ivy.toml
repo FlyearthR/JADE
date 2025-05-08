@@ -18,14 +18,14 @@ graph = '1_client_1_server_ivy.gml'
 [executables]
 [[executables.exe]]
 name = 'client'
-path = 'ping_server_test'
-args = ["./ping_server_test"]
+path = '/PFV/Protocols-Ivy/protocol-testing/minip/build//ping_server_test'
+args = ["/PFV/Protocols-Ivy/protocol-testing/minip/build//ping_server_test", "seed=662", "server_port=4443", "server_addr=184549378",  "client_port=4990",  "client_addr=184549377"]
 node_ids = [1]
 
 
 [[executables.exe]]
 name = 'server'
-path = 'miniP_server'
-args = ["./miniP_server", "-p", "4443", "-i", "11.0.0.2"]
-node_ids = [11]
+path = '/PFV/implementations/minip-implementations//ping-pong-fail/./miniP_server'
+args = ["/PFV/implementations/minip-implementations//ping-pong-fail/./miniP_server", "-p", "4443", "-i", "11.0.0.2"]
+node_ids = [2]
 

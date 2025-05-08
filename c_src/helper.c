@@ -12,7 +12,8 @@ struct itimerval timer_real;
 
 int before_timeval(struct timeval t1, struct timeval t2)
 {
-    return t1.tv_sec != t2.tv_sec ? t1.tv_sec < t2.tv_sec : t1.tv_usec < t2.tv_usec;
+    return timeval_to_uint_us(t1) < timeval_to_uint_us(t2);
+    //return t1.tv_sec != t2.tv_sec ? t1.tv_sec < t2.tv_sec : t1.tv_usec < t2.tv_usec;
 }
 
 unsigned int timeval_to_uint_us(struct timeval t)

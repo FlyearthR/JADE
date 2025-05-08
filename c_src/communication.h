@@ -25,7 +25,7 @@ extern int fdo;
 
 int send_msg(Message m);
 
-uint64_t receive_msg();
+uint64_t receive_msg(int update_time);
 
 struct timeval get_time();
 
@@ -33,9 +33,15 @@ uint64_t get_u64_time();
 
 struct timeval blocking();
 
+uint64_t blocking_t();
+
 void add_event(struct timeval);
 
+void add_event_t(uint64_t t);
+
 void suppress_event(struct timeval);
+
+void suppress_event_t(uint64_t t);
 
 int get_random();
 

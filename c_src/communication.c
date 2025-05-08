@@ -47,7 +47,7 @@ void __attribute__((constructor)) init_fd()
 
     LOGS("Process %i properly preloaded\n", id);
 
-    current_time = receive_msg();
+    current_time = receive_msg(1);
 }
 
 void print_msg(Message m)
@@ -104,7 +104,7 @@ int send_msg(Message m) // TODO: extend this
     return ret;
 }
 
-uint64_t receive_msg()
+uint64_t receive_msg(int update_time)
 {
     LOGS("receive_msg\n");
     Buffer msg;
@@ -128,11 +128,15 @@ uint64_t receive_msg()
         {
             sender(m->send);
         }
+        else if (!update_time)
+        {
+            return m->wake_up;
+        }
         else
         {
             current_time = m->wake_up;
             // check if we have to send a signal
-            if (before_timeval(timer_real.it_value, u64_to_timeval_us(current_time))) {
+            if ((timer_real.it_value.tv_sec != 0 || timer_real.it_value.tv_usec != 0) && before_timeval(timer_real.it_value, u64_to_timeval_us(current_time))) {
                 raise(SIGALRM);
                 timer_real.it_value = add_timeval(u64_to_timeval_us(current_time), timer_real.it_interval);
                 // we could have also received a message, so we should leave the loop
@@ -152,41 +156,60 @@ uint64_t get_u64_time()
     return current_time;
 }
 
-struct timeval blocking()
+uint64_t blocking_t()
 {
+    LOGS("blocking_t\n");
     Message m = {.tag = Stuck, .stuck = ID};
     unsigned int ret = send_msg(m);
     if (ret != 0)
         exit(-8);
-    ret = receive_msg();
+    ret = receive_msg(1);
 
-    return u64_to_timeval_us(ret);
+    return ret;
 }
 
-void add_event(struct timeval t)
+struct timeval blocking()
 {
-    Message m = {.tag = AddStep, .add_step = {._0 = ID, ._1 = timeval_to_uint_us(t)}};
+    return u64_to_timeval_us(blocking_t());
+}
+
+void add_event_t(uint64_t t)
+{
+    Message m = {.tag = AddStep, .add_step = {._0 = ID, ._1 = t}};
+    LOGS("addevent\n");
     unsigned int ret = send_msg(m);
     if (ret != 0)
         exit(-9);
 }
 
-void suppress_event(struct timeval t)
+void add_event(struct timeval t)
 {
-    Message m = {.tag = DelStep, .del_step = {._0 = ID, ._1 = timeval_to_uint_us(t)}};
+    add_event_t(timeval_to_uint_us(t));
+}
+
+void suppress_event_t(uint64_t t)
+{
+    Message m = {.tag = DelStep, .del_step = {._0 = ID, ._1 = t}};
+    LOGS("suppress event\n");
     print_msg(m);
     unsigned int ret = send_msg(m);
     if (ret != 0)
         exit(-10);
 }
 
+void suppress_event(struct timeval t)
+{
+    suppress_event_t(timeval_to_uint_us(t));
+}
+
 int get_random()
 {
     Message m = {.tag = GetRand, .get_rand = {._0 = ID, ._1 = seed}};
+    LOGS("get random\n");
     unsigned int ret = send_msg(m);
     if (ret != 0)
         exit(-11);
-    return receive_msg();
+    return receive_msg(0);
 }
 
 void custom_send(packet pkt)

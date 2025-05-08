@@ -97,6 +97,7 @@ pub struct Simulation {
 impl Drop for Simulation {
     fn drop(&mut self) {
         //delete the namespaces
+        // TODO: call this when ctrl+C is hit
         for node in self.cfg.topo.grf.nodes.iter() {
             if let Ok(ns) = NetNs::get(node.id.to_string()) {
                 if let Err(_err) = ns.remove() {
@@ -1232,6 +1233,63 @@ impl Simulation {
                         .unwrap()
                         .as_c_str(),
                     CString::new((format!("LD_PRELOAD={}", LIB_NAME)).to_string().as_str())
+                        .unwrap()
+                        .as_c_str(),
+                    CString::new(("CNT='0'").to_string().as_str())
+                        .unwrap()
+                        .as_c_str(),
+                    CString::new(("ENCRYPT_TICKET_FILE=/PFV/Protocols-Ivy/doc/examples/quic/last_encrypt_session_ticket.txt").to_string().as_str())
+                        .unwrap()
+                        .as_c_str(),
+                    CString::new(("INITIAL_VERSION=\"<VERSION>\"").to_string().as_str())
+                        .unwrap()
+                        .as_c_str(),
+                    CString::new(("NEW_TOKEN_FILE=/PFV/Protocols-Ivy/doc/examples/quic/last_new_token.txt").to_string().as_str())
+                        .unwrap()
+                        .as_c_str(),
+                    CString::new(("PATH=/root/.local/bin:/root/.cargo/bin:/root/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/go/bin").to_string().as_str())
+                        .unwrap()
+                        .as_c_str(),
+                    CString::new(("PROOTPATH=/PFV RETRY_TOKEN_FILE=/PFV/Protocols-Ivy/doc/examples/quic/last_retry_token.txt").to_string().as_str())
+                        .unwrap()
+                        .as_c_str(),
+                    CString::new(("SAVED_PACKET=/PFV/Protocols-Ivy/doc/examples/quic/saved_packet.txt").to_string().as_str())
+                        .unwrap()
+                        .as_c_str(),
+                    CString::new(("SESSION_TICKET_FILE=/PFV/Protocols-Ivy/doc/examples/quic/last_session_ticket_cb.txt").to_string().as_str())
+                        .unwrap()
+                        .as_c_str(),
+                    CString::new(("SSLKEYLOGFILE=\"<SSLKEYLOGFILE>\"").to_string().as_str())
+                        .unwrap()
+                        .as_c_str(),
+                    CString::new(("TEST_ALPN=\"<ALPN>\"").to_string().as_str())
+                        .unwrap()
+                        .as_c_str(),
+                    CString::new(("TEST_IMPL=\"<IMPLEMENTATION>\"").to_string().as_str())
+                        .unwrap()
+                        .as_c_str(),
+                    CString::new(("TEST_TYPE=server").to_string().as_str())
+                        .unwrap()
+                        .as_c_str(),
+                    CString::new(("ZRTT_SSLKEYLOGFILE=/PFV/Protocols-Ivy/doc/examples/quic/last_tls_key.txt").to_string().as_str())
+                        .unwrap()
+                        .as_c_str(),
+                    CString::new(("active_connection_id_limit=/PFV/Protocols-Ivy/doc/examples/quic/active_connection_id_limit.txt").to_string().as_str())
+                        .unwrap()
+                        .as_c_str(),
+                    CString::new(("initial_max_data=/PFV/Protocols-Ivy/doc/examples/quic/initial_max_data.txt").to_string().as_str())
+                        .unwrap()
+                        .as_c_str(),
+                    CString::new(("initial_max_stream_data_bidi_local=/PFV/Protocols-Ivy/doc/examples/quic/initial_max_stream_data_bidi_local.txt").to_string().as_str())
+                        .unwrap()
+                        .as_c_str(),
+                    CString::new(("initial_max_stream_data_bidi_remote=/PFV/Protocols-Ivy/doc/examples/quic/initial_max_stream_data_bidi_remote.txt").to_string().as_str())
+                        .unwrap()
+                        .as_c_str(),
+                    CString::new(("initial_max_stream_data_uni=/PFV/Protocols-Ivy/doc/examples/quic/initial_max_stream_data_uni.txt").to_string().as_str())
+                        .unwrap()
+                        .as_c_str(),
+                    CString::new(("initial_max_stream_id_bidi=/PFV/Protocols-Ivy/doc/examples/quic/initial_max_stream_id_bidi.txt").to_string().as_str())
                         .unwrap()
                         .as_c_str(),
                 ],

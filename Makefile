@@ -23,6 +23,14 @@ usetest: all
 	cp -f tests/$(INSTANCE).* testing/
 	cd testing && sudo RUST_BACKTRACE=1 ./simulator $(INSTANCE).toml
 
+minip: all
+	cd examples/minip-implementations/ping-pong && gcc miniP_client.c -o ../../../testing/miniP_client && gcc miniP_server_fonctionnel.c -o ../../../testing/miniP_server
+	cp -f tests/1_client_1_server_ivy.gml testing/1_client_1_server_ivy.gml
+	cp -f tests/1_client_1_server_minip.toml testing/1_client_1_server_minip.toml
+	cp -f target/debug/simulator testing/simulator
+	cp -f target/syscalls/syscalls.so testing/syscalls.so
+	cd testing && RUST_BACKTRACE=1 sudo ./simulator 1_client_1_server_minip.toml
+
 ivy: all
 	cp -f target/debug/simulator testing/simulator
 	cp -f target/syscalls/syscalls.so testing/syscalls.so

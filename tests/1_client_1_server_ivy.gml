@@ -31,7 +31,7 @@ graph [
     target 2
     target_if 0
     label "Link"
-    metric 20
+    metric 500000
     type "symmetric"
   ]
 ]
