@@ -1250,7 +1250,10 @@ impl Simulation {
                     CString::new(("PATH=/root/.local/bin:/root/.cargo/bin:/root/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/go/bin").to_string().as_str())
                         .unwrap()
                         .as_c_str(),
-                    CString::new(("PROOTPATH=/PFV RETRY_TOKEN_FILE=/PFV/Protocols-Ivy/doc/examples/quic/last_retry_token.txt").to_string().as_str())
+                    CString::new(("PROOTPATH=/PFV").to_string().as_str())
+                        .unwrap()
+                        .as_c_str(),
+                    CString::new(("RETRY_TOKEN_FILE=/PFV/Protocols-Ivy/doc/examples/quic/last_retry_token.txt").to_string().as_str())
                         .unwrap()
                         .as_c_str(),
                     CString::new(("SAVED_PACKET=/PFV/Protocols-Ivy/doc/examples/quic/saved_packet.txt").to_string().as_str())
