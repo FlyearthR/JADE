@@ -382,10 +382,16 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) // TODO:
     memcpy(&f->fi.addr, addr, addrlen);
     fd_ip_elem* elem;
     LOGS("list before prepend\n");
-    LL_FOREACH(fd_ip_list, elem) LOGS("fd: %i, ip: %s\n", elem->fi.fd, inet_ntoa(((struct sockaddr_in*)&(elem->fi.addr))->sin_addr));
+    LL_FOREACH(fd_ip_list, elem
+    {
+        LOGS("fd: %i, ip: %s\n", elem->fi.fd, inet_ntoa(((struct sockaddr_in*)&(elem->fi.addr))->sin_addr));
+    }
     LL_PREPEND(fd_ip_list, f);
     LOGS("list after prepend\n");
-    LL_FOREACH(fd_ip_list, elem) LOGS("fd: %i, ip: %s\n", elem->fi.fd, inet_ntoa(((struct sockaddr_in*)&(elem->fi.addr))->sin_addr));
+    LL_FOREACH(fd_ip_list, elem)
+    {
+        LOGS("fd: %i, ip: %s\n", elem->fi.fd, inet_ntoa(((struct sockaddr_in*)&(elem->fi.addr))->sin_addr));
+    }
 
     LOGS("prepending fd: %i, ip: %s\n", sockfd, inet_ntoa(((struct sockaddr_in *)addr)->sin_addr));
 
