@@ -45,7 +45,7 @@ void __attribute__((constructor)) init_fd()
 
     char* log_file_fd = getenv("LOG_FILE_FD");
     if(log_file_fd)
-        log_file = atoi(log_file_fd);
+        log_file = fdopen(atoi(log_file_fd), "w");
     else
         log_file = fopen(path, "w"); // TODO: get log file from the env
 

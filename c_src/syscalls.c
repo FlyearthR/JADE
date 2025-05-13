@@ -520,7 +520,7 @@ int pause(void){
 int system(const char *cmd)
 {
     char buffer[20];
-    snprintf(buffer, 20, "%i", log_file);
+    snprintf(buffer, 20, "%i", fileno(log_file));
     setenv("LOG_FILE_FD", buffer, 1);
     snprintf(buffer, 20, "%llu", get_u64_time());
     setenv("CURRENT_TIME", buffer, 1);

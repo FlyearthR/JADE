@@ -77,10 +77,10 @@ int cmp_pkt(packet_elem* pe1, packet_elem* pe2);
 int cmp_fd_ip(fd_ip_elem* fd_ip1,fd_ip_elem* fd_ip2);
 
 #define LOGS(...) \
-    flock(log_file, LOCK_EX); \
+    flock(fileno(log_file), LOCK_EX); \
     fprintf(log_file, __VA_ARGS__); \
     fflush(log_file); \
-    flock(log_file, LOCK_UN)
+    flock(fileno(log_file), LOCK_UN)
 
 #define LIBC_FUNCTION(ftype, fname, ...) ftype (* libc_##fname ) ( __VA_ARGS__ ); \
     libc_##fname = dlsym(RTLD_NEXT, #fname )
