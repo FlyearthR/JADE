@@ -47,7 +47,11 @@ void __attribute__((constructor)) init_fd()
 
     LOGS("Process %i properly preloaded\n", id);
 
-    current_time = receive_msg(1);
+    char* c_time = getenv("CURRENT_TIME");
+    if (c_time)
+        current_time = atoll(c_time);
+    else
+        current_time = receive_msg(1);
 }
 
 void print_msg(Message m)

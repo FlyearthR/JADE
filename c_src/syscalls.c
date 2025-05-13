@@ -88,7 +88,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
 
 int select(int nfds, fd_set *restrict readfds,
     fd_set *restrict writefds, fd_set *restrict exceptfds,
-    struct timeval *restrict timeout)
+    struct timeval *restrict timeout) // TODO: support null pointer timeout as infinite select
 {
     LOGS("select called\n");
     struct timeval zeros = {.tv_sec = 0, .tv_usec = 0};
@@ -231,6 +231,13 @@ int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout)
         n_events += ret;
     } while (ret == 0 && (cur = blocking_t()) < to && n_events < maxevents);
     return 0;
+}
+
+time_t time (time_t *__timer)
+{
+    if (__timer != NULL)
+        *__timer = get_u64_time()/1000000;
+    return get_u64_time()/1000000;
 }
 
 int gettimeofday(struct timeval *restrict tv,
@@ -510,6 +517,17 @@ int pause(void){
     return -1;
 }
 
+int system(const char *cmd)
+{
+    char buffer[20];
+    snprintf(buffer, 20, "%llu", get_u64_time());
+    setenv("CURRENT_TIME", buffer, 1);
+    LIBC_FUNCTION(int, system, const char *cmd);
+    int ret = LIBC_FUNCTION_GET(system)(cmd);
+    unsetenv("CURRENT_TIME");
+    return ret;
+}
+
 #ifdef DEBUG
 int open(const char *pathname, int flags, ...)
 {
@@ -632,7 +650,7 @@ ssize_t writev(int fd, const struct iovec *iov, int iovcnt){
     return n_bytes_sent;
 }
 
-ssize_t getrandom(void *buf, size_t buflen, unsigned int flags){
+/*ssize_t getrandom(void *buf, size_t buflen, unsigned int flags){
     LOGS("getrandom called\n");
     //use get_random to fill a buffer of at least buflen with random bytes then truncate it to buflen
     int n_bytes = 0;
@@ -657,7 +675,7 @@ void srand(unsigned int local_seed)
     LOGS("srand called\n");
     seed = local_seed;
     random_number = get_random();
-}
+}*/
 
 unsigned int sleep(unsigned int seconds)
 {
@@ -683,11 +701,28 @@ int usleep(useconds_t usec)
     LOGS("usleep called\n");
     if (usec == 0)
         return 0;
-        uint64_t start = get_u64_time();
-        uint64_t end = start;
-        end += usec;
-        add_event_t(end);
-        while (blocking_t() < end) {
+    uint64_t start = get_u64_time();
+    uint64_t end = start;
+    end += usec;
+    add_event_t(end);
+    while (blocking_t() < end) {
+        LOGS("in loop, current time: %llu, deadline: %llu\n", get_u64_time(), end);
+    }
+    return 0;
+}
+
+int nanosleep(const struct timespec *duration,
+    struct timespec * rem)
+{
+    LOGS("nanosleep called\n");
+    uint64_t t = timeval_to_uint_us(timespec_to_timeval(*duration));
+    if (t == 0)
+        return 0;
+    uint64_t start = get_u64_time();
+    uint64_t end = start;
+    end += t;
+    add_event_t(end);
+    while (blocking_t() < end) {
         LOGS("in loop, current time: %llu, deadline: %llu\n", get_u64_time(), end);
     }
     return 0;
