@@ -29,3 +29,4 @@ usleep
 write
 writev
 gmtime_r
+time

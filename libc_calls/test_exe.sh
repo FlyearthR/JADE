@@ -29,17 +29,17 @@ CALLS=$(cat /tmp/libc_calls)
 
 for CALL in $CALLS
 do
-    if grep -q "$CALL" partially_implemented
+    if grep -q "\<$CALL\>" partially_implemented
     then
         echo "$CALL: is partially implemented, you should check if your desired behaviour are supported"
-    elif grep -q "$CALL" todo
+    elif grep -q "\<$CALL\>" todo
     then
         echo "$CALL: is not implemented and should be"
-    elif grep -q "$CALL" implemented
+    elif grep -q "\<$CALL\>" implemented
     then
         #ok
         :
-    elif grep -q "$CALL" not_needed
+    elif grep -q "\<$CALL\>" not_needed
     then
         #ok
         :

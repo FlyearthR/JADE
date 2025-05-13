@@ -43,7 +43,11 @@ void __attribute__((constructor)) init_fd()
 
     snprintf(path, 100, "%snode%i.log", "../logs/", id);
 
-    log_file = fopen(path, "w"); // TODO: get log file from the env
+    char* log_file_fd = getenv("LOG_FILE_FD");
+    if(log_file_fd)
+        log_file = atoi(log_file_fd);
+    else
+        log_file = fopen(path, "w"); // TODO: get log file from the env
 
     LOGS("Process %i properly preloaded\n", id);
 
@@ -356,6 +360,8 @@ void send_has_to_send(const struct sockaddr *dest_addr, packet_elem *pe)
 
 void __attribute__((destructor)) send_finished()
 {
+    if(getenv("LOG_FILE_FD"))
+        return;
     int count;
     packet_elem *p;
     Buffer msg;

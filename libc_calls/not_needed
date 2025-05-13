@@ -98,3 +98,12 @@ unlink
 unlink -> fichier
 __vfprintf_chk
 __vsnprintf_chk
+htons
+htonl
+atoi
+ntohl
+recv
+printf
+fprintf
+getopt
+sprintf
