@@ -522,7 +522,7 @@ int system(const char *cmd)
     char buffer[20];
     snprintf(buffer, 20, "%i", fileno(log_file));
     setenv("LOG_FILE_FD", buffer, 1);
-    snprintf(buffer, 20, "%llu", get_u64_time());
+    snprintf(buffer, 20, "%lu", get_u64_time());
     setenv("CURRENT_TIME", buffer, 1);
     LIBC_FUNCTION(int, system, const char *cmd);
     int ret = LIBC_FUNCTION_GET(system)(cmd);
@@ -709,7 +709,7 @@ int usleep(useconds_t usec)
     end += usec;
     add_event_t(end);
     while (blocking_t() < end) {
-        LOGS("in loop, current time: %llu, deadline: %llu\n", get_u64_time(), end);
+        LOGS("in loop, current time: %lu, deadline: %lu\n", get_u64_time(), end);
     }
     return 0;
 }
@@ -726,7 +726,7 @@ int nanosleep(const struct timespec *duration,
     end += t;
     add_event_t(end);
     while (blocking_t() < end) {
-        LOGS("in loop, current time: %llu, deadline: %llu\n", get_u64_time(), end);
+        LOGS("in loop, current time: %lu, deadline: %lu\n", get_u64_time(), end);
     }
     return 0;
 }
