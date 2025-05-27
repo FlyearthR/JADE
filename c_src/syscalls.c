@@ -3,6 +3,7 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <sys/random.h>
 #include <poll.h>
 #include <unistd.h>
 #include <arpa/inet.h>
@@ -12,6 +13,7 @@
 #include "communication.h"
 
 int random_number = 42;
+int random_fd = 0;
 
 int empty_fun()
 {
@@ -305,11 +307,11 @@ int clock_gettime(clockid_t clockid, struct timespec *tp)
     }
 }
 
-int clock_settime(clockid_t clockid, const struct timespec *tp)
+/*int clock_settime(clockid_t clockid, const struct timespec *tp)
 {
     LOGS("clock_gettime called\n");
     return -1; // TODO: set errno
-}
+}*/
 
 struct tm *gmtime_r(const time_t *timep, struct tm *result){
     LOGS("gmtime_r called\n");
@@ -356,20 +358,14 @@ int setitimer(int which, const struct itimerval *restrict new_value,
     }
 }
 
-int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen) // TODO: should we intercept this call?
+/*int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen) // TODO: should we intercept this call?
 {
     LOGS("bind called\n");
     LOGS("sockaddr: %s, fd: %i\n", inet_ntoa(((struct sockaddr_in *)addr)->sin_addr), sockfd);
 
-    // bind associate an fd with a SOURCE ip, our data structure match fd to DESTINATION ip
-    /*fd_ip_elem *f = (fd_ip_elem *)malloc(sizeof(fd_ip_elem));
-    f->fi.fd = sockfd;
-    memcpy(&f->fi.addr, addr, addrlen);
-    LL_PREPEND(fd_ip_list, f);*/
-
     LIBC_FUNCTION(int, bind, int sockfd, const struct sockaddr *addr, socklen_t addrlen);
     return LIBC_FUNCTION_GET(bind)(sockfd, addr, addrlen);
-}
+}*/
 
 int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) // TODO: check if still used
 {
@@ -382,7 +378,7 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) // TODO:
     memcpy(&f->fi.addr, addr, addrlen);
     fd_ip_elem* elem;
     LOGS("list before prepend\n");
-    LL_FOREACH(fd_ip_list, elem
+    LL_FOREACH(fd_ip_list, elem)
     {
         LOGS("fd: %i, ip: %s\n", elem->fi.fd, inet_ntoa(((struct sockaddr_in*)&(elem->fi.addr))->sin_addr));
     }
@@ -400,12 +396,12 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) // TODO:
     return LIBC_FUNCTION_GET(connect)(sockfd, addr, addrlen);
 }
 
-int socket(int domain, int type, int protocol){
+/*int socket(int domain, int type, int protocol){
     LOGS("socket called\n");
     LIBC_FUNCTION(int, socket, int domain, int type, int protocol);
     int ret = LIBC_FUNCTION_GET(socket)(domain, type|O_NONBLOCK, protocol);
     return ret;
-}
+}*/
 
 
 ssize_t send(int sockfd, const void *buf, size_t len, int flags)
@@ -518,10 +514,10 @@ void abort()
     exit(-1);
 }
 
-int pause(void){
+/*int pause(void){
     // TODO: support signals
     return -1;
-}
+}*/
 
 int system(const char *cmd)
 {
@@ -537,17 +533,24 @@ int system(const char *cmd)
     return ret;
 }
 
-#ifdef DEBUG
+
 int open(const char *pathname, int flags, ...)
 {
     LOGS("open called\n");
+    if (!strcmp(pathname, "/dev/urandom") || !strcmp(pathname, "/dev/random")) { // TODO: do better
+        random_fd = 64;
+        return random_fd;
+    }
     va_list ap;
     LIBC_FUNCTION(int, open, const char *pathname, int flags, ...);
     int ret = LIBC_FUNCTION_GET(open)(pathname, flags, ap);
+    if (random_fd == ret) {
+        LOGS("too much file decriptors opened, would overwrite random_fd\n");
+        return -1;
+    }
     LOGS("fd correspondance - fd: %i; path: %s\n", ret, pathname);
     return ret;
 }
-#endif
 
 #define GET_FD(fd, ...) fd
 
@@ -581,6 +584,9 @@ _ret;})
 ssize_t __read_chk(int fd, void *buf, size_t count)
 {
     LOGS("__read_chk called\n");
+    if (fd == random_fd) {
+        return getrandom(buf, count, 0);
+    }
     LIBC_FUNCTION(ssize_t, __read_chk, int fd, void *buf, size_t count);
     return read_implem(LIBC_FUNCTION_GET(__read_chk), fd, buf, count);
 }
@@ -588,6 +594,9 @@ ssize_t __read_chk(int fd, void *buf, size_t count)
 ssize_t read(int fd, void *buf, size_t count)
 {
     LOGS("read called - fd: %i\n", fd);
+    if (fd == random_fd) {
+        return getrandom(buf, count, 0);
+    }
     LIBC_FUNCTION(ssize_t, read, int fd, void *buf, size_t count);
     return read_implem(LIBC_FUNCTION_GET(read), fd, buf, count);
 }
@@ -659,7 +668,7 @@ ssize_t writev(int fd, const struct iovec *iov, int iovcnt){
     return n_bytes_sent;
 }
 
-/*ssize_t getrandom(void *buf, size_t buflen, unsigned int flags){
+ssize_t getrandom(void *buf, size_t buflen, unsigned int flags){
     LOGS("getrandom called\n");
     //use get_random to fill a buffer of at least buflen with random bytes then truncate it to buflen
     int n_bytes = 0;
@@ -684,7 +693,7 @@ void srand(unsigned int local_seed)
     LOGS("srand called\n");
     seed = local_seed;
     random_number = get_random();
-}*/
+}
 
 unsigned int sleep(unsigned int seconds)
 {
