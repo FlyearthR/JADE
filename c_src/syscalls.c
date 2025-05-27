@@ -682,6 +682,11 @@ ssize_t getrandom(void *buf, size_t buflen, unsigned int flags){
     return buflen;
 }
 
+int getentropy(void* buffer, size_t length) {
+    getrandom(buffer, length, 0);
+    return 0;
+}
+
 int rand(void)
 {
     LOGS("gettimeofday called\n");
