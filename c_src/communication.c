@@ -212,12 +212,14 @@ void suppress_event(struct timeval t)
 
 int get_random()
 {
-    Message m = {.tag = GetRand, .get_rand = {._0 = ID, ._1 = seed}};
+    LIBC_FUNCTION(int, rand);
+    return LIBC_FUNCTION_GET(rand)(); 
+    /*Message m = {.tag = GetRand, .get_rand = {._0 = ID, ._1 = seed}};
     LOGS("get random\n");
     unsigned int ret = send_msg(m);
     if (ret != 0)
         exit(-11);
-    return receive_msg(0);
+    return receive_msg(0);*/
 }
 
 void custom_send(packet pkt)

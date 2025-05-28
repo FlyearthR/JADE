@@ -638,7 +638,8 @@ ssize_t write(int fd, const void *buf, size_t count)
 ssize_t writev(int fd, const struct iovec *iov, int iovcnt){
     LOGS("writev called\n");
     if (getsockname(fd, NULL, 0) == -1 && errno == ENOTSOCK){
-        return writev(fd, iov, iovcnt);
+        LIBC_FUNCTION(ssize_t, writev, int fd, const struct iovec *iov, int iovcnt);
+        return LIBC_FUNCTION_GET(writev)(fd, iov, iovcnt); 
     }
     packet_elem *pe;
     if ((pe = (packet_elem *)malloc(sizeof *pe)) == NULL)
@@ -687,18 +688,23 @@ int getentropy(void* buffer, size_t length) {
     return 0;
 }
 
+int RAND_bytes(unsigned char *buf, int num) {
+    getrandom(buf, num, 0);
+    return 1;
+}
+
 int rand(void)
 {
     LOGS("gettimeofday called\n");
     return get_random();
 }
 
-void srand(unsigned int local_seed)
+/*void srand(unsigned int local_seed)
 {
     LOGS("srand called\n");
     seed = local_seed;
     random_number = get_random();
-}
+}*/
 
 unsigned int sleep(unsigned int seconds)
 {

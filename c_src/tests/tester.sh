@@ -4,9 +4,10 @@ EXE=$1
 
 basic_test() {
     EXE=$1
+    CFLAGS=$2
     START_PWD=$(pwd)
 
-    gcc $EXE.c -o ../../testing/$EXE
+    gcc $EXE.c $CFLAGS -o ../../testing/$EXE
     sed "s/%%EXE.%%/$EXE/g" ../../tests/2_followers.toml.template |
         sed "s/%%ARGS.%%//g" > ../../testing/2_followers.toml
     cp ../../tests/2_followers.gml ../../testing/2_followers.gml
@@ -164,9 +165,14 @@ case $EXE in
     # TODO
     ;;
 
-  gettimeofday | rand | srand | clock_getres | clock_gettime | setitimer)
+  gettimeofday | rand | srand | dev_random | dev_urandom | getentropy | clock_getres | clock_gettime | setitimer)
     basic_test $EXE
     ;;
+
+  RAND_bytes)
+    basic_test $EXE "-lcrypto"
+    ;;
+
   sleep | usleep)
     basic_test $EXE
     sed "s/%%EXE.%%/$EXE/g" ../../tests/2_followers.toml.template |
