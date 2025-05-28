@@ -1241,7 +1241,7 @@ impl Simulation {
                     CString::new(("ENCRYPT_TICKET_FILE=/PFV/Protocols-Ivy/doc/examples/quic/last_encrypt_session_ticket.txt").to_string().as_str())
                         .unwrap()
                         .as_c_str(),
-                    CString::new(("INITIAL_VERSION=\"<VERSION>\"").to_string().as_str())
+                    CString::new(("INITIAL_VERSION=29").to_string().as_str())
                         .unwrap()
                         .as_c_str(),
                     CString::new(("NEW_TOKEN_FILE=/PFV/Protocols-Ivy/doc/examples/quic/last_new_token.txt").to_string().as_str())
@@ -1262,13 +1262,13 @@ impl Simulation {
                     CString::new(("SESSION_TICKET_FILE=/PFV/Protocols-Ivy/doc/examples/quic/last_session_ticket_cb.txt").to_string().as_str())
                         .unwrap()
                         .as_c_str(),
-                    CString::new(("SSLKEYLOGFILE=\"<SSLKEYLOGFILE>\"").to_string().as_str())
+                    CString::new(("SSLKEYLOGFILE=/PFV/tls-keys/picoquic_key.log").to_string().as_str())
                         .unwrap()
                         .as_c_str(),
-                    CString::new(("TEST_ALPN=\"<ALPN>\"").to_string().as_str())
+                    CString::new(("TEST_ALPN=hq-29").to_string().as_str())
                         .unwrap()
                         .as_c_str(),
-                    CString::new(("TEST_IMPL=\"<IMPLEMENTATION>\"").to_string().as_str())
+                    CString::new(("TEST_IMPL=picoquic").to_string().as_str())
                         .unwrap()
                         .as_c_str(),
                     CString::new(("TEST_TYPE=server").to_string().as_str())
