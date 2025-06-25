@@ -802,12 +802,9 @@ impl Simulation {
      * Starts a follower with the queues to communicate toward the leader as file descriptor 3 and from
      * the leader as file descriptor 4.
      * @arg id: the id of the follower
-     * @arg exe: the path to the follower executable
-     * @arg args: the arguments to start the follower
-     * @arg env: the environment to start the follower
      * @return: the pid of the child on success
      **/
-    fn run_follower(&self, id: u8, env: &[&CStr]) -> Result<i32> {
+    fn run_follower(&self, id: u8) -> Result<i32> {
         self.logs.log("trace", "entering simulation::run_follower");
         //get namespace
         let ns = NetNs::get(id.to_string()).unwrap();
@@ -818,7 +815,8 @@ impl Simulation {
                 self.logs.log(
                     "debug",
                     &format!(
-                        "execve - path: {:?} - args: {:?}",
+                        "execve - env: {:?} - path: {:?} - args: {:?}",
+                        &self.cfg.exe[(id - 1) as usize].env,
                         &self.cfg.exe[(id - 1) as usize].path,
                         &self.cfg.exe[(id - 1) as usize].args
                     ),
@@ -826,7 +824,7 @@ impl Simulation {
                 execve(
                     &self.cfg.exe[(id - 1) as usize].path,
                     &self.cfg.exe[(id - 1) as usize].args,
-                    env,
+                    &self.cfg.exe[(id - 1) as usize].env
                 )?;
                 Ok(0)
             }
@@ -1226,78 +1224,8 @@ impl Simulation {
             .expect("leader queues initialisation failed"); //open the communication queues
         for i in 0..self.cfg.nb_follower {
             //start the followers
-            self.run_follower(
-                (i + 1) as u8,
-                &[
-                    CString::new((format!("ID={}", i + 1)).to_string().as_str())
-                        .unwrap()
-                        .as_c_str(),
-                    CString::new((format!("LD_PRELOAD={}", LIB_NAME)).to_string().as_str())
-                        .unwrap()
-                        .as_c_str(),
-                    CString::new(("CNT='0'").to_string().as_str())
-                        .unwrap()
-                        .as_c_str(),
-                    CString::new(("ENCRYPT_TICKET_FILE=/PFV/Protocols-Ivy/doc/examples/quic/last_encrypt_session_ticket.txt").to_string().as_str())
-                        .unwrap()
-                        .as_c_str(),
-                    CString::new(("INITIAL_VERSION=29").to_string().as_str())
-                        .unwrap()
-                        .as_c_str(),
-                    CString::new(("NEW_TOKEN_FILE=/PFV/Protocols-Ivy/doc/examples/quic/last_new_token.txt").to_string().as_str())
-                        .unwrap()
-                        .as_c_str(),
-                    CString::new(("PATH=/root/.local/bin:/root/.cargo/bin:/root/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/go/bin").to_string().as_str())
-                        .unwrap()
-                        .as_c_str(),
-                    CString::new(("PROOTPATH=/PFV").to_string().as_str())
-                        .unwrap()
-                        .as_c_str(),
-                    CString::new(("RETRY_TOKEN_FILE=/PFV/Protocols-Ivy/doc/examples/quic/last_retry_token.txt").to_string().as_str())
-                        .unwrap()
-                        .as_c_str(),
-                    CString::new(("SAVED_PACKET=/PFV/Protocols-Ivy/doc/examples/quic/saved_packet.txt").to_string().as_str())
-                        .unwrap()
-                        .as_c_str(),
-                    CString::new(("SESSION_TICKET_FILE=/PFV/Protocols-Ivy/doc/examples/quic/last_session_ticket_cb.txt").to_string().as_str())
-                        .unwrap()
-                        .as_c_str(),
-                    CString::new(("SSLKEYLOGFILE=/PFV/tls-keys/picoquic_key.log").to_string().as_str())
-                        .unwrap()
-                        .as_c_str(),
-                    CString::new(("TEST_ALPN=hq-29").to_string().as_str())
-                        .unwrap()
-                        .as_c_str(),
-                    CString::new(("TEST_IMPL=picoquic").to_string().as_str())
-                        .unwrap()
-                        .as_c_str(),
-                    CString::new(("TEST_TYPE=server").to_string().as_str())
-                        .unwrap()
-                        .as_c_str(),
-                    CString::new(("ZRTT_SSLKEYLOGFILE=/PFV/Protocols-Ivy/doc/examples/quic/last_tls_key.txt").to_string().as_str())
-                        .unwrap()
-                        .as_c_str(),
-                    CString::new(("active_connection_id_limit=/PFV/Protocols-Ivy/doc/examples/quic/active_connection_id_limit.txt").to_string().as_str())
-                        .unwrap()
-                        .as_c_str(),
-                    CString::new(("initial_max_data=/PFV/Protocols-Ivy/doc/examples/quic/initial_max_data.txt").to_string().as_str())
-                        .unwrap()
-                        .as_c_str(),
-                    CString::new(("initial_max_stream_data_bidi_local=/PFV/Protocols-Ivy/doc/examples/quic/initial_max_stream_data_bidi_local.txt").to_string().as_str())
-                        .unwrap()
-                        .as_c_str(),
-                    CString::new(("initial_max_stream_data_bidi_remote=/PFV/Protocols-Ivy/doc/examples/quic/initial_max_stream_data_bidi_remote.txt").to_string().as_str())
-                        .unwrap()
-                        .as_c_str(),
-                    CString::new(("initial_max_stream_data_uni=/PFV/Protocols-Ivy/doc/examples/quic/initial_max_stream_data_uni.txt").to_string().as_str())
-                        .unwrap()
-                        .as_c_str(),
-                    CString::new(("initial_max_stream_id_bidi=/PFV/Protocols-Ivy/doc/examples/quic/initial_max_stream_id_bidi.txt").to_string().as_str())
-                        .unwrap()
-                        .as_c_str(),
-                ],
-            )
-            .expect("run follower failed");
+            self.run_follower( // TODO: manage env
+                (i + 1) as u8).expect("run follower failed");
             // TODO: add in the env the name of the queue
             //std::thread::sleep(std::time::Duration::from_millis(5000));
         }
@@ -2105,11 +2033,13 @@ mod determinism {
                     CString::from(EXE_NAMES[0]),
                     CString::from(EXE_NAMES[0]),
                     cstringify(&EXE1_ARGS),
+                    vec![],
                 ),
                 Process::new(
                     CString::from(EXE_NAMES[1]),
                     CString::from(EXE_NAMES[1]),
                     cstringify(&EXE2_ARGS),
+                    vec![],
                 ),
             ];
             let mut n_use_random_number = Vec::with_capacity(nb);

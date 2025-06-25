@@ -17,11 +17,23 @@ nb_follower = 2
 name = 'client'
 path = 'examples/miniP/client'
 args = ["./client", "-i", "127.0.0.1", "-p", "4443"]
+env = ["VAR_ENV=1"]
 
 [[executables.exe]]
 name = 'server'
 path = 'examples/miniP/server'
 args = ["./server", "-i", "127.0.0.1", "-p", "4443"]
+env = ["VAR_ENV=2", "ENV_VAR=3"]
+
+[[executables.exe]]
+name = 'equality'
+path = '/usr/bin/['
+args = ["[", "1", "-eq", "1", "]"]
+
+[[executables.exe]]
+name = 'inequality'
+path = '/usr/bin/['
+args = ["[", "1", "-eq", "1", "]"]
 
 # Graph
 graph = 'tests/graph.gml'

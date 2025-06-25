@@ -196,6 +196,7 @@ pub struct Process {
     pub name: CString,
     pub path: CString,
     pub args: Vec<CString>,
+    pub env: Vec<CString>,
 }
 
 impl Process {
@@ -204,17 +205,19 @@ impl Process {
             name: CString::from(c""),
             path: CString::from(c""),
             args: vec![],
+            env: vec![],
         }
     }
 
-    pub fn new(name: CString, path: CString, args: Vec<CString>) -> Self {
-        Self { name, path, args }
+    pub fn new(name: CString, path: CString, args: Vec<CString>, env: Vec<CString>) -> Self {
+        Self { name, path, args, env }
     }
 
     pub fn optionable_new(
         name: Option<&str>,
         path: Option<&str>,
         args: Option<&Vec<Value>>,
+        env: Option<&Vec<Value>>,
     ) -> Option<Self> {
         let mut ret = Self::empty_new();
         if let Some(n) = name {
@@ -238,6 +241,17 @@ impl Process {
         } else {
             ret.args = Vec::new();
         }
+
+        if let Some(a) = env {
+            let env_vec = a
+                .iter()
+                .filter_map(|var| var.as_str().map(|s| CString::new(s).unwrap()))
+                .collect();
+            ret.env = env_vec;
+        } else {
+            ret.env = Vec::new();
+        }
+
         return Some(ret);
     }
 }
@@ -278,11 +292,13 @@ impl Config {
                     CString::from(c"name"),
                     CString::from(EXE_NAMES[0]),
                     cstringify(&EXE1_ARGS),
+                    vec![],
                 ),
                 Process::new(
                     CString::from(c"name"),
                     CString::from(EXE_NAMES[1]),
                     cstringify(&EXE2_ARGS),
+                    vec![],
                 ),
             ],
             random_number: RANDOM_NUMBER,
@@ -325,6 +341,7 @@ impl Config {
                             exe_table.get("name").and_then(Value::as_str),
                             exe_table.get("path").and_then(Value::as_str),
                             exe_table.get("args").and_then(Value::as_array),
+                            exe_table.get("env").and_then(Value::as_array),
                         ) {
                             exe.push(e);
                         }
@@ -567,11 +584,19 @@ mod unit_testing {
             cfg.exe[0].args,
             cstringify(&[c"./client", c"-i", c"127.0.0.1", c"-p", c"4443"])
         );
+        assert_eq!(
+            cfg.exe[0].env,
+            cstringify(&[c"VAR_ENV=1"])
+        );
         assert_eq!(cfg.exe[1].name, CString::from(c"server"));
         assert_eq!(cfg.exe[1].path, CString::from(c"examples/miniP/server"));
         assert_eq!(
             cfg.exe[1].args,
             cstringify(&[c"./server", c"-i", c"127.0.0.1", c"-p", c"4443"])
+        );
+        assert_eq!(
+            cfg.exe[1].env,
+            cstringify(&[c"VAR_ENV=2", c"ENV_VAR=3"])
         );
     }
 

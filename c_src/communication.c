@@ -135,6 +135,7 @@ uint64_t receive_msg(int update_time)
         if (m->tag == Send)
         {
             sender(m->send);
+            free(m);
         }
         else if (!update_time)
         {
