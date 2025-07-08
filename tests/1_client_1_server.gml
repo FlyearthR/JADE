@@ -14,7 +14,7 @@ graph [
     ]
   ]
   node [
-    id 11
+    id 2
     label "Server"
     interface [
       id 0
@@ -28,7 +28,7 @@ graph [
   edge [
     source 1
     source_if 0
-    target 11
+    target 2
     target_if 0
     label "Link"
     metric 20

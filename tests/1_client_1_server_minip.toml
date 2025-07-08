@@ -12,20 +12,19 @@ log_file = "log.txt"
 nb_follower = 2
 
 # Graph
-graph = '1_client_1_server.gml'
+graph = '1_client_1_server_ivy.gml'
 
 # Executables
 [executables]
 [[executables.exe]]
 name = 'client'
-path = 'simple_client'
-args = ["./simple_client", "-i", "10.0.0.20", "-p", "8080", "-I", "1", "-s", "1000", "-n", "20"]
+path = './miniP_client'
+args = ["./miniP_client", "-p", "4443", "-i", "11.0.0.2"]
 node_ids = [1]
 
 
 [[executables.exe]]
 name = 'server'
-path = 'simple_server'
-args = ["./simple_server", "-p", "8080", "-m", "20", "-n", "1", "-l", "test.log"]
+path = './miniP_server'
+args = ["./miniP_server", "-p", "4443", "-i", "11.0.0.2"]
 node_ids = [2]
-

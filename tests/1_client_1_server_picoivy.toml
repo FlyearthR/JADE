@@ -1,0 +1,31 @@
+# Queue name
+qname = '/some_queue'
+
+# Random number
+random_number = 123
+
+#logs
+logs = ["trace", "debug", "warn", "error", "info", "message"]
+log_file = "log.txt"
+
+# Number of followers
+nb_follower = 2
+
+# Graph
+graph = '1_client_1_server_ivy.gml'
+
+# Executables
+[executables]
+[[executables.exe]]
+name = 'client'
+path = '/PFV/Protocols-Ivy/protocol-testing/quic/build//quic_server_test_deadconnection_signal'
+args = ["/PFV/Protocols-Ivy/protocol-testing/quic/build//quic_server_test_deadconnection_signal", "seed=247", "the_cid=1", "server_port=4443", "iversion=29", "server_addr=184549378", "modify_packets=false", "server_cid=2", "client_port=4990", "client_port_alt=4991", "client_addr=184549377"]
+node_ids = [1]
+
+
+[[executables.exe]]
+name = 'server'
+path = '/PFV/implementations/quic-implementations//picoquic/./picoquicdemo'
+args = ["/PFV/implementations/quic-implementations//picoquic/./picoquicdemo", "-c", "/PFV/implementations/quic-implementations//picoquic//certs/cert.pem", "-l", "-", "-q", "/PFV/qlogs/picoquic", "-k", "/PFV/implementations/quic-implementations//picoquic//certs/key.pem", "-a", "hq-29", "-D", "-L"]
+node_ids = [2]
+
