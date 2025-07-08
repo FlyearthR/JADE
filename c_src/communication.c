@@ -21,7 +21,7 @@ void __attribute__((constructor)) init_fd()
     strcat(err, ".err");
     freopen(err, "w", stderr);
 
-    char FD[20] = "/some_queue_";
+    char FD[20] = "/some_queue_"; // TODO: get queue name/fd from env
     strcat(FD, getenv("ID"));
     struct mq_attr attr = {
         .mq_flags = 0,
@@ -50,6 +50,7 @@ void __attribute__((constructor)) init_fd()
         log_file = fopen(path, "w"); // TODO: get log file from the env
 
     LOGS("Process %i properly preloaded\n", id);
+    printf("process %i logfile: %s\n", id, path);
 
     char* c_time = getenv("CURRENT_TIME");
     if (c_time)

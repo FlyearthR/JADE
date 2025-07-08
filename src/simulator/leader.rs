@@ -46,7 +46,7 @@ pub const fn validate_cstr_contents(bytes: &[u8]) {
     }
 }
 
-const LIB_NAME: &str = "./syscalls.so";
+const LIB_NAME: &str = "/home/flyearth/1-PHD/Thesis/network_time_simulator/network_time_simulator/testing/syscalls.so";
 
 /**
  * Open one queue on which the follower will send message to the leader and
@@ -824,8 +824,7 @@ impl Simulation {
                 execve(
                     &self.cfg.exe[(id - 1) as usize].path,
                     &self.cfg.exe[(id - 1) as usize].args,
-                    &self.cfg.exe[(id - 1) as usize].env
-                )?;
+                    &self.cfg.exe[(id - 1) as usize].env)?;
                 Ok(0)
             }
             Err(_) => {

@@ -1,6 +1,6 @@
 CC = gcc
-CFLAGS = -g
-INSTANCE = 9_clients_1_server
+CFLAGS = -g3
+INSTANCE = 1_client_1_server
 
 .PHONY: syscalls.so all test API leader clean little_clean
 

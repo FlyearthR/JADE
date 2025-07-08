@@ -11,6 +11,8 @@ use std::path::Path;
 use toml::de::Error as TomlError;
 use toml::Value;
 
+use crate::LIB_NAME;
+
 pub fn cstringify(arr: &[&CStr]) -> Vec<CString> {
     let mut ret: Vec<CString> = Vec::with_capacity(arr.len());
     for e in arr.iter() {
@@ -205,11 +207,14 @@ impl Process {
             name: CString::from(c""),
             path: CString::from(c""),
             args: vec![],
-            env: vec![],
+            env: vec![CString::new(format!("LD_PRELOAD={}", LIB_NAME).to_string().as_str()).unwrap()],
         }
     }
 
-    pub fn new(name: CString, path: CString, args: Vec<CString>, env: Vec<CString>) -> Self {
+    pub fn new(name: CString, path: CString, args: Vec<CString>, mut env: Vec<CString>) -> Self {
+        env.push(
+                CString::new((format!("LD_PRELOAD={}", LIB_NAME)).to_string().as_str())
+                .unwrap());
         Self { name, path, args, env }
     }
 
@@ -243,13 +248,16 @@ impl Process {
         }
 
         if let Some(a) = env {
-            let env_vec = a
+            let mut env_vec: Vec<CString> = a
                 .iter()
                 .filter_map(|var| var.as_str().map(|s| CString::new(s).unwrap()))
                 .collect();
+            env_vec.push(
+                CString::new((format!("LD_PRELOAD={}", LIB_NAME)).to_string().as_str())
+                .unwrap());
             ret.env = env_vec;
         } else {
-            ret.env = Vec::new();
+            ret.env = vec![CString::new((format!("LD_PRELOAD={}", LIB_NAME)).to_string().as_str()).unwrap()];
         }
 
         return Some(ret);
