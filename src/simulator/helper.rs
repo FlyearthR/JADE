@@ -219,6 +219,7 @@ impl Process {
     }
 
     pub fn optionable_new(
+        id: u8,
         name: Option<&str>,
         path: Option<&str>,
         args: Option<&Vec<Value>>,
@@ -255,9 +256,13 @@ impl Process {
             env_vec.push(
                 CString::new((format!("LD_PRELOAD={}", LIB_NAME)).to_string().as_str())
                 .unwrap());
+            env_vec.push(
+                CString::new((format!("ID={}", id)).to_string().as_str())
+                .unwrap());
             ret.env = env_vec;
         } else {
-            ret.env = vec![CString::new((format!("LD_PRELOAD={}", LIB_NAME)).to_string().as_str()).unwrap()];
+            ret.env = vec![CString::new((format!("ID={}", id)).to_string().as_str()).unwrap(),
+                            CString::new((format!("LD_PRELOAD={}", LIB_NAME)).to_string().as_str()).unwrap()];
         }
 
         return Some(ret);
@@ -343,13 +348,14 @@ impl Config {
 
         if let Some(executables) = value.get("executables").and_then(Value::as_table) {
             if let Some(exes) = executables.get("exe").and_then(Value::as_array) {
-                for e in exes {
+                for (i, e) in exes.iter().enumerate() {
                     if let Some(exe_table) = e.as_table() {
                         if let Some(e) = Process::optionable_new(
+                            i as u8,
                             exe_table.get("name").and_then(Value::as_str),
                             exe_table.get("path").and_then(Value::as_str),
                             exe_table.get("args").and_then(Value::as_array),
-                            exe_table.get("env").and_then(Value::as_array),
+                            exe_table.get("env").and_then(Value::as_array)
                         ) {
                             exe.push(e);
                         }
