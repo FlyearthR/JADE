@@ -46,7 +46,7 @@ pub const fn validate_cstr_contents(bytes: &[u8]) {
     }
 }
 
-const LIB_NAME: &str = "/home/flyearth/1-PHD/Thesis/network_time_simulator/network_time_simulator/testing/syscalls.so";
+const LIB_NAME: &str = "./syscalls.so";
 
 /**
  * Open one queue on which the follower will send message to the leader and
