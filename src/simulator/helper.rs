@@ -351,7 +351,7 @@ impl Config {
                 for (i, e) in exes.iter().enumerate() {
                     if let Some(exe_table) = e.as_table() {
                         if let Some(e) = Process::optionable_new(
-                            i as u8,
+                            (i+1) as u8,
                             exe_table.get("name").and_then(Value::as_str),
                             exe_table.get("path").and_then(Value::as_str),
                             exe_table.get("args").and_then(Value::as_array),
@@ -600,7 +600,7 @@ mod unit_testing {
         );
         assert_eq!(
             cfg.exe[0].env,
-            cstringify(&[c"VAR_ENV=1"])
+            cstringify(&[c"VAR_ENV=1", c"LD_PRELOAD=./syscalls.so", c"ID=1"])
         );
         assert_eq!(cfg.exe[1].name, CString::from(c"server"));
         assert_eq!(cfg.exe[1].path, CString::from(c"examples/miniP/server"));
@@ -610,7 +610,7 @@ mod unit_testing {
         );
         assert_eq!(
             cfg.exe[1].env,
-            cstringify(&[c"VAR_ENV=2", c"ENV_VAR=3"])
+            cstringify(&[c"VAR_ENV=2", c"ENV_VAR=3", c"LD_PRELOAD=./syscalls.so", c"ID=2"])
         );
     }
 
