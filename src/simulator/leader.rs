@@ -136,14 +136,6 @@ impl Simulation {
             c.insert(i + 1, (1, 0));
         }
 
-        logs.log(
-            "info",
-            &format!(
-                "simulation initialized : cfg {:?}, events {:?}, counters {:?}, logs {:?}",
-                cfg, btm, c, logs
-            ),
-        );
-
         Self {
             cfg,
             states: vec![State::Running; nb_f],
@@ -161,11 +153,9 @@ impl Simulation {
      * @return: the configuration of the current simulation
      **/
     async fn create_namespaces(cfg: Config, logs: &Logger) -> Result<Config> {
-        logs.log("trace", "entering simulation::create_namespaces");
         // Create the namespaces
         for node in cfg.topo.grf.nodes.iter() {
             if let Ok(_) = NetNs::get(node.id.to_string()) {
-                logs.log("error", &format!("Namespace {:?} already exists", node.id));
                 eprintln!("Namespace {:?} already exists", node.id);
             } else {
                 NetNs::new(node.id.to_string())
@@ -173,7 +163,6 @@ impl Simulation {
                 //use node id as name
             }
         }
-        logs.log("info", "namespaces were created");
 
         // Add the links between the namespaces
         for edge in cfg.topo.grf.edges.iter() {
@@ -217,13 +206,6 @@ impl Simulation {
                     Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0),
                     logs,
                 )) {
-                    logs.log(
-                        "error",
-                        &format!(
-                            "Error {} : could not create link between {:?} and {:?}",
-                            e, edge.source, edge.target
-                        ),
-                    );
                     println!(
                         "Error {} : could not create link between {:?} and {:?}",
                         e, edge.source, edge.target
@@ -276,7 +258,6 @@ impl Simulation {
                 }
             }
         }
-        logs.log("info", "links were created");
         Ok(cfg)
     }
 
@@ -301,8 +282,6 @@ impl Simulation {
         ipv6_target: Ipv6Addr,
         logs: &Logger,
     ) -> Result<i32> {
-        logs.log("trace", "entering simulation::add_link");
-
         let (connection, handle, _) = new_connection().unwrap();
         tokio::spawn(connection);
 
@@ -472,7 +451,6 @@ impl Simulation {
      */
     #[allow(dead_code)]
     async fn delete_link(id_source_namespace: u8, id_target_namespace: u8, logs: &Logger) {
-        logs.log("trace", "entering simulation::delete_link");
         // Interface names
         // Interface veth_sourceNode_targetNode is the interface of sourceNode that is connected to targetNode
         let name_interface = format!("veth_{}_{}", id_source_namespace, id_target_namespace);
@@ -524,10 +502,6 @@ impl Simulation {
             let link_idx = link.header.index;
             match handle.link().del(link_idx).execute().await {
                 Ok(_) => {
-                    logs.log(
-                        "info",
-                        &format!("Successfully deleted the link {}", name_interface),
-                    );
                     println!("Successfully deleted the link {}", name_interface)
                 }
                 Err(e) => {
@@ -563,7 +537,6 @@ impl Simulation {
         ipv6: Ipv6Addr,
         logs: &Logger,
     ) {
-        logs.log("trace", "entering simulation::set_interface_up");
 
         // Interface names
         // Interface veth_sourceNode_targetNode is the interface of sourceNode that is connected to targetNode
@@ -805,22 +778,12 @@ impl Simulation {
      * @return: the pid of the child on success
      **/
     fn run_follower(&self, id: u8) -> Result<i32> {
-        self.logs.log("trace", "entering simulation::run_follower");
         //get namespace
         let ns = NetNs::get(id.to_string()).unwrap();
         ns.run(|_| match fork() {
             Ok(Fork::Parent(child)) => Ok(child),
             Ok(Fork::Child) => {
                 let _ = follower_init_queues(id, self.cfg.nb_follower, &self.cfg._qname);
-                self.logs.log(
-                    "debug",
-                    &format!(
-                        "execve - env: {:?} - path: {:?} - args: {:?}",
-                        &self.cfg.exe[(id - 1) as usize].env,
-                        &self.cfg.exe[(id - 1) as usize].path,
-                        &self.cfg.exe[(id - 1) as usize].args
-                    ),
-                );
                 execve(
                     &self.cfg.exe[(id - 1) as usize].path,
                     &self.cfg.exe[(id - 1) as usize].args,
@@ -845,8 +808,6 @@ impl Simulation {
      * @return: returns a Result
      **/
     fn leader_init_queues(&mut self) -> Result<()> {
-        self.logs
-            .log("trace", "entering simulation::leader_init_queues");
         self.qs.push(
             posixmq::OpenOptions::readonly() //the leader will receive messages on this queue
                 .max_msg_len(SIZE_BUFFER)
@@ -868,12 +829,8 @@ impl Simulation {
     }
 
     fn messages_handler(&mut self, message: &Buffer, current_time: u64) -> Result<()> {
-        self.logs
-            .log("trace", "entering simulation::message_handler");
         match deserialize_rust(*message) {
             Message::AddStep(id, t) => {
-                self.logs
-                    .log("trace", &format!("Adding a step {} for node {}", t, id));
 
                 if let Some(x) = self.events.get_mut(&t) {
                     x.add_process(id);
@@ -882,12 +839,6 @@ impl Simulation {
                 }
             }
             Message::DelStep(id, t) => {
-                self.logs
-                    .log("trace", &format!("Deleting a step {} for node {}", t, id));
-                self.logs.log(
-                    "debug",
-                    &format!("deleting process id: {} self: {:?}", id, self),
-                );
                 if let Some(x) = self.events.get_mut(&t) {
                     x.del_process(id);
                 }
@@ -895,16 +846,10 @@ impl Simulation {
             Message::GetTime(id) => {
                 //return head key of the BTreeMap
 
-                self.logs
-                    .log("trace", &format!("Getting time for node {}", id));
                 let msg = serialize_rust(Message::WakeUp(current_time));
                 self.qs[id as usize].send(2, &msg.buffer)?;
             }
             Message::GetRand(id, seed) => {
-                self.logs.log(
-                    "trace",
-                    &format!("Getting random for node {} with seed {}", id, seed),
-                );
 
                 // Random with seed.
                 if seed == self.counters.get(&usize::from(id)).unwrap().1 {
@@ -931,22 +876,12 @@ impl Simulation {
                 // self.qs[id as usize].send(2, &msg.buffer)?;
             }
             Message::Finished(id) => {
-                self.logs.log("trace", &format!("Node {} has finished", id));
                 self.states[(id - 1) as usize] = State::Finished;
             }
             Message::Stuck(id) => {
-                self.logs.log("trace", &format!("Node {} is stuck", id));
                 self.states[(id - 1) as usize] = State::Blocked;
             }
             Message::HasToSend4(id, if_id, ip, pkt_id) => {
-                self.logs.log(
-                    "trace",
-                    &format!(
-                        "Node {} has to send ipv4 packet {} via {} to {:?}",
-                        id, pkt_id, if_id, ip
-                    ),
-                );
-                self.logs.log("info", &format!("nodes : {:?}", self.cfg));
                 // self.cfg.topo.get_jitter(self.cfg.random_number,self.cfg.n_use_random_number);
                 let n_use_random_number = self
                     .cfg
@@ -968,13 +903,6 @@ impl Simulation {
                         .unwrap()
                         * self.cfg.jitter_coef;
                 *n_use_random_number += 1;
-                self.logs.log(
-                    "debug",
-                    &format!(
-                        "timestamp : {}, n_use_random_number : {:?}",
-                        timestamp, self.cfg.n_use_random_number
-                    ),
-                );
                 if let Some(x) = self.events.get_mut(&timestamp) {
                     x.add_packet(id, pkt_id);
                 } else {
@@ -983,13 +911,6 @@ impl Simulation {
                 }
             }
             Message::HasToSend6(id, if_id, ip, pkt_id) => {
-                self.logs.log(
-                    "trace",
-                    &format!(
-                        "Node {} has to send ipv6 packet {} via {} to {:?}",
-                        id, pkt_id, if_id, ip
-                    ),
-                );
                 let n_use_random_number = self
                     .cfg
                     .n_use_random_number
@@ -1008,13 +929,6 @@ impl Simulation {
                         .unwrap()
                         * self.cfg.jitter_coef;
                 *n_use_random_number += 1;
-                self.logs.log(
-                    "debug",
-                    &format!(
-                        "timestamp : {}, n_use_random_number : {:?}",
-                        timestamp, self.cfg.n_use_random_number
-                    ),
-                );
                 if let Some(x) = self.events.get_mut(&timestamp) {
                     x.add_packet(id, pkt_id);
                 } else {
@@ -1033,17 +947,9 @@ impl Simulation {
      * Part of a timespot where the delayed send are actually sent
      */
     fn sending_time_loop(&self, ta: TimestampActions) -> Result<()> {
-        self.logs
-            .log("trace", "entering simulation::sending_time_loop");
-        self.logs.log(
-            "debug",
-            &format!("entering simulation::sending_time_loop with args {:?}", ta),
-        );
         for (process, pkt_id) in ta.flatten() {
             let msg = serialize_rust(Message::Send(pkt_id));
 
-            self.logs
-                .log("message", &format!("process {} sends {}", process, pkt_id));
             self.qs[process as usize].send(1, &msg.buffer)?;
 
             let mut msg: Buffer = Buffer::new();
@@ -1077,28 +983,10 @@ impl Simulation {
      * Part of a timespot where the processes actually run
      */
     fn running_time_loop(&mut self, current_time: u64) -> Result<State> {
-        self.logs
-            .log("trace", "entering simulation::running_time_loop");
-        self.logs.log(
-            "debug",
-            &format!(
-                "entering simulation::running_time_loop with args current_time : {} ",
-                current_time
-            ),
-        );
         let mut msg: Buffer = Buffer::new();
         loop {
-            self.logs.log("info", "running time loop");
             match self.qs[0].recv(&mut msg.buffer) {
                 Ok(_) => {
-                    self.logs.log(
-                        "message",
-                        &format!(
-                            "Leader received {:?} at time {}",
-                            Into::<Message>::into(msg),
-                            current_time
-                        ),
-                    );
                     self.messages_handler(&msg, current_time)?;
                     let mut nb_blocked = 0;
                     let mut nb_finished = 0;
@@ -1109,13 +997,6 @@ impl Simulation {
                             _ => {}
                         }
                     }
-                    self.logs.log(
-                        "debug",
-                        &format!(
-                            "nb-finished: {}, nf_blocked: {}, nb_follower: {}",
-                            nb_finished, nb_blocked, self.cfg.nb_follower
-                        ),
-                    );
 
                     if nb_finished == self.cfg.nb_follower {
                         return Ok(State::Finished);
@@ -1139,39 +1020,21 @@ impl Simulation {
      */
     fn main_loop(&mut self) -> Result<u8> {
         //inti logger
-        self.logs.log("trace", "entering simulation::main");
-        self.logs.log(
-            "debug",
-            &format!("entering simulation::main loop with args : {:?}", self),
-        );
 
         let msg = serialize_rust(Message::WakeUp(0));
         for (s, q) in self.states.iter_mut().zip(self.qs[1..].iter()) {
-            self.logs.log(
-                "message",
-                &format!(
-                    "leader sends wake up message to node {} at time 0",
-                    q.as_raw_mqd()
-                ),
-            );
             q.send(1, &msg.buffer)?;
 
             *s = State::Running;
         }
 
         if let Ok(State::Finished) = self.running_time_loop(0) {
-            self.logs
-                .log("info", "Simulation finished by all process finishing");
             eprintln!("Simulation finished by all process finishing");
             return Ok(0);
         }
 
         loop {
             if let Some((time, ta)) = self.events.pop_first() {
-                self.logs.log(
-                    "debug",
-                    &format!("event at time {} TimestampActions : {:?}", time, ta),
-                );
                 /*************** First half, sending time ***************/
                 let _ = self.sending_time_loop(ta); //TODO : manage error (at least log it)
 
@@ -1182,21 +1045,11 @@ impl Simulation {
                     // wake them up multiple times if needed
                     // update receive_msg() according to it (so after sending a signal it will go back in the receiving loop)
                     if s != &State::Finished {
-                        self.logs.log(
-                            "message",
-                            &format!(
-                                "leader sends wake up message to node {} at time {}",
-                                q.as_raw_mqd(),
-                                time
-                            ),
-                        );
                         q.send(1, &msg.buffer)?;
                         *s = State::Running;
                     }
                 }
                 if let Ok(State::Finished) = self.running_time_loop(time) {
-                    self.logs
-                        .log("info", "Simulation finished by all process finishing");
                     eprintln!("Simulation finished by all process finishing");
                     return Ok(0);
                 }
@@ -1213,12 +1066,6 @@ impl Simulation {
     }
 
     fn run(mut self) {
-        self.logs.log("trace", "entering simulation::run");
-        self.logs.log(
-            "debug",
-            &format!("entering simulation::run with args {:?}", self),
-        );
-
         self.leader_init_queues()
             .expect("leader queues initialisation failed"); //open the communication queues
         for i in 0..self.cfg.nb_follower {
