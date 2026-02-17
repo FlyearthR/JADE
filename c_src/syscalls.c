@@ -42,6 +42,10 @@ struct sockaddr *get_ip(int fd)
     return &found->fi.addr;
 }
 
+/**
+ * Intercepted recvfrom syscall.
+ * If the socket would block, it notifies the simulator and waits for an event.
+ */
 ssize_t recvfrom(int sockfd, void *buf, size_t len,
     int flags, struct sockaddr *src_addr,
     socklen_t *addrlen)
@@ -88,6 +92,10 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
 }
 
 
+/**
+ * Intercepted select syscall.
+ * Manages deterministic time by notifying the simulator of the desired timeout.
+ */
 int select(int nfds, fd_set *restrict readfds,
     fd_set *restrict writefds, fd_set *restrict exceptfds,
     struct timeval *restrict timeout) // TODO: support null pointer timeout as infinite select
@@ -242,6 +250,9 @@ time_t time (time_t *__timer)
     return get_u64_time()/1000000;
 }
 
+/**
+ * Intercepted gettimeofday. Returns the simulation time.
+ */
 int gettimeofday(struct timeval *restrict tv,
                  void *restrict tz)
 {
@@ -280,6 +291,9 @@ int clock_getres(clockid_t clockid, struct timespec *res) // all clocks are base
     }
 }
 
+/**
+ * Intercepted clock_gettime. Returns the simulation time for various clock IDs.
+ */
 int clock_gettime(clockid_t clockid, struct timespec *tp)
 {
     LOGS("clock_gettime called\n");
@@ -479,6 +493,11 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
     return n_bytes_sent;
 }
 
+/**
+ * Intercepted sendto syscall.
+ * Notifies the simulator of a packet to be sent and waits for authorization.
+ * Authorizations are received via the IPC mechanism.
+ */
 ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
                const struct sockaddr *dest_addr, socklen_t addrlen)
 {

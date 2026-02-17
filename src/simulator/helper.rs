@@ -13,6 +13,7 @@ use toml::Value;
 
 use crate::LIB_NAME;
 
+/// Converts a slice of `CStr` to a `Vec` of `CString`.
 pub fn cstringify(arr: &[&CStr]) -> Vec<CString> {
     let mut ret: Vec<CString> = Vec::with_capacity(arr.len());
     for e in arr.iter() {
@@ -21,19 +22,26 @@ pub fn cstringify(arr: &[&CStr]) -> Vec<CString> {
     return ret;
 }
 
+/// Represents the network topology, including nodes, interfaces, and IP mappings.
 #[derive(Debug)]
 pub struct NetworkTopology {
+    /// The underlying graph representation.
     pub grf: Graph,
+    /// Mapping from IPv4 address to (node_id, interface_id).
     pub ip4_node: HashMap<Ipv4AddrC, (u8, u8)>,
+    /// Mapping from IPv6 address to (node_id, interface_id).
     pub ip6_node: HashMap<Ipv6AddrC, (u8, u8)>,
 }
 
 impl NetworkTopology {
+    /// Loads a topology from a GML string.
     #[allow(dead_code)]
     pub fn load(graph: &str) -> Self {
         Self::from_graph(Graph::from_gml(GMLObject::from_str(graph).unwrap()).unwrap())
     }
 
+    /// Creates a `NetworkTopology` from a `Graph`.
+    /// Parses node attributes to extract interfaces and IP addresses.
     fn from_graph(grf: Graph) -> Self {
         let mut ip4_node: HashMap<Ipv4AddrC, (u8, u8)> = HashMap::new();
         let mut ip6_node: HashMap<Ipv6AddrC, (u8, u8)> = HashMap::new();
@@ -135,6 +143,7 @@ graph [
         }
     }
 
+    /// Returns the delay (metric) of a link between two nodes.
     fn get_delay(&self, peer: (u8, u8), id_src: u8, id_if_src: u8) -> Option<u64> {
         self.grf
             .edges
@@ -148,6 +157,7 @@ graph [
             })
     }
 
+    /// Calculates jitter for a link based on a distribution and a random seed.
     #[allow(dead_code)]
     pub fn get_jitter(
         &self,
@@ -193,15 +203,21 @@ graph [
     }
 }
 
+/// Represents an external process to be run within the simulation.
 #[derive(Debug)]
 pub struct Process {
+    /// Name of the process.
     pub name: CString,
+    /// Path to the executable.
     pub path: CString,
+    /// Arguments passed to the executable.
     pub args: Vec<CString>,
+    /// Environment variables. Includes `LD_PRELOAD` and `ID`.
     pub env: Vec<CString>,
 }
 
 impl Process {
+    /// Creates a new empty `Process` with `LD_PRELOAD` set.
     fn empty_new() -> Self {
         Self {
             name: CString::from(c""),
@@ -211,6 +227,7 @@ impl Process {
         }
     }
 
+    /// Creates a new `Process` with mandatory `LD_PRELOAD`.
     pub fn new(name: CString, path: CString, args: Vec<CString>, mut env: Vec<CString>) -> Self {
         env.push(
                 CString::new((format!("LD_PRELOAD={}", LIB_NAME)).to_string().as_str())
@@ -269,21 +286,33 @@ impl Process {
     }
 }
 
+/// Simulation configuration loaded from a TOML file.
 #[derive(Debug)]
 pub struct Config {
+    /// Number of follower processes.
     pub nb_follower: usize,
+    /// Base name for IPC message queues.
     pub _qname: String,
+    /// List of processes to execute.
     pub exe: Vec<Process>,
+    /// Master random seed.
     pub random_number: u64,
+    /// Tracks usage of random numbers per follower for determinism.
     pub n_use_random_number: Vec<u64>,
-    pub jitter_distribution: String, //"poisson" or "normal" or "no_jitter"
+    /// Type of jitter to apply ("poisson", "normal", or "no_jitter").
+    pub jitter_distribution: String,
+    /// Coefficient for jitter calculation.
     pub jitter_coef: u64,
+    /// The network topology.
     pub topo: NetworkTopology,
+    /// Enabled log levels.
     pub log_level: Vec<String>,
+    /// Path to the log file.
     pub log_file: String,
 }
 
 impl Config {
+    /// Creates a default configuration for testing.
     #[allow(dead_code)]
     pub fn default_config() -> Self {
         const NB_FOLLOWER: usize = 2;
@@ -446,6 +475,7 @@ impl Config {
      * Deletes the queues created for the run
      * @return: Ok on success
      **/
+    /// Unlinks (deletes) all Posix message queues used in the simulation.
     pub fn unlink_queues(&self) -> Result<()> {
         let mut ret = None;
         for i in 0..self.nb_follower + 1 {

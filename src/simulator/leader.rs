@@ -23,10 +23,14 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::os::fd::AsRawFd;
 use std::path::Path;
 
+/// Represents the current state of a follower process.
 #[derive(Copy, Clone, PartialEq, Debug)]
 enum State {
+    /// The process is running or scheduled to run.
     Running,
+    /// The process is blocked on a syscall (e.g., waiting for time or packet).
     Blocked,
+    /// The process has terminated.
     Finished,
 }
 
@@ -84,17 +88,25 @@ fn follower_init_queues(id: u8, nb: usize, qname: &String) -> Result<(PosixMq, P
     return Ok((qi, qo));
 }
 
+/// The core simulator structure that manages the entire simulation life cycle.
 #[derive(Debug)]
 pub struct Simulation {
+    /// Configuration for the simulation.
     cfg: Config,
+    /// Current state of each follower process.
     states: Vec<State>,
+    /// Future events scheduled at specific timestamps.
     events: BTreeMap<u64, TimestampActions>,
+    /// Posix Message Queues for IPC (index 0 is for leader, 1..nb_follower are for followers).
     qs: Vec<PosixMq>,
+    /// Random seed counters per follower for deterministic random generation.
     counters: HashMap<usize, (u64, u64)>, //val = (counter,seed)
+    /// Logger for simulation events.
     logs: Logger,
 }
 
 impl Drop for Simulation {
+    /// Cleanup logic: removes network namespaces and unlinks message queues.
     fn drop(&mut self) {
         //delete the namespaces
         // TODO: call this when ctrl+C is hit
@@ -828,6 +840,7 @@ impl Simulation {
         Ok(())
     }
 
+    /// Handles an IPC message from a follower and updates the simulation state.
     fn messages_handler(&mut self, message: &Buffer, current_time: u64) -> Result<()> {
         match deserialize_rust(*message) {
             Message::AddStep(id, t) => {
@@ -1018,6 +1031,7 @@ impl Simulation {
     /**
      * Main loop
      */
+    /// Main simulation loop. Advances time and processes events.
     fn main_loop(&mut self) -> Result<u8> {
         //inti logger
 
@@ -1065,6 +1079,7 @@ impl Simulation {
         }
     }
 
+    /// Starts the simulation: initializes queues, forks followers, and enters the main loop.
     fn run(mut self) {
         self.leader_init_queues()
             .expect("leader queues initialisation failed"); //open the communication queues

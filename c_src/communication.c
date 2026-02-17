@@ -9,6 +9,11 @@ int fdi = 0;
 int fdo = 0;
 uint64_t current_time;
 
+/**
+ * Constructor: Initializes file descriptors for IPC and logging.
+ * This is executed when the library is loaded via LD_PRELOAD.
+ * It reads configuration from environment variables (ID, LOG_FILE_FD, CURRENT_TIME).
+ */
 void __attribute__((constructor)) init_fd()
 { // TODO: get the name of the queue from the env
     id = atoi(getenv("ID"));
@@ -104,6 +109,11 @@ void print_msg(Message m)
     }
 }
 
+/**
+ * Sends a message to the simulator via the output message queue.
+ * @param m The message to send.
+ * @return 0 on success, negative value on error.
+ */
 int send_msg(Message m) // TODO: extend this
 {
     LOGS("inside send_msg\n");
@@ -113,6 +123,13 @@ int send_msg(Message m) // TODO: extend this
     return ret;
 }
 
+/**
+ * Receives a message from the simulator.
+ * This function blocks until a message is available.
+ * It handles 'Send' messages (authorized to send a packet) internally.
+ * @param update_time If true, updates the local current_time with the simulation time.
+ * @return The timestamp or value received in the message.
+ */
 uint64_t receive_msg(int update_time)
 {
     LOGS("receive_msg\n");
@@ -166,6 +183,11 @@ uint64_t get_u64_time()
     return current_time;
 }
 
+/**
+ * Blocks the process until authorized to continue by the simulator.
+ * Sends a 'Stuck' message to the leader and waits for a 'WakeUp' message.
+ * @return The new simulation time.
+ */
 uint64_t blocking_t()
 {
     LOGS("blocking_t\n");

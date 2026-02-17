@@ -1,13 +1,21 @@
 use std::fs::File;
 use std::io::Write;
 
+/// Simple logger for recording simulation events at various levels.
 pub struct Logger {
+    /// The file where logs are written.
     log_file: File,
+    /// Enable trace level logs.
     trace: bool, // path through the code
+    /// Enable debug level logs.
     debug: bool, // call + args
+    /// Enable warn level logs.
     warn: bool,
+    /// Enable error level logs.
     error: bool,
+    /// Enable info level logs.
     info: bool, //other
+    /// Enable message level logs.
     message: bool,
 }
 
@@ -43,6 +51,7 @@ impl Logger {
         }
     }
 
+    /// Logs a message at the specified level if enabled.
     pub fn log(&self, level: &str, message: &str) {
         match level {
             "trace" => {

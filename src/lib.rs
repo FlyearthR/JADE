@@ -1,21 +1,33 @@
+//! Shared types, FFI bindings, and IPC message definitions for the Network Time Simulator.
+//!
+//! This crate provides the data structures used for communication between the
+//! Rust leader (simulator) and the C intercepted applications, as well as
+//! common networking types like IP addresses compatible with C representations.
+
 mod follower;
 
 use std::str::FromStr;
 
+/// The fixed size of the buffer used for IPC messages via Posix Message Queues.
 pub const SIZE_BUFFER: usize = 27;
 
+/// A C-compatible representation of an IPv4 address.
 #[repr(C)]
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub struct Ipv4AddrC {
+    /// The four octets of the IPv4 address.
     pub segments: [u8; 4],
 }
+
 impl Ipv4AddrC {
+    /// Creates a new `Ipv4AddrC` from four octets.
     pub fn new(a: u8, b: u8, c: u8, d: u8) -> Self {
         Self {
             segments: [a, b, c, d],
         }
     }
 
+    /// Returns the octets of the IPv4 address.
     pub fn octets(self) -> [u8; 4] {
         self.segments
     }
@@ -48,12 +60,17 @@ impl From<&String> for Ipv4AddrC {
     }
 }
 
+/// A C-compatible representation of an IPv6 address.
 #[repr(C)]
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub struct Ipv6AddrC {
+    /// The eight 16-bit segments of the IPv6 address.
     pub segments: [u16; 8],
 }
+
 impl Ipv6AddrC {
+    /// Creates a new `Ipv6AddrC` from eight 16-bit segments.
+    /// This function is exported to C.
     #[no_mangle]
     pub extern "C" fn new(a: u16, b: u16, c: u16, d: u16, e: u16, f: u16, g: u16, h: u16) -> Self {
         Self {
@@ -61,6 +78,7 @@ impl Ipv6AddrC {
         }
     }
 
+    /// Returns the segments of the IPv6 address.
     pub fn segments(self) -> [u16; 8] {
         self.segments
     }
@@ -111,6 +129,10 @@ impl From<&String> for Ipv6AddrC {
         ip.as_str().into()
     }
 }
+/// Converts a C string to an `Ipv6AddrC`.
+///
+/// # Safety
+/// This function is unsafe because it dereferences a raw pointer.
 #[no_mangle]
 extern "C" fn ip6_from_str(ip: *const std::ffi::c_char) -> Ipv6AddrC {
     unsafe {
@@ -120,6 +142,11 @@ extern "C" fn ip6_from_str(ip: *const std::ffi::c_char) -> Ipv6AddrC {
             .into()
     }
 }
+
+/// Converts a C string to an `Ipv4AddrC`.
+///
+/// # Safety
+/// This function is unsafe because it dereferences a raw pointer.
 #[no_mangle]
 extern "C" fn ip4_from_str(ip: *const std::ffi::c_char) -> Ipv4AddrC {
     unsafe {
@@ -130,6 +157,7 @@ extern "C" fn ip4_from_str(ip: *const std::ffi::c_char) -> Ipv4AddrC {
     }
 }
 
+/// A fixed-size buffer for IPC messages.
 #[repr(C)]
 #[derive(Copy, Clone, PartialEq)]
 pub struct Buffer {
@@ -137,6 +165,7 @@ pub struct Buffer {
 }
 
 impl Buffer {
+    /// Creates a new empty `Buffer`.
     pub fn new() -> Buffer {
         Buffer {
             buffer: [0; SIZE_BUFFER],
@@ -144,20 +173,32 @@ impl Buffer {
     }
 }
 
+/// Messages exchanged between the simulator (leader) and the intercepted apps (followers).
 #[repr(C)]
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Message {
-    Stuck(u8),                          // 1
-    AddStep(u8, u64),                   // 2
-    DelStep(u8, u64),                   // 3
-    HasToSend4(u8, u8, Ipv4AddrC, u64), // 4
-    HasToSend6(u8, u8, Ipv6AddrC, u64), // 5
-    Send(u64),                          // 6
-    Sent(u8, u64),                      // 7
-    GetTime(u8),                        // 8
-    GetRand(u8, u64),                   // 9
-    WakeUp(u64),                        // 10
-    Finished(u8),                       // 11
+    /// App is blocked on an operation.
+    Stuck(u8),
+    /// App is requesting to advance time or perform a step.
+    AddStep(u8, u64),
+    /// App is cancelling a previously requested step.
+    DelStep(u8, u64),
+    /// App has an IPv4 packet to send.
+    HasToSend4(u8, u8, Ipv4AddrC, u64),
+    /// App has an IPv6 packet to send.
+    HasToSend6(u8, u8, Ipv6AddrC, u64),
+    /// Simulator authorizing an app to send a packet.
+    Send(u64),
+    /// App confirming a packet has been sent.
+    Sent(u8, u64),
+    /// App requesting the current simulation time.
+    GetTime(u8),
+    /// App requesting a random seed from the simulator.
+    GetRand(u8, u64),
+    /// Simulator waking up an app at a specific time.
+    WakeUp(u64),
+    /// App has finished its execution.
+    Finished(u8),
 }
 
 impl From<Message> for Buffer {
@@ -329,19 +370,25 @@ impl Into<Message> for Buffer {
     }
 }
 
+/// Serializes a `Message` into a `Buffer` for Rust usage.
 pub fn serialize_rust(msg: Message) -> Buffer {
     Buffer::from(msg)
 }
 
+/// Deserializes a `Buffer` into a `Message` for Rust usage.
 pub fn deserialize_rust(msg: Buffer) -> Message {
     Buffer::into(msg)
 }
 
+/// Serializes a `Message` and returns a pointer to a `Buffer`.
+/// The caller is responsible for freeing the memory.
 #[no_mangle]
 pub extern "C" fn serialize(msg: Message) -> *mut Buffer {
     Box::into_raw(Box::new(Buffer::from(msg)))
 }
 
+/// Deserializes a `Buffer` and returns a pointer to a `Message`.
+/// The caller is responsible for freeing the memory.
 #[no_mangle]
 pub extern "C" fn deserialize(msg: Buffer) -> *mut Message {
     Box::into_raw(Box::new(Buffer::into(msg)))
