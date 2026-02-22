@@ -11,7 +11,7 @@ use std::path::Path;
 use toml::de::Error as TomlError;
 use toml::Value;
 
-use crate::LIB_NAME;
+use crate::{LIB_NAME, LOG_DIR};
 
 /// Converts a slice of `CStr` to a `Vec` of `CString`.
 pub fn cstringify(arr: &[&CStr]) -> Vec<CString> {
@@ -212,8 +212,12 @@ pub struct Process {
     pub path: CString,
     /// Arguments passed to the executable.
     pub args: Vec<CString>,
-    /// Environment variables. Includes `LD_PRELOAD` and `ID`.
+    /// Environment variables. Includes `LD_PRELOAD`, `ID`, and `LOG_DIR`.
     pub env: Vec<CString>,
+    /// Optional Docker image to use when running in Docker mode.
+    pub image: Option<CString>,
+    /// IDs of the nodes where this process should be executed.
+    pub node_ids: Vec<u8>,
 }
 
 impl Process {
@@ -223,7 +227,10 @@ impl Process {
             name: CString::from(c""),
             path: CString::from(c""),
             args: vec![],
-            env: vec![CString::new(format!("LD_PRELOAD={}", LIB_NAME).to_string().as_str()).unwrap()],
+            env: vec![CString::new(format!("LD_PRELOAD={}", LIB_NAME).to_string().as_str()).unwrap(),
+                      CString::new(format!("LOG_DIR={}", LOG_DIR).to_string().as_str()).unwrap()],
+            image: None,
+            node_ids: vec![],
         }
     }
 
@@ -232,7 +239,8 @@ impl Process {
         env.push(
                 CString::new((format!("LD_PRELOAD={}", LIB_NAME)).to_string().as_str())
                 .unwrap());
-        Self { name, path, args, env }
+        env.push(CString::new(format!("LOG_DIR={}", LOG_DIR).to_string().as_str()).unwrap());
+        Self { name, path, args, env, image: None, node_ids: vec![] }
     }
 
     pub fn optionable_new(
@@ -241,6 +249,8 @@ impl Process {
         path: Option<&str>,
         args: Option<&Vec<Value>>,
         env: Option<&Vec<Value>>,
+        image: Option<&str>,
+        node_ids: Option<&Vec<Value>>,
     ) -> Option<Self> {
         let mut ret = Self::empty_new();
         if let Some(n) = name {
@@ -282,6 +292,14 @@ impl Process {
                             CString::new((format!("LD_PRELOAD={}", LIB_NAME)).to_string().as_str()).unwrap()];
         }
 
+        if let Some(img) = image {
+            ret.image = Some(CString::new(img).unwrap());
+        }
+
+        if let Some(ids) = node_ids {
+            ret.node_ids = ids.iter().filter_map(|id| id.as_integer().map(|i| i as u8)).collect();
+        }
+
         return Some(ret);
     }
 }
@@ -293,6 +311,8 @@ pub struct Config {
     pub nb_follower: usize,
     /// Base name for IPC message queues.
     pub _qname: String,
+    /// Mode of execution: "netns" (default) or "docker".
+    pub mode: String,
     /// List of processes to execute.
     pub exe: Vec<Process>,
     /// Master random seed.
@@ -329,6 +349,7 @@ impl Config {
         return Self {
             nb_follower: NB_FOLLOWER,
             _qname: QNAME.to_string(),
+            mode: "netns".to_string(),
             exe: vec![
                 Process::new(
                     CString::from(c"name"),
@@ -372,6 +393,11 @@ impl Config {
             .and_then(Value::as_str)
             .unwrap_or("")
             .to_string();
+        let mode = value
+            .get("mode")
+            .and_then(Value::as_str)
+            .unwrap_or("netns")
+            .to_string();
 
         let mut exe = Vec::new();
 
@@ -384,7 +410,9 @@ impl Config {
                             exe_table.get("name").and_then(Value::as_str),
                             exe_table.get("path").and_then(Value::as_str),
                             exe_table.get("args").and_then(Value::as_array),
-                            exe_table.get("env").and_then(Value::as_array)
+                            exe_table.get("env").and_then(Value::as_array),
+                            exe_table.get("image").and_then(Value::as_str),
+                            exe_table.get("node_ids").and_then(Value::as_array),
                         ) {
                             exe.push(e);
                         }
@@ -439,6 +467,7 @@ impl Config {
             return Ok(Config {
                 nb_follower,
                 _qname,
+                mode,
                 exe,
                 random_number,
                 n_use_random_number,
@@ -453,6 +482,7 @@ impl Config {
         return Ok(Config {
             nb_follower,
             _qname,
+            mode,
             exe,
             random_number,
             n_use_random_number,
@@ -500,7 +530,7 @@ impl Config {
 }
 
 /**
- * A TimestampActions gathers all the actions to perform at a specific timestpot.
+ * A TimestampActions gathers all the actions to perform at a specific timeslot.
  * @to_wake_up: the list of processes that have a known reason to be woken up a that timestamp
  * @has_to_send: a list of pairs (process that have something to send , packet IDs)
  */

@@ -22,16 +22,17 @@ use std::io::{Error, ErrorKind};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::os::fd::AsRawFd;
 use std::path::Path;
+use std::process::Command;
 
 /// Represents the current state of a follower process.
 #[derive(Copy, Clone, PartialEq, Debug)]
 enum State {
     /// The process is running or scheduled to run.
-    Running,
     /// The process is blocked on a syscall (e.g., waiting for time or packet).
     Blocked,
     /// The process has terminated.
     Finished,
+    Running,
 }
 
 #[allow(unconditional_panic)]
@@ -51,9 +52,11 @@ pub const fn validate_cstr_contents(bytes: &[u8]) {
 }
 
 const LIB_NAME: &str = "./syscalls.so";
+const DOCKER_LIB_NAME: &str = "/exe/syscalls.so";
+const LOG_DIR: &str = "logs/";
 
 /**
- * Open one queue on which the follower will send message to the leader and
+ * Open one queue on which the follower will send messages to the leader and
  * one queue on which the follower will receive messages from the leader
  * @arg id: the id of the follower, strictly positive
  * @arg nb: the size of the queue (use the number of followers)
@@ -103,20 +106,37 @@ pub struct Simulation {
     counters: HashMap<usize, (u64, u64)>, //val = (counter,seed)
     /// Logger for simulation events.
     logs: Logger,
+    /// Docker container PIDs by node id when running in Docker mode.
+    docker_pids: Option<HashMap<u8, i32>>,
 }
 
 impl Drop for Simulation {
     /// Cleanup logic: removes network namespaces and unlinks message queues.
     fn drop(&mut self) {
-        //delete the namespaces
         // TODO: call this when ctrl+C is hit
-        for node in self.cfg.topo.grf.nodes.iter() {
-            if let Ok(ns) = NetNs::get(node.id.to_string()) {
-                if let Err(_err) = ns.remove() {
-                    eprintln!("Failed to remove namespace {}", node.id);
+        if self.cfg.mode == "docker" {
+            // Stop containers (autoremoval is enabled on run). TODO: make cleanup policy configurable.
+            if let Some(pids) = &self.docker_pids {
+                for (id, _pid) in pids.iter() {
+                    let name = format!("jade_node_{}", id);
+                    let mut cmd_stop = Command::new("/usr/bin/env");
+                    cmd_stop.arg("docker").arg("stop").arg("-t").arg("0").arg(name);
+                    if let Ok(val) = env::var("DOCKER_HOST") {
+                        cmd_stop.env("DOCKER_HOST", val);
+                    }
+                    let _ = cmd_stop.status();
                 }
-            } else {
-                eprintln!("Namespace {} doesn't exist", node.id);
+            }
+        } else {
+            //delete the namespaces
+            for node in self.cfg.topo.grf.nodes.iter() {
+                if let Ok(ns) = NetNs::get(node.id.to_string()) {
+                    if let Err(_err) = ns.remove() {
+                        eprintln!("Failed to remove namespace {}", node.id);
+                    }
+                } else {
+                    eprintln!("Namespace {} doesn't exist", node.id);
+                }
             }
         }
         let _ = self.cfg.unlink_queues();
@@ -138,11 +158,15 @@ impl Simulation {
         let _ = cfg.unlink_queues();
         let btm = BTreeMap::new();
 
-        let rt = tokio::runtime::Runtime::new().expect("Failed to create runtime");
-        let cfg = rt
-            .block_on(Self::create_namespaces(cfg, &logs))
-            .expect("Failed to create namespaces");
-        rt.shutdown_background();
+        let mut cfg = cfg;
+        let docker_map: Option<HashMap<u8, i32>> = None;
+        if cfg.mode != "docker" {
+            let rt = tokio::runtime::Runtime::new().expect("Failed to create runtime");
+            cfg = rt
+                .block_on(Self::create_namespaces(cfg, &logs))
+                .expect("Failed to create namespaces");
+            rt.shutdown_background();
+        }
         let mut c = HashMap::with_capacity(nb_f);
         for i in 0..nb_f {
             c.insert(i + 1, (1, 0));
@@ -155,6 +179,7 @@ impl Simulation {
             qs: Vec::with_capacity(nb_f + 1),
             counters: c,
             logs: logs,
+            docker_pids: docker_map,
         }
     }
 
@@ -435,7 +460,7 @@ impl Simulation {
             })
             .unwrap();
 
-        //set both interface up
+        //set both interfaces up
         Self::set_interface_up(
             id_source_namespace,
             id_target_namespace,
@@ -538,8 +563,8 @@ impl Simulation {
      * and attributes the ipv4 and ipv6 to the interface
      * @arg id_source_namespace: id of the namespace to which the interface is attached
      * @arg id_target_namespace: id of the namespace to which the link goes
-     * @arg ipv4 : ipv4 to attach to the interface 0.0.0.0 if no ipv6 must be attached
-     * @arg ipv6 : ipv6 to attach to the interface 0:0:0:0:0:0:0:0 if no ipv6 must be attached
+     * @arg ipv4: ipv4 to attach to the interface 0.0.0.0 if no ipv6 must be attached
+     * @arg ipv6: ipv6 to attach to the interface 0:0:0:0:0:0:0:0 if no ipv6 must be attached
      */
     #[allow(dead_code)]
     async fn set_interface_up(
@@ -789,28 +814,58 @@ impl Simulation {
      * @arg id: the id of the follower
      * @return: the pid of the child on success
      **/
-    fn run_follower(&self, id: u8) -> Result<i32> {
-        //get namespace
-        let ns = NetNs::get(id.to_string()).unwrap();
-        ns.run(|_| match fork() {
-            Ok(Fork::Parent(child)) => Ok(child),
-            Ok(Fork::Child) => {
-                let _ = follower_init_queues(id, self.cfg.nb_follower, &self.cfg._qname);
-                execve(
-                    &self.cfg.exe[(id - 1) as usize].path,
-                    &self.cfg.exe[(id - 1) as usize].args,
-                    &self.cfg.exe[(id - 1) as usize].env)?;
-                Ok(0)
-            }
-            Err(_) => {
-                self.logs.log("error", "fork failed");
+    fn run_follower(&mut self, id: u8) -> Result<i32> {
+        if self.cfg.mode == "docker" {
+            // In Docker mode, the container is already running with the actual process
+            // (started in create_docker_containers). Just return the PID.
+            // The process waits for JADE's signal before executing, which happens after this.
+            if let Some(ref pids) = self.docker_pids {
+                if let Some(&pid) = pids.get(&id) {
+                    Ok(pid)
+                } else {
+                    self.logs.log("error", &format!("No PID found for node {}", id));
+                    Err(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        String::from("No PID found for container"),
+                    ))
+                }
+            } else {
+                self.logs.log("error", "Docker PIDs not initialized");
                 Err(std::io::Error::new(
                     std::io::ErrorKind::Other,
-                    String::from("Fork failed"),
+                    String::from("Docker PIDs not initialized"),
                 ))
             }
-        })
-        .unwrap()
+        } else {
+            // Find the executable config for this node ID (fallback to index-based if needed)
+            let exe_cfg = self.cfg.exe.iter().find(|p| p.node_ids.contains(&id))
+                .or_else(|| {
+                    self.cfg.exe.get((id - 1) as usize)
+                })
+                .expect(&format!("Missing executable configuration for node ID {}", id));
+
+            //get namespace
+            let ns = NetNs::get(id.to_string()).unwrap();
+            ns.run(|_| match fork() {
+                Ok(Fork::Parent(child)) => Ok(child),
+                Ok(Fork::Child) => {
+                    let _ = follower_init_queues(id, self.cfg.nb_follower, &self.cfg._qname);
+                    execve(
+                        &exe_cfg.path,
+                        &exe_cfg.args,
+                        &exe_cfg.env)?;
+                    Ok(0)
+                }
+                Err(_) => {
+                    self.logs.log("error", "fork failed");
+                    Err(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        String::from("Fork failed"),
+                    ))
+                }
+            })
+            .unwrap()
+        }
     }
 
     /**
@@ -1081,6 +1136,14 @@ impl Simulation {
 
     /// Starts the simulation: initializes queues, forks followers, and enters the main loop.
     fn run(mut self) {
+        // In Docker mode, create containers first and wire network before starting processes
+        if self.cfg.mode == "docker" {
+            let pids = Self::create_docker_containers(&self.cfg, &self.logs).expect("Failed to create containers");
+            Self::wire_links_docker(&self.cfg, &pids, &self.logs).expect("Failed to wire docker links");
+            // Store PIDs
+            self.docker_pids = Some(pids);
+        }
+
         self.leader_init_queues()
             .expect("leader queues initialisation failed"); //open the communication queues
         for i in 0..self.cfg.nb_follower {
@@ -1095,25 +1158,238 @@ impl Simulation {
     }
 }
 
-fn main() {
-    let args: Vec<String> = env::args().collect();
+impl Simulation {
+    /// Create Docker containers running the actual application process.
+    /// This merges container creation with process execution in Docker mode.
+    /// The application will wait for JADE's signal before executing, so it's safe
+    /// to start the process before network configuration is complete.
+    fn create_docker_containers(cfg: &Config, logs: &Logger) -> Result<HashMap<u8, i32>> {
+        let mut pids: HashMap<u8, i32> = HashMap::new();
+        for node in cfg.topo.grf.nodes.iter() {
+            let id = node.id as u8;
+            let exe_cfg = cfg.exe.iter().find(|p| p.node_ids.contains(&id))
+                .or_else(|| cfg.exe.get((id - 1) as usize))
+                .expect(&format!("Missing executable configuration for node ID {}", id));
 
-    match args.len() {
-        // no arguments passed
-        1 => {
-            eprintln!("Please provide a config file");
+            let img = exe_cfg.image.as_ref().expect(&format!("Missing image for node ID {}", id));
+            let name = format!("jade_node_{}", id);
+
+            // Stop any existing container
+            let mut cmd_stop = Command::new("/usr/bin/env");
+            cmd_stop.arg("docker").arg("stop").arg(&name);
+            if let Ok(val) = env::var("DOCKER_HOST") {
+                cmd_stop.env("DOCKER_HOST", val);
+            }
+            let _ = cmd_stop.status();
+
+            // Start container with the actual application process
+            // The process will wait for JADE's signal, so network can be configured after
+            let mut cmd = Command::new("/usr/bin/env");
+            cmd.arg("docker")
+                .arg("run")
+                .arg("-d")
+                .arg("--privileged")
+                .arg("--rm")
+                .arg("--name").arg(&name)
+                .arg("--ipc=host")
+                .arg("--ulimit").arg("msgqueue=-1")
+                .arg("-e").arg(format!("ID={}", id))
+                .arg("-e").arg(format!("LD_PRELOAD={}", DOCKER_LIB_NAME))
+                .arg("-e").arg(format!("LOG_DIR={}", LOG_DIR))
+                .arg(img.as_c_str().to_str().unwrap());
+
+            // Add the command and its arguments
+            for arg in &exe_cfg.args {
+                cmd.arg(arg.as_c_str().to_str().unwrap());
+            }
+
+            if let Ok(val) = env::var("DOCKER_HOST") {
+                cmd.env("DOCKER_HOST", val);
+            }
+
+            // Log the full command
+            let cmd_str = format!("{:?}", cmd);
+            logs.log("info", &format!("Starting container {} with command: {}", name, cmd_str));
+            eprintln!("Starting container {} with command: {}", name, cmd_str);
+
+            let status = cmd.status();
+            if status.is_err() || !status.unwrap().success() {
+                logs.log("error", &format!("Failed to start container {}", name));
+                return Err(Error::new(ErrorKind::Other, "docker run failed"));
+            }
+
+            // Get PID with retry
+            let mut pid: i32 = 0;
+            for attempt in 0..10 {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                let mut cmd_inspect = Command::new("/usr/bin/env");
+                cmd_inspect.arg("docker").arg("inspect").arg("-f").arg("{{.State.Pid}}").arg(&name);
+                if let Ok(val) = env::var("DOCKER_HOST") {
+                    cmd_inspect.env("DOCKER_HOST", val);
+                }
+                if let Ok(output) = cmd_inspect.output() {
+                    if output.status.success() {
+                        let pid_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                        if let Ok(parsed_pid) = pid_str.parse::<i32>() {
+                            if parsed_pid > 0 && std::path::Path::new(&format!("/proc/{}/ns/net", parsed_pid)).exists() {
+                                pid = parsed_pid;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if attempt == 9 {
+                    // Container failed - get logs for debugging
+                    let mut cmd_logs = Command::new("/usr/bin/env");
+                    cmd_logs.arg("docker").arg("logs").arg(&name);
+                    if let Ok(val) = env::var("DOCKER_HOST") {
+                        cmd_logs.env("DOCKER_HOST", val);
+                    }
+                    if let Ok(log_output) = cmd_logs.output() {
+                        let logs_str = String::from_utf8_lossy(&log_output.stdout);
+                        let err_str = String::from_utf8_lossy(&log_output.stderr);
+                        logs.log("error", &format!("Container {} logs stdout: {}", name, logs_str));
+                        logs.log("error", &format!("Container {} logs stderr: {}", name, err_str));
+                        eprintln!("Container {} failed. Stdout: {}", name, logs_str);
+                        eprintln!("Container {} failed. Stderr: {}", name, err_str);
+                    }
+
+                    // Check if container is still running
+                    let mut cmd_state = Command::new("/usr/bin/env");
+                    cmd_state.arg("docker").arg("inspect").arg("-f").arg("{{.State.Status}}").arg(&name);
+                    if let Ok(val) = env::var("DOCKER_HOST") {
+                        cmd_state.env("DOCKER_HOST", val);
+                    }
+                    if let Ok(state_output) = cmd_state.output() {
+                        let state = String::from_utf8_lossy(&state_output.stdout);
+                        eprintln!("Container {} state: {}", name, state);
+                    }
+
+                    logs.log("error", &format!("Failed to get valid PID for container {}", name));
+                    return Err(Error::new(ErrorKind::Other, "Failed to get valid container PID"));
+                }
+            }
+            pids.insert(id, pid);
         }
-        // one argument passed
-        2 => {
-            let sim = Simulation::new(
-                Config::new(Path::new(&args[1])).expect("Error parsing config file"),
-            );
-            sim.run();
+        Ok(pids)
+    }
+
+    /// Wire containers with veth pairs and assign IPs (/32, /128) according to GML.
+    fn wire_links_docker(cfg: &Config, pids: &HashMap<u8, i32>, logs: &Logger) -> Result<()> {
+        // For each edge, create a veth pair and move each end into the corresponding container netns
+        for edge in cfg.topo.grf.edges.iter() {
+            let src: u8 = edge.source as u8;
+            let dst: u8 = edge.target as u8;
+            let if_src = format!("veth_{}_{}", src, dst);
+            let if_dst = format!("veth_{}_{}", dst, src);
+            // Delete existing veth pair if it exists (cleanup from previous run)
+            let _ = Command::new("/usr/bin/env").arg("ip").arg("link").arg("delete").arg(&if_src).status();
+            // Create pair
+            let status = Command::new("/usr/bin/env").arg("ip").arg("link").arg("add").arg(&if_src).arg("type").arg("veth").arg("peer").arg("name").arg(&if_dst).status();
+            if status.is_err() || !status.unwrap().success() {
+                logs.log("error", &format!("Failed to create veth {} <-> {}", if_src, if_dst));
+                return Err(Error::new(ErrorKind::Other, "ip link add failed"));
+            }
+            // Move ends into containers
+            let pid_src = *pids.get(&src).expect("missing pid src");
+            let pid_dst = *pids.get(&dst).expect("missing pid dst");
+            let _ = Command::new("/usr/bin/env").arg("ip").arg("link").arg("set").arg(&if_src).arg("netns").arg(pid_src.to_string()).status();
+            let _ = Command::new("/usr/bin/env").arg("ip").arg("link").arg("set").arg(&if_dst).arg("netns").arg(pid_dst.to_string()).status();
+
+            // Determine IPs from topology for each node
+            let ipv4_source: Ipv4Addr = cfg
+                .topo
+                .ip4_node
+                .iter()
+                .find_map(|(key, &val)| if val.0 == src as u8 { Some(key.clone()) } else { None })
+                .expect("Source IPv4 not found").try_into().unwrap();
+            let ipv4_target: Ipv4Addr = cfg
+                .topo
+                .ip4_node
+                .iter()
+                .find_map(|(key, &val)| if val.0 == dst as u8 { Some(key.clone()) } else { None })
+                .expect("Target IPv4 not found").try_into().unwrap();
+
+            // Configure inside containers using nsenter
+            let _ = Command::new("/usr/bin/env").arg("nsenter").arg("-t").arg(pid_src.to_string()).arg("-n")
+                .arg("ip").arg("addr").arg("add").arg(format!("{}/32", ipv4_source)).arg("dev").arg(&if_src).status();
+            let _ = Command::new("/usr/bin/env").arg("nsenter").arg("-t").arg(pid_src.to_string()).arg("-n")
+                .arg("ip").arg("link").arg("set").arg(&if_src).arg("up").status();
+
+            let _ = Command::new("/usr/bin/env").arg("nsenter").arg("-t").arg(pid_dst.to_string()).arg("-n")
+                .arg("ip").arg("addr").arg("add").arg(format!("{}/32", ipv4_target)).arg("dev").arg(&if_dst).status();
+            let _ = Command::new("/usr/bin/env").arg("nsenter").arg("-t").arg(pid_dst.to_string()).arg("-n")
+                .arg("ip").arg("link").arg("set").arg(&if_dst).arg("up").status();
+
+            if cfg.topo.ip6_node.len() != 0 {
+                // Optional IPv6 configuration (/128)
+                let ipv6_source: Ipv6Addr = cfg
+                    .topo
+                    .ip6_node
+                    .iter()
+                    .find_map(|(key, &val)| if val.0 == src as u8 { Some(key.clone()) } else { None })
+                    .expect("Source IPv6 not found").try_into().unwrap();
+                let ipv6_target: Ipv6Addr = cfg
+                    .topo
+                    .ip6_node
+                    .iter()
+                    .find_map(|(key, &val)| if val.0 == dst as u8 { Some(key.clone()) } else { None })
+                    .expect("Target IPv6 not found").try_into().unwrap();
+                let _ = Command::new("/usr/bin/env").arg("nsenter").arg("-t").arg(pid_src.to_string()).arg("-n")
+                    .arg("ip").arg("-6").arg("addr").arg("add").arg(format!("{}/128", ipv6_source)).arg("dev").arg(&if_src).status();
+                let _ = Command::new("/usr/bin/env").arg("nsenter").arg("-t").arg(pid_dst.to_string()).arg("-n")
+                    .arg("ip").arg("-6").arg("addr").arg("add").arg(format!("{}/128", ipv6_target)).arg("dev").arg(&if_dst).status();
+            }
         }
-        _ => {
-            eprintln!("Please provide a config file");
+        Ok(())
+    }
+}
+
+fn main() {
+    let mut args: Vec<String> = env::args().collect();
+    // Simple CLI parsing: --mode <mode>, --output-format=interop-runner, plus a config path
+    let mut cli_mode: Option<String> = None;
+    let mut _cli_output_format: Option<String> = None; // TODO: implement interop-runner output formatting
+
+    // Remove binary name
+    if !args.is_empty() { args.remove(0); }
+
+    let mut i = 0usize;
+    let mut cfg_path: Option<String> = None;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--mode" => {
+                if i + 1 < args.len() { cli_mode = Some(args[i + 1].clone()); i += 2; } else { eprintln!("--mode requires a value"); return; }
+            }
+            s if s.starts_with("--output-format=") => {
+                let v = s.splitn(2, '=').nth(1).unwrap_or("").to_string();
+                _cli_output_format = if v.is_empty() { None } else { Some(v) };
+                i += 1;
+            }
+            s if s.starts_with("-") => {
+                eprintln!("Unknown option: {}", s); return;
+            }
+            s => {
+                cfg_path = Some(s.to_string());
+                i += 1;
+            }
         }
     }
+
+    if cfg_path.is_none() {
+        eprintln!("Please provide a config file");
+        return;
+    }
+
+    let mut cfg = Config::new(Path::new(&cfg_path.unwrap())).expect("Error parsing config file");
+    if let Some(ref cm) = cli_mode {
+        if cm != &cfg.mode {
+            eprintln!("Notice: CLI --mode={} ignored; TOML mode='{}' has precedence", cm, cfg.mode);
+        }
+    }
+
+    let sim = Simulation::new(cfg);
+    sim.run();
 }
 
 #[cfg(test)]
@@ -1911,6 +2187,7 @@ mod determinism {
             return Self {
                 nb_follower: nb,
                 _qname: QNAME.to_string(),
+                mode: "netns".to_string(),
                 exe: processes,
                 random_number: RANDOM_NUMBER,
                 n_use_random_number: n_use_random_number,

@@ -31,14 +31,14 @@ void __attribute__((constructor)) init_fd()
     struct mq_attr attr = {
         .mq_flags = 0,
         .mq_maxmsg = 20,
-        .mq_msgsize = 27,
+        .mq_msgsize = SIZE_BUFFER,
         .mq_curmsgs = 0,
     };
-    fdi = mq_open(FD, O_RDONLY | O_CREAT, (mode_t)0600, attr);
+    fdi = mq_open(FD, O_RDONLY | O_CREAT, (mode_t)0600, &attr);
 
     FD[12] = '0';
     FD[13] = '\0';
-    fdo = mq_open(FD, O_WRONLY | O_CREAT, (mode_t)0600, attr);
+    fdo = mq_open(FD, O_WRONLY | O_CREAT, (mode_t)0600, &attr);
 
     pkt_list = NULL;
     fd_ip_list = NULL;
@@ -46,7 +46,7 @@ void __attribute__((constructor)) init_fd()
 
     char path[100];
 
-    snprintf(path, 100, "%snode%i.log", "../logs/", id);
+    snprintf(path, 100, "%snode%i.log", getenv("LOG_DIR"), id);
 
     char* log_file_fd = getenv("LOG_FILE_FD");
     if(log_file_fd)
@@ -136,7 +136,7 @@ uint64_t receive_msg(int update_time)
     Buffer msg;
     do
     {
-        int ret = mq_receive(FDI, msg.buffer, SIZE_BUFFER, NULL);
+        int ret = mq_receive(FDI, msg.buffer, 8192, NULL); // TODO: fix this
         if (ret == -1)
         {
             perror("Error: ");
@@ -237,7 +237,7 @@ void suppress_event(struct timeval t)
 int get_random()
 {
     LIBC_FUNCTION(int, rand);
-    return LIBC_FUNCTION_GET(rand)(); 
+    return LIBC_FUNCTION_GET(rand)();
     /*Message m = {.tag = GetRand, .get_rand = {._0 = ID, ._1 = seed}};
     LOGS("get random\n");
     unsigned int ret = send_msg(m);
@@ -327,7 +327,7 @@ void sender(uint64_t pkt_id)
     case write_t:
         custom__write(found->pkt);
         break;
-    
+
     case writev_t:
         custom__writev(found->pkt);
         break;
