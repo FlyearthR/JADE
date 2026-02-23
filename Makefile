@@ -36,13 +36,15 @@ usedebug: all
 	cp -f tests/$(INSTANCE).* testing/
 	cd testing && sudo RUST_BACKTRACE=1 ./simulator $(INSTANCE)_debug.toml
 
+builddocker: all
+	$(MAKE) usetest || echo "skip fail"
+	docker build -t simple_client -f tests/client.dockerfile . && docker build -t simple_server -f tests/server.dockerfile .
+
 testdocker: all
 	cp -f target/debug/simulator testing/simulator
 	cp -f target/syscalls/syscalls.so testing/syscalls.so
 	cp -f tests/1_client_1_server_docker.toml testing/
 	cp -f tests/1_client_1_server.gml testing/
-	$(MAKE) usetest || echo "skip fail"
-	docker build -t simple_client -f tests/client.dockerfile . && docker build -t simple_server -f tests/server.dockerfile .
 	cd testing && sudo RUST_BACKTRACE=1 ./simulator 1_client_1_server_docker.toml
 
 minip: all
