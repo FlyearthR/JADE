@@ -228,7 +228,7 @@ impl Process {
             path: CString::from(c""),
             args: vec![],
             env: vec![CString::new(format!("LD_PRELOAD={}", LIB_NAME).to_string().as_str()).unwrap(),
-                      CString::new(format!("LOG_DIR={}", LOG_DIR).to_string().as_str()).unwrap()],
+                      CString::new(format!("LOG_DIR={}", std::env::var("LOG_DIR").unwrap_or_else(|_| LOG_DIR.to_string())).to_string().as_str()).unwrap()],
             image: None,
             node_ids: vec![],
         }
@@ -239,7 +239,7 @@ impl Process {
         env.push(
                 CString::new((format!("LD_PRELOAD={}", LIB_NAME)).to_string().as_str())
                 .unwrap());
-        env.push(CString::new(format!("LOG_DIR={}", LOG_DIR).to_string().as_str()).unwrap());
+        env.push(CString::new(format!("LOG_DIR={}", std::env::var("LOG_DIR").unwrap_or_else(|_| LOG_DIR.to_string())).to_string().as_str()).unwrap());
         Self { name, path, args, env, image: None, node_ids: vec![] }
     }
 
@@ -286,10 +286,14 @@ impl Process {
             env_vec.push(
                 CString::new((format!("ID={}", id)).to_string().as_str())
                 .unwrap());
+            env_vec.push(
+                CString::new((format!("LOG_DIR={}", std::env::var("LOG_DIR").unwrap_or_else(|_| LOG_DIR.to_string()))).to_string().as_str())
+                .unwrap());
             ret.env = env_vec;
         } else {
             ret.env = vec![CString::new((format!("ID={}", id)).to_string().as_str()).unwrap(),
-                            CString::new((format!("LD_PRELOAD={}", LIB_NAME)).to_string().as_str()).unwrap()];
+                            CString::new((format!("LD_PRELOAD={}", LIB_NAME)).to_string().as_str()).unwrap(),
+                            CString::new((format!("LOG_DIR={}", std::env::var("LOG_DIR").unwrap_or_else(|_| LOG_DIR.to_string()))).to_string().as_str()).unwrap()];
         }
 
         if let Some(img) = image {
@@ -660,7 +664,7 @@ mod unit_testing {
         );
         assert_eq!(
             cfg.exe[0].env,
-            cstringify(&[c"VAR_ENV=1", c"LD_PRELOAD=./syscalls.so", c"ID=1"])
+            cstringify(&[c"VAR_ENV=1", c"LD_PRELOAD=./syscalls.so", c"ID=1", c"LOG_DIR=logs/"])
         );
         assert_eq!(cfg.exe[1].name, CString::from(c"server"));
         assert_eq!(cfg.exe[1].path, CString::from(c"examples/miniP/server"));
@@ -670,7 +674,7 @@ mod unit_testing {
         );
         assert_eq!(
             cfg.exe[1].env,
-            cstringify(&[c"VAR_ENV=2", c"ENV_VAR=3", c"LD_PRELOAD=./syscalls.so", c"ID=2"])
+            cstringify(&[c"VAR_ENV=2", c"ENV_VAR=3", c"LD_PRELOAD=./syscalls.so", c"ID=2", c"LOG_DIR=logs/"])
         );
     }
 

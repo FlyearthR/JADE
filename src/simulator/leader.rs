@@ -328,7 +328,7 @@ impl Simulation {
             .veth(name_interface1.clone(), name_interface2.clone());
         if let Err(error) = request.execute().await.map_err(|e| format!("{}", e)) {
             logs.log("error", &format!("Could not create veth pair: {}", error));
-            // println!("Could not create veth pair: {}", error);
+            println!("Could not create veth pair: {}", error);
         }
 
         // Get interface index
@@ -1142,6 +1142,13 @@ impl Simulation {
     /// The application will wait for JADE's signal before executing, so it's safe
     /// to start the process before network configuration is complete.
     fn create_docker_containers(cfg: &Config, logs: &Logger) -> Result<HashMap<u8, i32>> {
+        let log_dir = env::var("LOG_DIR").unwrap_or_else(|_| "logs/".to_string());
+        if !Path::new(&log_dir).exists() {
+            std::fs::create_dir_all(&log_dir).expect("Failed to create log directory");
+        }
+        let log_dir_abs = std::fs::canonicalize(&log_dir).expect("Failed to canonicalize log directory");
+        let log_dir_str = log_dir_abs.to_str().expect("Log directory path is not valid UTF-8");
+
         let mut pids: HashMap<u8, i32> = HashMap::new();
         for node in cfg.topo.grf.nodes.iter() {
             let id = node.id as u8;
@@ -1171,9 +1178,10 @@ impl Simulation {
                 .arg("--name").arg(&name)
                 .arg("--ipc=host")
                 .arg("--ulimit").arg("msgqueue=-1")
+                .arg("-v").arg(format!("{}:/logs", log_dir_str))
                 .arg("-e").arg(format!("ID={}", id))
                 .arg("-e").arg(format!("LD_PRELOAD={}", DOCKER_LIB_NAME))
-                .arg("-e").arg(format!("LOG_DIR={}", LOG_DIR))
+                .arg("-e").arg("LOG_DIR=/logs/")
                 .arg(img.as_c_str().to_str().unwrap());
 
             // Add the command and its arguments
