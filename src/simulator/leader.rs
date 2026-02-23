@@ -16,6 +16,7 @@ use rand::{Rng, SeedableRng};
 use rtnetlink::new_connection;
 use std::collections::{BTreeMap, HashMap};
 use std::env;
+#[allow(unused)]
 use std::ffi::{CStr, CString};
 use std::io::Result;
 use std::io::{Error, ErrorKind};
