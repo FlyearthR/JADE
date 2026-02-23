@@ -136,7 +136,7 @@ uint64_t receive_msg(int update_time)
     Buffer msg;
     do
     {
-        int ret = mq_receive(FDI, msg.buffer, 8192, NULL); // TODO: fix this
+        int ret = mq_receive(FDI, msg.buffer, SIZE_BUFFER, NULL);
         if (ret == -1)
         {
             perror("Error: ");
