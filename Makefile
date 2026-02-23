@@ -1,6 +1,7 @@
 CC = gcc
 CFLAGS = -g3
 INSTANCE = 1_client_1_server
+#DOCKER_HOST=unix:///home/flyearth/.docker/desktop/docker.sock
 
 .PHONY: syscalls.so all test API leader clean little_clean
 
@@ -40,7 +41,8 @@ testdocker: all
 	cp -f target/syscalls/syscalls.so testing/syscalls.so
 	cp -f tests/1_client_1_server_docker.toml testing/
 	cp -f tests/1_client_1_server.gml testing/
-	cd testing && RUST_BACKTRACE=1 ./simulator 1_client_1_server_docker.toml
+	docker build -t simple_client -f tests/client.dockerfile . && docker build -t simple_server -f tests/server.dockerfile .
+	cd testing && sudo RUST_BACKTRACE=1 ./simulator 1_client_1_server_docker.toml
 
 minip: all
 	cd examples/minip-implementations/ping-pong && gcc miniP_client.c -o ../../../testing/miniP_client && gcc miniP_server_fonctionnel.c -o ../../../testing/miniP_server
