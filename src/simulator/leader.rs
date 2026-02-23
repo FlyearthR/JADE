@@ -23,7 +23,7 @@ use std::io::{Error, ErrorKind};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::os::fd::AsRawFd;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 /// Represents the current state of a follower process.
 #[derive(Copy, Clone, PartialEq, Debug)]
@@ -1162,7 +1162,8 @@ impl Simulation {
 
             // Stop any existing container
             let mut cmd_stop = Command::new("/usr/bin/env");
-            cmd_stop.arg("docker").arg("stop").arg(&name);
+            cmd_stop.stdout(Stdio::null()).stderr(Stdio::null())
+                .arg("docker").arg("stop").arg(&name);
             if let Ok(val) = env::var("DOCKER_HOST") {
                 cmd_stop.env("DOCKER_HOST", val);
             }
