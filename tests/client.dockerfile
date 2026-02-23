@@ -1,11 +1,10 @@
-FROM ubuntu:24.04
+FROM ubuntu:latest
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
     make \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+    curl
 
 # Install Rust
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -28,5 +27,6 @@ RUN make syscalls.so
 # Copy the application executable and syscalls.so to root
 COPY testing/simple_client /exe/simple_client
 RUN cp /build/c_src/syscalls.so /exe/syscalls.so
+RUN mkdir /logs
 
-WORKDIR /
+WORKDIR /exe

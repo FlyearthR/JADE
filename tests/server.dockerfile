@@ -28,5 +28,6 @@ RUN make syscalls.so
 # Copy the application executable and syscalls.so to root
 COPY testing/simple_server /exe/simple_server
 RUN cp /build/c_src/syscalls.so /exe/syscalls.so
+RUN mkdir /logs
 
-WORKDIR /
+WORKDIR /exe
