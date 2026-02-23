@@ -21,14 +21,14 @@ graph = '1_client_1_server.gml'
 [executables]
 [[executables.exe]]
 name = 'client'
-path = '/exe/simple_client'
+path = './simple_client'
 image = 'simple_client:latest'
-args = ["/exe/simple_client", "-i", "10.0.0.20", "-p", "8080", "-I", "1", "-s", "1000", "-n", "20"]
+args = ["./simple_client", "-i", "10.0.0.20", "-p", "8080", "-I", "1", "-s", "1000", "-n", "20"]
 node_ids = [1]
 
 [[executables.exe]]
 name = 'server'
-path = '/exe/simple_server'
+path = './simple_server'
 image = 'simple_server:latest'
-args = ["/exe/simple_server", "-p", "8080", "-m", "20", "-n", "1", "-l", "test.log"]
+args = ["./simple_server", "-p", "8080", "-m", "20", "-n", "1", "-l", "test.log"]
 node_ids = [2]
