@@ -40,6 +40,7 @@ testdocker: all
 	cp -f target/syscalls/syscalls.so testing/syscalls.so
 	cp -f tests/1_client_1_server_docker.toml testing/
 	cp -f tests/1_client_1_server.gml testing/
+	docker build -t simple_client -f tests/client.dockerfile . && docker build -t simple_server -f tests/server.dockerfile .
 	cd testing && sudo  DOCKER_HOST=unix:///home/flyearth/.docker/desktop/docker.sock RUST_BACKTRACE=1 ./simulator 1_client_1_server_docker.toml
 
 minip: all

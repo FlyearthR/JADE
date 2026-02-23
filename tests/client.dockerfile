@@ -22,8 +22,9 @@ COPY c_src/ /build/c_src
 COPY src/ /build/src
 
 
-# Build syscalls.so
+# Build syscalls.so, client and server
 RUN make syscalls.so
+RUN make usetest || echo "skip fail"
 
 # Copy the application executable and syscalls.so to root
 COPY testing/simple_client /exe/simple_client
