@@ -28,11 +28,11 @@ use std::process::Command;
 #[derive(Copy, Clone, PartialEq, Debug)]
 enum State {
     /// The process is running or scheduled to run.
+    Running,
     /// The process is blocked on a syscall (e.g., waiting for time or packet).
     Blocked,
     /// The process has terminated.
     Finished,
-    Running,
 }
 
 #[allow(unconditional_panic)]
@@ -55,13 +55,11 @@ const LIB_NAME: &str = "./syscalls.so";
 const DOCKER_LIB_NAME: &str = "/exe/syscalls.so";
 const LOG_DIR: &str = "logs/";
 
-/**
- * Open one queue on which the follower will send messages to the leader and
- * one queue on which the follower will receive messages from the leader
- * @arg id: the id of the follower, strictly positive
- * @arg nb: the size of the queue (use the number of followers)
- * @return: on success return a pair of posix queues (follower_receiving_queue, follower_sending_queue)
- */
+/// Opens one queue on which the follower will send messages to the leader and
+/// one queue on which the follower will receive messages from the leader
+/// @arg id: the id of the follower, strictly positive
+/// @arg nb: the size of the queue (use the number of followers)
+/// @return: on success return a pair of posix queues (follower_receiving_queue, follower_sending_queue)
 fn follower_init_queues(id: u8, nb: usize, qname: &String) -> Result<(PosixMq, PosixMq)> {
     // TODO: no more use
     // TODO: (for later) find a way to use this to avoid passing through the env
@@ -183,12 +181,10 @@ impl Simulation {
         }
     }
 
-    /**
-     * Create one namespace for each node and one link for each edge. Attach the interface to
-     * the corresponding namespace and sets the interfaces up
-     * @arg cfg: the configuration of the current simulation
-     * @return: the configuration of the current simulation
-     **/
+    /// Creates one namespace for each node and one link for each edge. Attach the interface to
+    /// the corresponding namespace and sets the interfaces up
+    /// @arg cfg: the configuration of the current simulation
+    /// @return: the configuration of the current simulation
     async fn create_namespaces(cfg: Config, logs: &Logger) -> Result<Config> {
         // Create the namespaces
         for node in cfg.topo.grf.nodes.iter() {
@@ -201,7 +197,7 @@ impl Simulation {
             }
         }
 
-        // Add the links between the namespaces
+        // Adds the links between the namespaces
         for edge in cfg.topo.grf.edges.iter() {
             let ipv4_source: std::net::Ipv4Addr = cfg
                 .topo
@@ -299,17 +295,15 @@ impl Simulation {
     }
 
     #[allow(dead_code)]
-    /*
-     * add a link between name space id_source_namespace and id_target_namespace,
-     * sets the interfaces up and adds the ipv4 and ipv6 provided to the interfaces
-     * @arg id_source_namespace: id of the source namespace of the link
-     * @arg id_target_namespace: id of the target namespace of the link
-     * @arg ipv4_source: ipv4 that must be attached to the source interface. 0.0.0.0 if no ipv4 must be attached
-     * @arg ipv6_source: ipv6 that must be attached to the source interface. 0:0:0:0:0:0:0:0 if no ipv6 must be attached
-     * @arg ipv4_target: ipv4 that must be attached to the target interface. 0.0.0.0 if no ipv4 must be attached
-     * @arg ipv6_target: ipv6 that must be attached to the target interface. 0:0:0:0:0:0:0:0 if no ipv6 must be attached
-     * @return: 0 on success
-     */
+    /// Adds a link between name space id_source_namespace and id_target_namespace,
+    /// sets the interfaces up and adds the ipv4 and ipv6 provided to the interfaces
+    /// @arg id_source_namespace: id of the source namespace of the link
+    /// @arg id_target_namespace: id of the target namespace of the link
+    /// @arg ipv4_source: ipv4 that must be attached to the source interface. 0.0.0.0 if no ipv4 must be attached
+    /// @arg ipv6_source: ipv6 that must be attached to the source interface. 0:0:0:0:0:0:0:0 if no ipv6 must be attached
+    /// @arg ipv4_target: ipv4 that must be attached to the target interface. 0.0.0.0 if no ipv4 must be attached
+    /// @arg ipv6_target: ipv6 that must be attached to the target interface. 0:0:0:0:0:0:0:0 if no ipv6 must be attached
+    /// @return: 0 on success
     async fn add_link(
         id_source_namespace: u8,
         id_target_namespace: u8,
@@ -460,7 +454,7 @@ impl Simulation {
             })
             .unwrap();
 
-        //set both interfaces up
+        // set both interfaces up
         Self::set_interface_up(
             id_source_namespace,
             id_target_namespace,
@@ -481,11 +475,9 @@ impl Simulation {
         Ok(0)
     }
 
-    /*
-     * delete the link between namespace id_source_namespace and namespace id_target_namespace
-     * @arg id_source_namespace: id of the source namespace of the link
-     * @arg id_target_namespace: id of the target namespace of the link
-     */
+    /// Deletes the link between namespace id_source_namespace and namespace id_target_namespace
+    /// @arg id_source_namespace: id of the source namespace of the link
+    /// @arg id_target_namespace: id of the target namespace of the link
     #[allow(dead_code)]
     async fn delete_link(id_source_namespace: u8, id_target_namespace: u8, logs: &Logger) {
         // Interface names
@@ -558,14 +550,12 @@ impl Simulation {
         }
     }
 
-    /*
-     * set the interface "veth_id_source_namespace_id_target_namespace" up
-     * and attributes the ipv4 and ipv6 to the interface
-     * @arg id_source_namespace: id of the namespace to which the interface is attached
-     * @arg id_target_namespace: id of the namespace to which the link goes
-     * @arg ipv4: ipv4 to attach to the interface 0.0.0.0 if no ipv6 must be attached
-     * @arg ipv6: ipv6 to attach to the interface 0:0:0:0:0:0:0:0 if no ipv6 must be attached
-     */
+    /// Set the interface "veth_id_source_namespace_id_target_namespace" up
+    /// and attributes the ipv4 and ipv6 to the interface
+    /// @arg id_source_namespace: id of the namespace to which the interface is attached
+    /// @arg id_target_namespace: id of the namespace to which the link goes
+    /// @arg ipv4: ipv4 to attach to the interface 0.0.0.0 if no ipv6 must be attached
+    //// @arg ipv6: ipv6 to attach to the interface 0:0:0:0:0:0:0:0 if no ipv6 must be attached
     #[allow(dead_code)]
     async fn set_interface_up(
         id_source_namespace: u8,
@@ -715,11 +705,9 @@ impl Simulation {
         }
     }
 
-    /*
-     * set the interface "veth_id_source_namespace_id_target_namespace" down
-     * @arg id_source_namespace: id of the namespace to which the interface is attached
-     * @arg id_target_namespace: id of the namespace to which the link goes
-     */
+    /// Set the interface "veth_id_source_namespace_id_target_namespace" down
+    /// @arg id_source_namespace: id of the namespace to which the interface is attached
+    /// @arg id_target_namespace: id of the namespace to which the link goes
     #[allow(dead_code)]
     async fn set_interface_down(id_source_namespace: u8, id_target_namespace: u8, logs: Logger) {
         logs.log("trace", "entering simulation::set_interface_down");
@@ -792,7 +780,7 @@ impl Simulation {
 
         let interface_idx = link1.header.index;
 
-        //set interface down
+        // set interface down
         if let Err(e) = handle.link().set(interface_idx).down().execute().await {
             logs.log(
                 "error",
@@ -808,12 +796,10 @@ impl Simulation {
         }
     }
 
-    /**
-     * Starts a follower with the queues to communicate toward the leader as file descriptor 3 and from
-     * the leader as file descriptor 4.
-     * @arg id: the id of the follower
-     * @return: the pid of the child on success
-     **/
+    /// Starts a follower with the queues to communicate toward the leader as file descriptor 3 and from
+    /// the leader as file descriptor 4.
+    /// @arg id: the id of the follower
+    /// @return: the pid of the child on success
     fn run_follower(&mut self, id: u8) -> Result<i32> {
         if self.cfg.mode == "docker" {
             // In Docker mode, the container is already running with the actual process
@@ -844,7 +830,7 @@ impl Simulation {
                 })
                 .expect(&format!("Missing executable configuration for node ID {}", id));
 
-            //get namespace
+            // get namespace
             let ns = NetNs::get(id.to_string()).unwrap();
             ns.run(|_| match fork() {
                 Ok(Fork::Parent(child)) => Ok(child),
@@ -864,16 +850,14 @@ impl Simulation {
                     ))
                 }
             })
-            .unwrap()
+                .unwrap()
         }
     }
 
-    /**
-     * Initialize one queue on which the leader will wait for the messages from the followers and a
-     * queue by follower
-     * @arg nb: the number of follower
-     * @return: returns a Result
-     **/
+    /// Initialize one queue on which the leader will wait for the messages from the followers and a
+    /// queue by follower
+    /// @arg nb: the number of follower
+    /// @return: returns a Result
     fn leader_init_queues(&mut self) -> Result<()> {
         self.qs.push(
             posixmq::OpenOptions::readonly() //the leader will receive messages on this queue
@@ -1011,9 +995,7 @@ impl Simulation {
         Ok(())
     }
 
-    /**
-     * Part of a timespot where the delayed send are actually sent
-     */
+    /// Part of a timespot where the delayed send are actually sent
     fn sending_time_loop(&self, ta: TimestampActions) -> Result<()> {
         for (process, pkt_id) in ta.flatten() {
             let msg = serialize_rust(Message::Send(pkt_id));
@@ -1047,9 +1029,7 @@ impl Simulation {
         Ok(())
     }
 
-    /**
-     * Part of a timespot where the processes actually run
-     */
+    /// Part of a timespot where the processes actually run
     fn running_time_loop(&mut self, current_time: u64) -> Result<State> {
         let mut msg: Buffer = Buffer::new();
         loop {
@@ -1083,9 +1063,6 @@ impl Simulation {
         }
     }
 
-    /**
-     * Main loop
-     */
     /// Main simulation loop. Advances time and processes events.
     fn main_loop(&mut self) -> Result<u8> {
         //inti logger
@@ -1136,22 +1113,23 @@ impl Simulation {
 
     /// Starts the simulation: initializes queues, forks followers, and enters the main loop.
     fn run(mut self) {
+        self.leader_init_queues()
+            .expect("leader queues initialisation failed"); //open the communication queues
+
         // In Docker mode, create containers first and wire network before starting processes
         if self.cfg.mode == "docker" {
             let pids = Self::create_docker_containers(&self.cfg, &self.logs).expect("Failed to create containers");
             Self::wire_links_docker(&self.cfg, &pids, &self.logs).expect("Failed to wire docker links");
             // Store PIDs
             self.docker_pids = Some(pids);
-        }
-
-        self.leader_init_queues()
-            .expect("leader queues initialisation failed"); //open the communication queues
-        for i in 0..self.cfg.nb_follower {
-            //start the followers
-            self.run_follower( // TODO: manage env
-                (i + 1) as u8).expect("run follower failed");
-            // TODO: add in the env the name of the queue
-            //std::thread::sleep(std::time::Duration::from_millis(5000));
+        } else {
+            for i in 0..self.cfg.nb_follower {
+                //start the followers
+                self.run_follower( // TODO: manage env
+                                   (i + 1) as u8).expect("run follower failed");
+                // TODO: add in the env the name of the queue
+                //std::thread::sleep(std::time::Duration::from_millis(5000));
+            }
         }
 
         self.main_loop().expect("main loop failed");
@@ -1381,7 +1359,7 @@ fn main() {
         return;
     }
 
-    let mut cfg = Config::new(Path::new(&cfg_path.unwrap())).expect("Error parsing config file");
+    let cfg = Config::new(Path::new(&cfg_path.unwrap())).expect("Error parsing config file");
     if let Some(ref cm) = cli_mode {
         if cm != &cfg.mode {
             eprintln!("Notice: CLI --mode={} ignored; TOML mode='{}' has precedence", cm, cfg.mode);
