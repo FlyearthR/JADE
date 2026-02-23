@@ -17,14 +17,11 @@ uint64_t current_time;
 void __attribute__((constructor)) init_fd()
 { // TODO: get the name of the queue from the env
     id = atoi(getenv("ID"));
-    char out[10] = "";
-    strcat(out, getenv("ID"));
-    strcat(out, ".out");
-    freopen(out, "w", stdout);
-    char err[10] = "";
-    strcat(err, getenv("ID"));
-    strcat(err, ".err");
-    freopen(err, "w", stderr);
+    char path[100];
+    snprintf(path, 100, "%s%i.out", getenv("LOG_DIR"), id);
+    freopen(path, "w", stdout);
+    snprintf(path, 100, "%s%i.err", getenv("LOG_DIR"), id);
+    freopen(path, "w", stderr);
 
     char FD[20] = "/some_queue_"; // TODO: get queue name/fd from env
     strcat(FD, getenv("ID"));
@@ -43,8 +40,6 @@ void __attribute__((constructor)) init_fd()
     pkt_list = NULL;
     fd_ip_list = NULL;
     next_pkt_id = 0;
-
-    char path[100];
 
     snprintf(path, 100, "%snode%i.log", getenv("LOG_DIR"), id);
 
