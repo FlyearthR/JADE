@@ -1209,7 +1209,9 @@ impl Simulation {
             // Get PID with retry
             let mut pid: i32 = 0;
             for attempt in 0..10 {
-                std::thread::sleep(std::time::Duration::from_millis(100));
+                if attempt > 0 {
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
                 let mut cmd_inspect = Command::new("/usr/bin/env");
                 cmd_inspect.arg("docker").arg("inspect").arg("-f").arg("{{.State.Pid}}").arg(&name);
                 if let Ok(val) = env::var("DOCKER_HOST") {
@@ -1271,7 +1273,7 @@ impl Simulation {
             let if_src = format!("veth_{}_{}", src, dst);
             let if_dst = format!("veth_{}_{}", dst, src);
             // Delete existing veth pair if it exists (cleanup from previous run)
-            let _ = Command::new("/usr/bin/env").arg("ip").arg("link").arg("delete").arg(&if_src).status();
+            let _ = Command::new("/usr/bin/env").stdout(Stdio::null()).stderr(Stdio::null()).arg("ip").arg("link").arg("delete").arg(&if_src).status();
             // Create pair
             let status = Command::new("/usr/bin/env").arg("ip").arg("link").arg("add").arg(&if_src).arg("type").arg("veth").arg("peer").arg("name").arg(&if_dst).status();
             if status.is_err() || !status.unwrap().success() {
