@@ -40,6 +40,10 @@ builddocker: all
 	$(MAKE) usetest || echo "skip fail"
 	docker build -t simple_client -f tests/client.dockerfile . && docker build -t simple_server -f tests/server.dockerfile .
 
+builddockerquic: all
+	$(MAKE) usetest || echo "skip fail"
+	docker build -t aioquic_jade -f tests/aioquic.dockerfile .
+
 testdocker: all
 	cp -f target/debug/simulator testing/simulator
 	cp -f target/syscalls/syscalls.so testing/syscalls.so
