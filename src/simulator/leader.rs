@@ -1172,7 +1172,7 @@ impl Simulation {
             // Start container with the actual application process
             // The process will wait for JADE's signal, so network can be configured after
             let mut cmd = Command::new("/usr/bin/env");
-            cmd.arg("docker")
+            cmd.arg("docker") //TODO: move interop specific args to config file
                 .arg("run")
                 .arg("-d")
                 .arg("--privileged")
@@ -1180,6 +1180,15 @@ impl Simulation {
                 .arg("--name").arg(&name)
                 .arg("--ipc=host")
                 .arg("--ulimit").arg("msgqueue=-1")
+                .arg("--ulimit").arg("memlock=67108864")
+                .arg("-e").arg("CRON=\"$CRON\"") //TODO: set value 
+                .arg("-e").arg("ROLE=server") //TODO: set role
+                .arg("-e").arg("SERVER_PARAMS=\"$SERVER_PARAMS\"") //TODO: set params
+                .arg("-e").arg("SSLKEYLOGFILE=/logs/keys.log")
+                .arg("-e").arg("QLOGDIR=/logs/qlog/")
+                .arg("-e").arg("TESTCASE=\"$TESTCASE_SERVER\"") //TODO: set test case
+                .arg("-v").arg("<WWW_DIR>:/www:ro") //TODO: set dir
+                .arg("-v").arg("<CERTS_DIR>:/certs:ro") //TODO: set dir
                 .arg("-v").arg(format!("{}:/logs", log_dir_str))
                 .arg("-e").arg(format!("ID={}", id))
                 .arg("-e").arg(format!("LD_PRELOAD={}", DOCKER_LIB_NAME))
