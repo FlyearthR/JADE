@@ -1272,17 +1272,17 @@ impl Simulation {
             let dst: u8 = edge.target as u8;
             let if_src = format!("veth_{}_{}", src, dst);
             let if_dst = format!("veth_{}_{}", dst, src);
-            // Delete existing veth pair if it exists (cleanup from previous run)
-            let _ = Command::new("/usr/bin/env").stdout(Stdio::null()).stderr(Stdio::null()).arg("ip").arg("link").arg("delete").arg(&if_src).status();
+
             // Create pair
-            let status = Command::new("/usr/bin/env").arg("ip").arg("link").arg("add").arg(&if_src).arg("type").arg("veth").arg("peer").arg("name").arg(&if_dst).status();
+            let pid_src = *pids.get(&src).expect("missing pid src");
+            let pid_dst = *pids.get(&dst).expect("missing pid dst");
+            let status = Command::new("/usr/bin/env").arg("ip").arg("link").arg("add")
+                .arg(&if_src).arg("netns").arg(pid_src.to_string()).arg("type").arg("veth").arg("peer").arg(&if_dst)
+                .arg("netns").arg(pid_dst.to_string()).status();
             if status.is_err() || !status.unwrap().success() {
                 logs.log("error", &format!("Failed to create veth {} <-> {}", if_src, if_dst));
                 return Err(Error::new(ErrorKind::Other, "ip link add failed"));
             }
-            // Move ends into containers
-            let pid_src = *pids.get(&src).expect("missing pid src");
-            let pid_dst = *pids.get(&dst).expect("missing pid dst");
             let _ = Command::new("/usr/bin/env").arg("ip").arg("link").arg("set").arg(&if_src).arg("netns").arg(pid_src.to_string()).status();
             let _ = Command::new("/usr/bin/env").arg("ip").arg("link").arg("set").arg(&if_dst).arg("netns").arg(pid_dst.to_string()).status();
 
@@ -1302,17 +1302,17 @@ impl Simulation {
 
             // Configure inside containers using nsenter
             let _ = Command::new("/usr/bin/env").arg("nsenter").arg("-t").arg(pid_src.to_string()).arg("-n")
-                .arg("ip").arg("addr").arg("add").arg(format!("{}/32", ipv4_source)).arg("dev").arg(&if_src).status();
+                .arg("ip").arg("addr").arg("add").arg(format!("{}/24", ipv4_source)).arg("dev").arg(&if_src).status();
             let _ = Command::new("/usr/bin/env").arg("nsenter").arg("-t").arg(pid_src.to_string()).arg("-n")
                 .arg("ip").arg("link").arg("set").arg(&if_src).arg("up").status();
 
             let _ = Command::new("/usr/bin/env").arg("nsenter").arg("-t").arg(pid_dst.to_string()).arg("-n")
-                .arg("ip").arg("addr").arg("add").arg(format!("{}/32", ipv4_target)).arg("dev").arg(&if_dst).status();
+                .arg("ip").arg("addr").arg("add").arg(format!("{}/24", ipv4_target)).arg("dev").arg(&if_dst).status();
             let _ = Command::new("/usr/bin/env").arg("nsenter").arg("-t").arg(pid_dst.to_string()).arg("-n")
                 .arg("ip").arg("link").arg("set").arg(&if_dst).arg("up").status();
 
             if cfg.topo.ip6_node.len() != 0 {
-                // Optional IPv6 configuration (/128)
+                // Optional IPv6 configuration (/64)
                 let ipv6_source: Ipv6Addr = cfg
                     .topo
                     .ip6_node
@@ -1326,9 +1326,9 @@ impl Simulation {
                     .find_map(|(key, &val)| if val.0 == dst as u8 { Some(key.clone()) } else { None })
                     .expect("Target IPv6 not found").try_into().unwrap();
                 let _ = Command::new("/usr/bin/env").arg("nsenter").arg("-t").arg(pid_src.to_string()).arg("-n")
-                    .arg("ip").arg("-6").arg("addr").arg("add").arg(format!("{}/128", ipv6_source)).arg("dev").arg(&if_src).status();
+                    .arg("ip").arg("-6").arg("addr").arg("add").arg(format!("{}/64", ipv6_source)).arg("dev").arg(&if_src).status();
                 let _ = Command::new("/usr/bin/env").arg("nsenter").arg("-t").arg(pid_dst.to_string()).arg("-n")
-                    .arg("ip").arg("-6").arg("addr").arg("add").arg(format!("{}/128", ipv6_target)).arg("dev").arg(&if_dst).status();
+                    .arg("ip").arg("-6").arg("addr").arg("add").arg(format!("{}/64", ipv6_target)).arg("dev").arg(&if_dst).status();
             }
         }
         Ok(())
