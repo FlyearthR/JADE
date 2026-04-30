@@ -109,7 +109,7 @@ target/examples/simple_server:
 	cd examples/ && ${CC} ${CFLAGS} simple_server.c -o ../../target/examples/simple_server
 
 simulator:
-	cargo build
+	cargo build --release
 
 simulator-musl:
 	cargo build --target x86_64-unknown-linux-musl
