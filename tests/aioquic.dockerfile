@@ -28,4 +28,4 @@ RUN mkdir /exe
 RUN cp /build/c_src/syscalls.so /exe/syscalls.so
 RUN mkdir /logs
 
-WORKDIR /exe
+WORKDIR /aioquic
