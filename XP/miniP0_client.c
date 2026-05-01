@@ -56,7 +56,7 @@ int main(int argc, char* argv[])
     struct msg buf;
     for (int i = 0 ; i < nb && ret; i++) {
 	printf("Sending Ping...\n");
-	encode_msg(&buf, id, "ping", 3, 0);
+	encode_msg(&buf, id, "ping", i, 0);
 	if (sendto(fd, (void*) &buf, sizeof(struct msg), 0, (struct sockaddr*)&v_dst, sizeof(struct sockaddr_in)) != sizeof(struct msg)) {
 	    perror("sendto");
 	    exit(EXIT_FAILURE);
