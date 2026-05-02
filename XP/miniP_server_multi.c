@@ -26,6 +26,8 @@ unsigned long long start_time = 0;
 int nb = 0;
 client_t clients[MAX_CLIENTS];
 int num_clients = 0;
+int nb_clients = 0;
+int finished_clients = 0;
 
 int find_client(struct sockaddr_in *addr) {
     for (int i = 0; i < num_clients; i++) {
@@ -53,9 +55,10 @@ int main(int argc, char* argv[])
     char *ip = NULL;
     int port = 0;
     char opt;
-    while ((opt = getopt(argc, argv, "i:p:o:")) != -1) {
+    while ((opt = getopt(argc, argv, "i:p:o:c:")) != -1) {
         switch (opt) {
         case 'i': ip = optarg; break;
+        case 'c': nb_clients = atoi(optarg); break;
         case 'p': port = atoi(optarg); break;
 	case 'o': nb = atoi(optarg); break;
         default:
@@ -97,7 +100,7 @@ int main(int argc, char* argv[])
     fds[0].fd = fd;
     fds[0].events = POLLIN;
 
-    while (1) {
+    while (finished_clients < nb_clients) {
         int ret = poll(fds, 1, TIMEOUT * 1000);
 
         if (ret == -1) {
@@ -137,6 +140,8 @@ int main(int argc, char* argv[])
                 printf("Sent Pong to %s:%d (exchange %d/%d)\n",
                        inet_ntoa(from.sin_addr), ntohs(from.sin_port),
                        clients[client_idx].exchange_count, nb);
+		if (clients[client_idx].exchange_count == nb)
+			finished_clients++;
             }
         }
     }

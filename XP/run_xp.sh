@@ -46,7 +46,7 @@ call_tc() {
 	done
 
 	# Start server
-	ip netns exec server ./server -i 192.168.41.2 -p 4443 -o $pkts > /dev/null 2> /dev/null &
+	ip netns exec server ./server -i 0.0.0.0 -p 4443 -o $pkts > /dev/null 2> /dev/null &
 	pid=$!
 	sleep 0
 
@@ -74,7 +74,7 @@ call_tc() {
 #Setting up
 #----------
 echo "Compiling toy examples"
-gcc miniP0_server.c -o server 2> /dev/null
+gcc miniP_server_multi.c -o server 2> /dev/null
 gcc miniP0_client.c -o client 2> /dev/null
 cp ../target/release/simulator .
 cp ../target/syscalls/syscalls.so .

@@ -19,9 +19,11 @@ int main(int argc, char* argv[])
     char opt;
     int port_dst = 0;
     int nb = 0;
-    while ((opt = getopt(argc, argv, "i:p:o:")) != -1) {
+    int id = 0;
+    while ((opt = getopt(argc, argv, "i:p:o:I:")) != -1) {
         switch (opt) {
         case 'i': ip_dst = optarg; break;
+        case 'I': id = atoi(optarg); break;
         case 'p': port_dst = atoi(optarg); break;
 	case 'o': nb = atoi(optarg); break;
         default:
@@ -54,7 +56,7 @@ int main(int argc, char* argv[])
     struct msg buf;
     for (int i = 0 ; i < nb && ret; i++) {
 	printf("Sending Ping...\n");
-	encode_msg(&buf, 2, "ping", 3, 0);
+	encode_msg(&buf, i, "ping", id, 0);
 	if (sendto(fd, (void*) &buf, sizeof(struct msg), 0, (struct sockaddr*)&v_dst, sizeof(struct sockaddr_in)) != sizeof(struct msg)) {
 	    perror("sendto");
 	    exit(EXIT_FAILURE);
