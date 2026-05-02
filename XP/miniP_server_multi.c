@@ -90,8 +90,8 @@ int main(int argc, char* argv[])
         exit(EXIT_FAILURE);
     }
 
-    printf("Server listening on %s:%d\n", ip, port);
-    printf("Will send %d exchanges per client\n", nb);
+    //printf("Server listening on %s:%d\n", ip, port);
+    //printf("Will send %d exchanges per client\n", nb);
 
     struct msg buf;
     struct sockaddr_in from;
@@ -118,8 +118,9 @@ int main(int argc, char* argv[])
                 continue;
             }
 
-            printf("Message from %s:%d - ", inet_ntoa(from.sin_addr), ntohs(from.sin_port));
-            print_msg(buf);
+            //printf("Message from %s:%d - ", inet_ntoa(from.sin_addr), ntohs(from.sin_port));
+            //print_msg(buf);
+            printf("%i - %i\n", buf.type1, buf.type2);
 
             int client_idx = find_client(&from);
             if (client_idx == -1) {
@@ -137,9 +138,9 @@ int main(int argc, char* argv[])
                           (struct sockaddr*) &from, fromlen) != sizeof(struct msg)) {
                     perror("sendto");
                 }
-                printf("Sent Pong to %s:%d (exchange %d/%d)\n",
-                       inet_ntoa(from.sin_addr), ntohs(from.sin_port),
-                       clients[client_idx].exchange_count, nb);
+                //printf("Sent Pong to %s:%d (exchange %d/%d)\n",
+                //       inet_ntoa(from.sin_addr), ntohs(from.sin_port),
+                //       clients[client_idx].exchange_count, nb);
 		if (clients[client_idx].exchange_count == nb)
 			finished_clients++;
             }

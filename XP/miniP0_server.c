@@ -24,21 +24,21 @@ int respond(int fd) {
     fds[0].fd = fd;
     fds[0].events = POLLIN;
     for (int i = 0 ; i < nb && ret ; i++) {
-	encode_msg(&buf, 2, "pong", 3, 0);
-	printf("Sending Pong...\n");
-	if (send(fd, (void*) &buf, sizeof(struct msg), 0) != sizeof(struct msg)) {
-	    perror("send");
-	    exit(EXIT_FAILURE);
-	}
-	if (i < nb-1) {
-	    ret = poll(fds, 1, TIMEOUT * 1000);
-            if (ret == -1) {
-                perror ("poll");
-                exit(EXIT_FAILURE);
-	    } else if (ret) {
-                recv(fd, (void*) &buf, sizeof(struct msg), 0);
-	    }
-	}
+        encode_msg(&buf, 2, "pong", 3, 0);
+        printf("Sending Pong...\n");
+        if (send(fd, (void*) &buf, sizeof(struct msg), 0) != sizeof(struct msg)) {
+            perror("send");
+            exit(EXIT_FAILURE);
+        }
+        if (i < nb-1) {
+            ret = poll(fds, 1, TIMEOUT * 1000);
+                if (ret == -1) {
+                    perror ("poll");
+                    exit(EXIT_FAILURE);
+            } else if (ret) {
+                    recv(fd, (void*) &buf, sizeof(struct msg), 0);
+            }
+        }
     }
     return 0;
 }

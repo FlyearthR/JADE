@@ -5,10 +5,46 @@ MAX_PACKETS=$2 #paper value: 20000
 
 TIMEFORMAT="%2R"
 
+#tc emulation process
+#--------------------
+call_tc() {
+	pkts=$1
+	delay=$2
+	ip netns add client
+	ip netns add server
+
+	ip link add c-eth0 type veth peer name s-eth0
+	
+	ip link set c-eth0 netns client
+	ip link set s-eth0 netns server 
+ 
+	ip netns exec client ip addr add 192.168.42.1/24 dev c-eth0
+	ip netns exec server ip addr add 192.168.42.2/24 dev s-eth0 
+		 
+	ip netns exec client ip link set lo up
+	ip netns exec client ip link set c-eth0 up
+ 
+	ip netns exec server ip link set lo up
+	ip netns exec server ip link set s-eth0 up
+	
+	ip netns exec client tc qdisc add dev c-eth0 root netem delay ${delay}ms
+    	ip netns exec server tc qdisc add dev s-eth0 root netem delay ${delay}ms
+    	
+	ip netns exec server ./server -i 192.168.42.2 -p 4443 -o $pkts > /dev/null 2> /dev/null &
+    	pid=$!
+    	sleep 0
+    	ip netns exec client ./client -i 192.168.42.2 -p 4443 -o $pkts > /dev/null 2> /dev/null
+    	wait -n $pid
+    	
+	ip netns exec client tc qdisc del dev c-eth0 root
+    	ip netns exec server tc qdisc del dev s-eth0 root
+    	ip netns del client
+	ip netns del server
+}
 
 #tc emulation process - star topology
 #-------------------------------------
-call_tc() {
+call_tc_star() {
 	pkts=$1
 	delay=$2
 	num_clients=$3
@@ -74,7 +110,7 @@ call_tc() {
 #Setting up
 #----------
 echo "Compiling toy examples"
-gcc miniP_server_multi.c -o server 2> /dev/null
+gcc miniP0_server.c -o server 2> /dev/null
 gcc miniP0_client.c -o client 2> /dev/null
 cp ../target/release/simulator .
 cp ../target/syscalls/syscalls.so .
@@ -84,14 +120,13 @@ cp ../target/syscalls/syscalls.so .
 #-------------
 echo "Evaluating tc curve of Figure 3"
 pkts=500
-num_clients=1  # Number of clients in star topology
 echo -n "" > tc_${pkts}.csv
 
 for i in $(seq 1 $MAX_DELAY);
 do
 	echo ${i}ms
 		echo -n "$i, " >> tc_${pkts}.csv
-	{ time call_tc $pkts $i $num_clients ; } 2>> tc_${pkts}.csv
+	{ time call_tc $pkts $i ; } 2>> tc_${pkts}.csv
 done
 
 
@@ -99,14 +134,13 @@ done
 #-------------
 echo "Evaluating tc curve of Figure 4"
 delay=1
-num_clients=1  # Number of clients in star topology
 echo -n "" > tc_nb${delay}.csv
 
 for i in $(seq 500 500 $MAX_PACKETS);
 do
     	echo ${i} pkts
 		echo -n "$i, " >> tc_nb${delay}.csv
-	{ time call_tc $i $delay $num_clients ; } 2>> tc_nb${delay}.csv
+	{ time call_tc $i $delay ; } 2>> tc_nb${delay}.csv
 done
 
 
