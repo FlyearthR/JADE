@@ -304,7 +304,7 @@ void print_sendto(int sockfd, const void *buf, size_t len, int flags,
     /*unsigned int p = (unsigned char) (dest_addr->sa_data[1])*256;
     p += (unsigned char) (dest_addr->sa_data[0]);*/
     if (dest_addr->sa_family == AF_INET) {
-        char ip_str[4];
+        char ip_str[12];
         struct sockaddr_in* addr = (struct sockaddr_in*) dest_addr;
         inet_ntop(AF_INET, &(addr->sin_addr), ip_str, INET_ADDRSTRLEN);
         //printf("%s:%u\n", ip_str, p);
