@@ -228,7 +228,7 @@ impl Process {
             path: CString::from(c""),
             args: vec![],
             env: vec![CString::new(format!("LD_PRELOAD={}", LIB_NAME).to_string().as_str()).unwrap(),
-                      CString::new(format!("LOG_DIR={}", std::env::var("LOG_DIR").unwrap_or_else(|_| LOG_DIR.to_string())).to_string().as_str()).unwrap()],
+                      CString::new(format!("LOG_DIR={}", std::env::var("LOG_DIR").unwrap_or(LOG_DIR.to_string())).to_string().as_str()).unwrap()],
             image: None,
             node_ids: vec![],
         }
@@ -239,7 +239,7 @@ impl Process {
         env.push(
                 CString::new((format!("LD_PRELOAD={}", LIB_NAME)).to_string().as_str())
                 .unwrap());
-        env.push(CString::new(format!("LOG_DIR={}", std::env::var("LOG_DIR").unwrap_or_else(|_| LOG_DIR.to_string())).to_string().as_str()).unwrap());
+        env.push(CString::new(format!("LOG_DIR={}", std::env::var("LOG_DIR").unwrap_or(LOG_DIR.to_string())).to_string().as_str()).unwrap());
         Self { name, path, args, env, image: None, node_ids: vec![] }
     }
 

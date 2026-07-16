@@ -493,6 +493,20 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
     return n_bytes_sent;
 }
 
+/*
+void print_buffer_hex(const unsigned char *buffer, size_t size) {
+    for (size_t i = 0; i < size; i++) {
+        // Print each byte as a 2-digit hex value
+        printf("%02x", buffer[i]);
+
+        // Optional: New line every 16 bytes for readability
+        if ((i + 1) % 16 == 0) {
+            printf(" ");
+        }
+    }
+    printf(" ");
+}*/
+
 /**
  * Intercepted sendto syscall.
  * Notifies the simulator of a packet to be sent and waits for authorization.
@@ -502,6 +516,8 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
                const struct sockaddr *dest_addr, socklen_t addrlen)
 {
     LOGS("sendto called\n");
+    print_sendto(sockfd, buf, len, flags, dest_addr, addrlen);
+    LOGS("after print_sendto\n");
     packet_elem *pe;
     if ((pe = (packet_elem *)malloc(sizeof *pe)) == NULL)
         exit(-13);
@@ -521,7 +537,7 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
 
     LL_PREPEND(pkt_list, pe);
 
-    send_has_to_send(dest_addr, pe);
+    send_has_to_send(pe->pkt.dest_addr, pe);
     return len;
 }
 

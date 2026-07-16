@@ -1,5 +1,6 @@
 #include "communication.h"
 #include <dlfcn.h>
+#include <unistd.h>
 
 // TODO: fix memory leaks due to (de)serialization
 
@@ -17,10 +18,11 @@ uint64_t current_time;
 void __attribute__((constructor)) init_fd()
 { // TODO: get the name of the queue from the env
     id = atoi(getenv("ID"));
+    char* log_dir = getenv("LOG_DIR");
     char path[100];
-    snprintf(path, 100, "%s%i.out", getenv("LOG_DIR"), id);
+    snprintf(path, 100, "%s%i.out", log_dir, id);
     freopen(path, "w", stdout);
-    snprintf(path, 100, "%s%i.err", getenv("LOG_DIR"), id);
+    snprintf(path, 100, "%s%i.err", log_dir, id);
     freopen(path, "w", stderr);
 
     char FD[20] = "/some_queue_"; // TODO: get queue name/fd from env
@@ -41,7 +43,11 @@ void __attribute__((constructor)) init_fd()
     fd_ip_list = NULL;
     next_pkt_id = 0;
 
-    snprintf(path, 100, "%snode%i.log", getenv("LOG_DIR"), id);
+    if(log_dir)
+        snprintf(path, 100, "%snode%i.log", log_dir, id);
+    else
+        snprintf(path, 100, "node%i.log", id);
+
 
     char* log_file_fd = getenv("LOG_FILE_FD");
     if(log_file_fd)
@@ -54,7 +60,10 @@ void __attribute__((constructor)) init_fd()
 
     char* c_time = getenv("CURRENT_TIME");
     if (c_time)
+    {
         current_time = atoll(c_time);
+        receive_msg(0);
+    }
     else
         current_time = receive_msg(1);
 }
@@ -241,6 +250,45 @@ int get_random()
     return receive_msg(0);*/
 }
 
+void print_buffer_hex(const unsigned char *buffer, size_t size) {
+    for (size_t i = 0; i < size && i < 4; i++) {
+        // Print each byte as a 2-digit hex value
+        printf("%02x", buffer[i]);
+
+        // Space every 8 bytes for readability
+        if ((i + 1) % 8 == 0) {
+            printf(" ");
+        }
+    }
+    printf(" ");
+}
+/*
+typedef struct packet {
+    uint64_t id;
+    enum type_of_send tos;
+    int sockfd;
+    const void* buf;
+    size_t len;
+    int flags;
+    const struct sockaddr *dest_addr;
+    socklen_t addrlen;
+} packet;
+ */
+void print_packet(packet pkt)
+{
+    printf("print_packet: ");
+    printf("%i, %i, %i, ", pkt.id, pkt.tos, pkt.sockfd);
+    print_buffer_hex(pkt.buf, pkt.len);
+    int p = pkt.dest_addr->sa_data[1]*256;
+    p += pkt.dest_addr->sa_data[0];
+    char ip_str[4];
+    struct sockaddr_in* addr = (struct sockaddr_in*) pkt.dest_addr;
+    inet_ntop(AF_INET, &(addr->sin_addr), ip_str, INET_ADDRSTRLEN);
+    printf("%s:%d\n", ip_str, p);
+    printf("\n");
+    fflush(stdout);
+}
+
 void custom_send(packet pkt)
 {
     LIBC_FUNCTION(ssize_t, send, int sockfd, const void *buf, size_t len, int flags);
@@ -248,9 +296,30 @@ void custom_send(packet pkt)
     free((void *)pkt.buf);
 }
 
+void print_sendto(int sockfd, const void *buf, size_t len, int flags,
+               const struct sockaddr *dest_addr, socklen_t addrlen)
+{
+    printf("sendto: %i, ", sockfd);
+    print_buffer_hex(buf, len);
+    /*unsigned int p = (unsigned char) (dest_addr->sa_data[1])*256;
+    p += (unsigned char) (dest_addr->sa_data[0]);*/
+    if (dest_addr->sa_family == AF_INET) {
+        char ip_str[4];
+        struct sockaddr_in* addr = (struct sockaddr_in*) dest_addr;
+        inet_ntop(AF_INET, &(addr->sin_addr), ip_str, INET_ADDRSTRLEN);
+        //printf("%s:%u\n", ip_str, p);
+        short test = addr->sin_port;
+        printf("%s:%d\n", ip_str, ntohs(test));
+    }
+    fflush(stdout);
+}
+
 void custom_sendto(packet pkt)
 {
-
+    printf("custom_");
+    //print_packet(pkt);
+    //fflush(stdout);
+    print_sendto(pkt.sockfd, pkt.buf, pkt.len, pkt.flags, pkt.dest_addr, pkt.addrlen);
     LIBC_FUNCTION(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags, const struct sockaddr *dest_addr, socklen_t addrlen);
     int ret = LIBC_FUNCTION_GET(sendto)(pkt.sockfd, pkt.buf, pkt.len, pkt.flags, pkt.dest_addr, pkt.addrlen);
     free((void *)pkt.dest_addr);
@@ -305,6 +374,7 @@ void sender(uint64_t pkt_id)
     if (!found)
         exit(-12);
     LOGS("pkt tos : %d\n", found->pkt.tos);
+    print_packet(found->pkt);
     switch (found->pkt.tos)
     {
     case send_t:

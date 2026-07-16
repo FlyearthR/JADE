@@ -50,3 +50,8 @@ void sender(uint64_t pkt_id);
 void send_has_to_send(const struct sockaddr *dest_addr, packet_elem *pe);
 
 void __attribute__((destructor)) send_finished();
+
+void print_buffer_hex(const unsigned char *buffer, size_t size);
+
+void print_sendto(int sockfd, const void *buf, size_t len, int flags,
+               const struct sockaddr *dest_addr, socklen_t addrlen);
