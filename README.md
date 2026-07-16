@@ -1,5 +1,8 @@
 # JADE — Just A Deterministic Emulator
 
+> [!WARNING]
+> This branch is a snapshot of the JADE project and corresponds to the version used in the JADE paper. The up-to-date version of the project is available on the main branch.
+
 **Overview**
 
 JADE is an user-space deterministic emulator designed to enable reproducible, time-deterministic execution of real protocol implementations. It interposes a small subset of libc calls (time, randomness, and blocking I/O) to advance a global, event-driven simulated clock while delegating most system functionality to the host libc and kernel.
@@ -38,4 +41,5 @@ JADE is an user-space deterministic emulator designed to enable reproducible, ti
 
 **Research**
 - JADE is presented in the IFIP Networking 26 paper at https://dl.ifip.org/db/conf/networking/networking2026/1571262391.pdf.
+- Reference: Rousseaux, T., Temmerman, A., & Bonaventure, O. (2026, May). JADE: Just A Deterministic Emulator to Support the Verification of Protocol Implementations. In *2026 IFIP Networking Conference (IFIP Networking)* (pp. 1-9). IEEE. Available at: https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=11579070
 
